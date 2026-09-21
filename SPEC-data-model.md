@@ -36,18 +36,18 @@ Time columns are `timestamptz`; `session_date` is the event's local calendar dat
   17:00 America/Edmonton, CTA "Book your call" at 4500 s (1:15:00) hidden at 8259 s (2:17:39, as EasyWebinar),
   href `https://aiforagentsmasterclass.com/join-community`, end URL
   `https://aiforagentsmasterclass.com/join-community-expired`. Video URL and seconds come from the upload script.
-- `scripts/upload-video.ts --file <mp4> --event ailg-r`: reads the first MB to confirm the `moov` atom precedes
-  `mdat` (else stops and says to remux with `ffmpeg -movflags +faststart`), reads the duration from `mvhd`,
-  uploads with `@vercel/blob` `put(..., { access: "public", multipart: true })`, stores `video_url` and
-  `video_seconds` on the event.
-- `scripts/import-chat.ts --event ailg-r --file <csv>`: parses the EasyWebinar CSV (timestamp `mm:ss` or
-  `h:mm:ss`, name, role, message), replaces the event's `simulated_messages`, and sets `simulated_names` from the
-  distinct names (William's 110-name list can be passed with `--names <file>` instead).
+- `scripts/upload-video.ts --file <mp4> --event ailg-r`: reads the atom table to confirm `moov` precedes `mdat`
+  (tonight's file: yes; else it stops and says to remux with `ffmpeg -movflags +faststart`), reads the duration
+  from `mvhd` (8386 s tonight), uploads the 1.2 GB with `@vercel/blob` `put(..., { access: "public", multipart:
+  true })`, stores `video_url` and `video_seconds` on the event.
+- `scripts/import-chat.ts --event ailg-r --file <csv>`: parses the EasyWebinar CSV (header
+  `HH:MM:SS,Name,Role,Message`, timestamps like `0:00:33` and `1:14:20`, quoted commas), replaces the event's
+  `simulated_messages`, and sets `simulated_names` from the distinct names (109 in tonight's file).
 - `scripts/team-add.ts --email <e> --name "<display>"`: creates the auth user with a generated password (printed
   once, never stored by us) and the `team_members` row.
 
 ## Testing
-- `src/lib/csv.test.ts`: the three timestamp shapes, quoted commas, a blank line, order by offset.
+- `src/lib/csv.test.ts`: `0:00:33` and `1:14:20` timestamps, quoted commas, a blank line, order by offset.
 - `src/lib/mp4.test.ts`: `moov` before `mdat` detected on a synthetic header; duration read from `mvhd`.
 - Live: `supabase db push` on the new project; seed; import; a `select count(*)` per table matches the CSV.
 

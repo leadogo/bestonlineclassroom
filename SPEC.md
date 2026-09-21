@@ -51,7 +51,8 @@ Then `reminders` → `admin` → `replay` (phase 2) → `analytics`, `design-pas
    cope). No HLS vendor for launch; Cloudflare R2 is the fallback if transfer cost bites.
 4. **Chat polls every 3 s; simulated chat is played in the browser** from the list loaded at room open. Upgrade
    to Supabase Realtime only if the 3 s lag is felt.
-5. **Team login is a magic link**, no passwords to manage. The allowlist is the `team_members` table.
+5. **Team login is email + password** (accounts created by script, password shown once), because Supabase's
+   built-in mailer allows only a couple of emails an hour. The allowlist is the `team_members` table.
 6. **Join URL is `/j/<token>`**, a random unguessable token per registrant. The Skool link `/w/<slug>` asks for
    a first name and creates a guest registrant so the person can chat and be counted.
 7. **After the end**, the room redirects to the event's end URL (tonight: the booking page
@@ -61,12 +62,22 @@ Then `reminders` → `admin` → `replay` (phase 2) → `analytics`, `design-pas
 10. **Same conventions as the site**: Next 16, React 19, Tailwind 4, TypeScript strict, `node --test`, no test
     framework, no dependency added without asking, Test Sample identities for anything live.
 
-## Open questions
-1. Domain for the room and the join links (default: a subdomain of thefuturerealestateagent.com, e.g. `live.`).
-2. Where is the MP4 now? Not under `~/orca`. A path, or I re-download it from Vidalytics.
-3. Relay real chat messages to #autoweb-chat tonight (as today), or drop it now that the moderator view exists?
-4. Moderator display names for tonight (e.g. "Sam from William's team"): who is on the team and what should
-   each be called?
+## Inputs (William, 2026-09-20 evening)
+1. MP4: `~/Downloads/1786148398463-AILG-Recording-QR-Fix.mp4`, 1.20 GB, `moov` before `mdat` (no remux needed),
+   duration 8385.9 s (139m46s), about 1.15 Mbps. William wants a browser upload in `/admin` later.
+2. Simulated chat: `~/Downloads/easywebinar_chat_fixed (1).csv`, columns `HH:MM:SS,Name,Role,Message`, 754
+   rows, 109 distinct names (the attendee list is derived from them).
+3. Supabase project `lcgzfljpzinucbgjpswr`, reached through the Supabase MCP server registered in `.mcp.json`
+   (William authenticates it with `/mcp`). The service-role key goes into `.env.local` and Vercel by William.
+4. Slack: the site's persona bridge (`BMS_OPS_URL` + `LARRY_BRIDGE_SECRET`, `src/lib/slack-brandon.ts`), posting
+   to #autoweb-chat `C0BP5KW3J75`. Secrets copied from Doppler `futurerealestateagent`.
+5. Team tonight: William only, `william@leadogo.com`, display name "William".
+6. Vercel project and the `bestonlineclassroom.com` DNS record: William connects them once the repo is pushed.
+
+## Cost note (decision 3)
+1.2 GB × every viewer who watches to the end is roughly 1 to 2 TB of transfer a month at today's attendance.
+Check the Blob transfer line on the first invoice; Cloudflare R2 (no egress fee) is the switch if it bites, and
+the room only needs a new `video_url`.
 
 ## Facts checked 2026-09-20 evening
 - `bestonlineclassroom.com` was registered today (NameCheap, DNS on Cloudflare). Vercel needs one CNAME or A

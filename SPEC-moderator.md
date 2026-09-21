@@ -43,4 +43,5 @@ Attendee polls pick up deletes and reactions through `updated`.
 - Never: a moderator action without a team session; a password stored anywhere but Supabase Auth.
 
 ## Success criteria
-William and one teammate are signed in before 5 PM, each replying under their own display name.
+William (`william@leadogo.com`, display name "William") is signed in on his phone before 5 PM and a reply shows
+in the attendee room within 3 s. A second teammate is one `team-add` away.

@@ -12,9 +12,10 @@ One commit, one revert.
    `${CLASSROOM_URL}/api/register` with `CLASSROOM_REGISTER_SECRET`, 3 s timeout, one retry, and returns the
    existing `RegisterResult` shape: `{ ok: true, joinLink: join_url, replayLink: "", key: token, loginLink: "" }`
    or `{ ok: false, error }`.
-2. `src/app/api/register/route.ts`: call `registerWithClassroom` where `registerAttendee` is called. EasyWebinar
-   is still called afterwards while `EASYWEBINAR_PARALLEL=1` (result logged, not used), so the EasyWebinar event
-   keeps its registrant count for a few days; unset the flag to stop.
+2. `src/app/api/register/route.ts`: call `registerWithClassroom` first, then EasyWebinar as today while
+   `EASYWEBINAR_PARALLEL=1`. Both results ride in the payload: `easywebinar_join_link` keeps EasyWebinar's link
+   (ActiveCampaign's emails use it and William will re-point the Zap later), and a new field
+   `classroom_join_link` carries ours. The flag stays on until the Zap is re-pointed.
 3. `src/lib/join-link.ts`: `joinHash` becomes `joinToken` (accepts our 12-char token from a
    `${CLASSROOM_URL}/j/<token>` link); `trackedJoinUrl` unchanged in shape (`/join?k=<token>&rid=&sd=`);
    `easyWebinarJoinUrl` becomes `roomUrl(token)`. `calendar-links.ts`'s `isJoinLink` accepts ours.
@@ -24,14 +25,15 @@ One commit, one revert.
 5. `src/app/live/route.ts`: `302` to `${CLASSROOM_URL}/w/ailg-r?src=<src>&eh=<email hash>` (closed → the
    landing page as today). The seat-pool claim and `registerSeat` fallback are removed from this route; the
    pool files stay until a cleanup commit William approves.
-6. `src/lib/optin.ts`: no field renamed. `easywebinar_join_link` now carries our link, `join_link_tracked`
-   wraps it, `easywebinar_replay_link` is "" until `replay` ships. `easywebinar_registered` reflects our call.
+6. `src/lib/optin.ts`: no field renamed or repurposed. New fields `classroom_join_link`, `classroom_registered`.
+   `join_link_tracked` wraps our link (the thank-you page and calendar entry use it, so those go to our room).
 7. Tests: `join-link.test.ts` re-pinned to the token form; a `classroom.test.ts` for the request builder.
 8. Env (Vercel + Doppler `futurerealestateagent`): `CLASSROOM_URL=https://bestonlineclassroom.com`,
    `CLASSROOM_REGISTER_SECRET`, `EASYWEBINAR_PARALLEL=1`.
 
 ## Rollback
-Revert the commit; unset nothing. EasyWebinar was still registering everyone in parallel.
+Revert the commit; unset nothing. EasyWebinar is still registering everyone in parallel and its emails still
+go out, so a registrant always has a working link.
 
 ## Testing
 Test Sample opt-in on production: the thank-you page's calendar entry carries `/join?k=<token>…`, clicking it
@@ -40,14 +42,13 @@ opens the room. The old-style link `/join?k=<32 hex>&rid=…` lands in the room'
 
 ## Boundaries
 - Ask first: removing the EasyWebinar module or the pool; any change to the Zap or ActiveCampaign templates.
-- Never: change a Zapier payload field name; ship without the parallel flag on for the first night.
+- Never: change or repurpose a Zapier payload field; turn the parallel flag off before the Zap is re-pointed.
 
-## Open questions
-1. Which field do the ActiveCampaign emails use for the join link, `easywebinar_join_link` or
-   `join_link_tracked`? Registrants from before cutover hold EasyWebinar links in their inbox either way; the
-   parallel run covers them for as long as it stays on.
-2. Keep EasyWebinar's own reminder emails on during the parallel run (they carry EasyWebinar links) or switch
-   them off tonight so only ActiveCampaign's go out?
+## Decisions (William, 2026-09-20 evening)
+1. ActiveCampaign keeps sending EasyWebinar's link for now; William re-points the Zap to `classroom_join_link`
+   when ready. Until then the thank-you page, the calendar entry and `/live` are the paths into our room, and
+   email clicks still land in EasyWebinar.
+2. EasyWebinar's own reminder emails stay on during the parallel run.
 
 ## Success criteria
 A Test Sample opt-in at 16:50 MT tomorrow lands in our room at 17:00 through the calendar link, and a Skool

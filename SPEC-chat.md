@@ -14,7 +14,9 @@ see each other and the moderators, and every real message reaches Slack in the f
 - **Real**: `POST /api/chat { token, body, offset }` → `chat_messages` (`role = attendee`, `author_name =
   first_name`). Limits: 1 to 500 chars, one message per 2 s per registrant (checked against the last row),
   blocked registrants get `403 { error: "Chat is unavailable." }`. Also relayed in `after()` to
-  `SLACK_CHAT_WEBHOOK_URL` as `<first_name> / <email or "guest"> / <body>`; failure logged, never surfaced.
+  Slack through the same persona bridge the site uses (`BMS_OPS_URL/api/internal/persona-post`, bearer
+  `LARRY_BRIDGE_SECRET`, persona `SLACK_PERSONA`, channel `SLACK_CHAT_CHANNEL_ID` = `C0BP5KW3J75`) as
+  `<first_name> / <email or "guest"> / <body>`; failure logged, never surfaced.
 - **Poll**: `GET /api/chat?token=&after=<id>&since=<iso>` every 3 s →
   `{ new: [{ id, author_name, role, body, offset_seconds, reactions, created_at }], updated: [{ id, reactions,
   deleted }], now }`. `new` = rows with `id > after` and `deleted_at is null`; `updated` = rows with
@@ -32,7 +34,7 @@ emoji + count under a message (set by moderators only tonight).
 ## This repo
 `src/app/api/chat/route.ts`, `src/app/api/simulated/route.ts`, `src/components/room/ChatPanel.tsx`,
 `src/lib/chat.ts` (`simulatedCursor(rows, offset, lastIndex)`, `mergeUpdates(list, updated)`, `canPost(lastAt,
-now)`, `slackLine(...)`), `src/lib/slack.ts`.
+now)`, `slackLine(...)`), `src/lib/slack.ts` (the site's `postAsBrandon` with the channel and persona from env).
 
 ## Testing
 - `src/lib/chat.test.ts`: cursor returns exactly the rows crossed since the last tick and all history on the
