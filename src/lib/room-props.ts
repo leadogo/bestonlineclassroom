@@ -27,6 +27,7 @@ export type RoomProps = {
   video: { available: boolean; seconds: number };
   cta: { at: number; hide: number; label: string; href: string; title: string; subtitle: string; iconUrl: string | null; stripIconUrl: string | null } | null;
   artworkUrl: string | null;
+  posterUrl: string | null;
   captions: boolean;
   endUrl: string;
   params: Record<string, string>;
@@ -72,6 +73,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       hostName: event.host_name,
       host: { avatarUrl: event.host_avatar_url ?? null, tagline: event.host_tagline ?? null },
       artworkUrl: event.artwork_url ?? event.icon_url ?? null,
+      posterUrl: event.poster_url ?? null,
       captions: Boolean(event.captions_url),
       logoUrl: event.logo_url,
       iconUrl: event.icon_url,

@@ -23,6 +23,8 @@ export type EventRow = {
   cta_strip_icon_url: string | null;
   artwork_url: string | null;
   captions_url: string | null;
+  captions_offset_seconds: number | string | null;
+  poster_url: string | null;
   end_url: string;
   simulated_names: string[];
   logo_url: string | null;

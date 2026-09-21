@@ -11,7 +11,7 @@ const DRIFT_SECONDS = 5;
 const STALL_MS = 5000;
 const SOUND_KEY = "bc_sound";
 
-export function VideoStage({ token, available, expected, videoRef, title, artwork, captions, cc }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null>; title: string; artwork: string | null; captions: boolean; cc: boolean }) {
+export function VideoStage({ token, available, expected, videoRef, title, artwork, captions, cc, poster }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null>; title: string; artwork: string | null; captions: boolean; cc: boolean; poster: string | null }) {
   const [ready, setReady] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [sound, setSound] = useState(false);
@@ -41,7 +41,11 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
   // autoplay. A stable callback, so re-renders (the clock ticks every second) never touch the element again.
   const attach = useCallback(
     (el: HTMLVideoElement | null) => {
-      if (el && videoRef.current !== el) el.muted = true;
+      if (el && videoRef.current !== el) {
+        el.defaultMuted = true;
+        el.muted = true;
+        el.setAttribute("muted", "");
+      }
       videoRef.current = el;
     },
     [videoRef],
@@ -192,7 +196,7 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
 
   return (
     <>
-      <video ref={attach} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline autoPlay muted preload="auto" tabIndex={-1} disablePictureInPicture disableRemotePlayback>
+      <video ref={attach} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline autoPlay muted preload="auto" poster={poster ?? undefined} tabIndex={-1} disablePictureInPicture disableRemotePlayback>
         {captions && <track kind="subtitles" srcLang="en" label="English" src={`/api/captions?token=${encodeURIComponent(token)}`} default={cc} />}
       </video>
       {!ready && !blocked && (

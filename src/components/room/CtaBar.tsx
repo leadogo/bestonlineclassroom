@@ -19,7 +19,7 @@ export function CtaBar({ label, href, title, subtitle, iconUrl, token, overlay =
     return (
       <div className={overlay ? "bg-gradient-to-t from-black/85 to-transparent px-3 pb-2 pt-6" : "border-b border-line bg-panel px-3 py-1.5"} role="region" aria-label="Offer">
         <div className="mx-auto flex max-w-xl items-center gap-2 rounded-lg bg-cta px-2.5 py-1.5 text-cta-ink">
-          {iconUrl && <img src={iconUrl} alt="" className="h-6 w-6 shrink-0 rounded" />}
+          {iconUrl && <img src={iconUrl} alt="" className="h-6 w-auto max-w-10 shrink-0 rounded object-contain" />}
           <p className="min-w-0 flex-1 truncate text-sm font-bold">{title}</p>
           <a href={href} target="_blank" rel="noopener" onClick={clicked} className="inline-flex min-h-8 shrink-0 items-center rounded-md bg-cta-ink px-3 text-sm font-bold text-cta">
             {label.length > 18 ? "Claim" : label}
@@ -32,7 +32,7 @@ export function CtaBar({ label, href, title, subtitle, iconUrl, token, overlay =
     <div className={`rise ${overlay ? "bg-gradient-to-t from-black/90 via-black/70 to-transparent px-3 pb-3 pt-8 sm:px-4 sm:pb-4" : "border-b border-line bg-panel px-3 py-2.5"}`} role="region" aria-label="Offer">
       <div className="mx-auto flex max-w-xl flex-col gap-2.5 rounded-xl bg-cta px-3.5 py-3 text-cta-ink shadow-[0_6px_24px_rgba(245,179,36,0.35)]">
         <div className="flex items-start gap-3">
-          {iconUrl && <img src={iconUrl} alt="" className="h-9 w-9 shrink-0 rounded-md" />}
+          {iconUrl && <img src={iconUrl} alt="" className="h-10 w-auto max-w-14 shrink-0 rounded-md object-contain" />}
           <div className="min-w-0 flex-1">
             <p className="text-[16px] font-bold leading-tight text-balance">{title}</p>
             <p className="mt-0.5 text-[13px] leading-snug opacity-85">{subtitle}</p>

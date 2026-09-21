@@ -109,7 +109,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row landscape-phone:flex-row">
         <div className={`relative flex w-full shrink-0 flex-col bg-black lg:min-h-0 lg:flex-1 landscape-phone:h-full landscape-phone:flex-1 ${!live || chatHidden ? "min-h-0 flex-1" : ""}`}>
           <div className={`relative w-full lg:aspect-auto lg:min-h-0 lg:flex-1 landscape-phone:aspect-auto landscape-phone:flex-1 ${!live || chatHidden ? "min-h-0 flex-1" : "aspect-video"}`} onClick={live ? revealCard : undefined}>
-            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} title={p.title} artwork={p.artworkUrl} captions={p.captions} cc={cc} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} hostName={p.hostName} host={p.host} />}
+            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} title={p.title} artwork={p.artworkUrl} captions={p.captions} cc={cc} poster={p.posterUrl} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} hostName={p.hostName} host={p.host} />}
             {live && card && (
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10 text-white">
                 <div className="flex min-w-0 items-center gap-2.5">

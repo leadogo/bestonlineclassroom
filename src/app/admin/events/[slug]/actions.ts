@@ -47,6 +47,7 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     chapters: parseChapters(str(fd, "chapters", 4000)),
     days: [0, 1, 2, 3, 4, 5, 6].filter((d) => fd.get(`day_${d}`) === "on"),
     host_tagline: str(fd, "host_tagline", 120) || null,
+    captions_offset_seconds: Number(str(fd, "captions_offset", 10)) || 0,
     host_avatar_url: str(fd, "host_avatar_url", 500) || null,
     cta_title: str(fd, "cta_title", 80) || null,
     cta_subtitle: str(fd, "cta_subtitle", 140) || null,

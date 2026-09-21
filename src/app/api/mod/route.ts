@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     return { first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, joined_at: row.joined_at, registrant_id: row.registrant_id, ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked };
   });
   const team = ((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => ({ id: `m:${m.id}`, name: m.display_name as string }));
-  return Response.json({ new: news, updated, people, team, now: new Date().toISOString(), edge: edgeConfigured() }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ new: news, updated, people, team, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date }, { headers: { "cache-control": "no-store" } });
 }
 
 /** POST { event, date, action: reply | delete | block | react, ... } */

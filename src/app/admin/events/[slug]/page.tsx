@@ -73,6 +73,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             <Field label="Title" name="title" value={event.title} />
             <Field label="Host name" name="host_name" value={event.host_name} hint="Shown at the top of the people list and on the countdown." />
             <Field label="Host credentials (one line)" name="host_tagline" value={event.host_tagline ?? ""} placeholder="Zero to $1M GCI in 34 Months" hint="Under the name on the countdown page." />
+            <Field label="Captions offset (seconds)" name="captions_offset" value={String(Number(event.captions_offset_seconds ?? 0) || 0)} hint="Positive if captions run ahead of the words, negative if behind." />
             <Field label="Host photo (image link)" name="host_avatar_url" value={event.host_avatar_url ?? ""} hint="A square photo. Upload with npm run brand:upload for now." />
             <Field label="Start time (24 h)" name="start_time" value={event.start_time.slice(0, 5)} hint="On the days ticked below, at this time." />
             <Field label="Timezone" name="timezone" value={event.timezone} hint="IANA name, e.g. America/Edmonton" />

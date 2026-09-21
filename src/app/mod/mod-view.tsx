@@ -58,7 +58,12 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
           router.push("/login");
           return;
         }
-        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; team?: Mentionable[]; now: string; edge?: boolean };
+        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; team?: Mentionable[]; now: string; edge?: boolean; session_start?: number; session_date?: string };
+        // The session moved (a restart, or the day turned): start over with the right clock.
+        if (j.session_start && j.session_start !== session.startsAt && j.session_date === session.date) {
+          window.location.reload();
+          return;
+        }
         const fresh: Item[] = j.new.map((m) => ({ key: `r${m.id}`, id: m.id, registrantId: m.registrant_id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, deleted: Boolean(m.deleted_at), ghost: m.visibility === "author", mentionsMe: (m.mentions ?? []).includes(`m:${member.id}`) }));
         setEdge(j.edge !== false);
         if (fresh.length) cursor.current.after = fresh[fresh.length - 1].id!;
@@ -77,7 +82,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
       stop = true;
       if (t) clearTimeout(t);
     };
-  }, [event.slug, session.date, router, member.id]);
+  }, [event.slug, session.date, session.startsAt, router, member.id]);
 
   useEffect(() => {
     if (!showSim) return;
@@ -262,7 +267,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
       </div>
 
       {pending > 0 && !atBottom && (
-        <button type="button" onClick={() => { atBottomRef.current = true; setAtBottom(true); setPending(0); scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }} className="absolute bottom-20 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow-lg">
+        <button type="button" onClick={() => { atBottomRef.current = true; setAtBottom(true); setPending(0); scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" }); }} className="absolute bottom-20 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow-lg">
           {pending} new message{pending > 1 ? "s" : ""} ↓
         </button>
       )}
