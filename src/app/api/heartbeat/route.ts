@@ -19,8 +19,9 @@ export async function POST(request: Request) {
   const offset = typeof b.offset === "number" && Number.isFinite(b.offset) ? b.offset : 0;
   const kind = b.kind === "replay" ? "replay" : "live";
 
-  const reg = await db().from("registrants").select("id, session_date, ip").eq("token", token).maybeSingle();
+  const reg = await db().from("registrants").select("id, session_date, ip, blocked_at").eq("token", token).maybeSingle();
   if (reg.error || !reg.data) return new Response(null, { status: 404 });
+  if (reg.data.blocked_at) return new Response(null, { status: 403 });
   const { id, session_date } = reg.data;
   if (!reg.data.ip) {
     const ip = clientIp(request.headers);

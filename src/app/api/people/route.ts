@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
   const { data, error } = await db()
     .from("attendance")
-    .select("last_seen_at, registrant_id, registrant:registrants!inner(first_name, event_id, source)")
+    .select("last_seen_at, joined_at, registrant_id, registrant:registrants!inner(first_name, event_id, source)")
     .eq("session_date", reg.data.session_date)
     .eq("kind", "live")
     .eq("registrant.event_id", reg.data.event_id)
@@ -22,8 +22,8 @@ export async function GET(request: Request) {
     .order("last_seen_at", { ascending: false })
     .limit(300);
   if (error) return Response.json({ error: "Lookup failed" }, { status: 500 });
-  const rows = (data ?? []).map((row) => ({ id: row.registrant_id as string, ...(row.registrant as unknown as { first_name: string; source: string }) })).filter((r) => r.source !== "test");
+  const rows = (data ?? []).map((row) => ({ id: row.registrant_id as string, joined_at: row.joined_at as string, ...(row.registrant as unknown as { first_name: string; source: string }) })).filter((r) => r.source !== "test");
   const names = Array.from(new Set(rows.map((r) => r.first_name)));
-  const people = rows.map((r) => ({ id: r.id, name: r.first_name }));
+  const people = rows.map((r) => ({ id: r.id, name: r.first_name, sub: `joined ${new Date(r.joined_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` }));
   return Response.json({ names, people }, { headers: { "cache-control": "no-store" } });
 }

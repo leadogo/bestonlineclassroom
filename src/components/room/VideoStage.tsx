@@ -1,16 +1,22 @@
 "use client";
 // The recording, played as if live: opened at the expected offset, kept within 5 s of it, muted until the
 // viewer taps for sound (mobile autoplay rules), no controls, no scrubbing, no clicks reaching the element.
+// Leaving the page (another app, the lock screen) pauses it and clears the media session, so nothing on a lock
+// screen can scrub; coming back seeks to the live minute and plays at once. The sound choice is remembered and
+// tried silently first; the tap only shows when the browser blocks it.
 import { useCallback, useEffect, useState, type MutableRefObject } from "react";
 import { useClientValue } from "@/lib/use-client-value";
 
 const DRIFT_SECONDS = 5;
 const STALL_MS = 5000;
+const SOUND_KEY = "bc_sound";
 
 export function VideoStage({ token, available, expected, videoRef }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null> }) {
   const [sound, setSound] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [stalled, setStalled] = useState(false);
+  const touch = useClientValue(() => window.matchMedia("(pointer: coarse)").matches, false);
 
   // The address comes from a token-checked call after mount, never from the page source.
   useEffect(() => {
@@ -28,8 +34,6 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
       stop = true;
     };
   }, [token, available]);
-  const [stalled, setStalled] = useState(false);
-  const touch = useClientValue(() => window.matchMedia("(pointer: coarse)").matches, false);
 
   // Attached once: React does not write the muted attribute, and the browser must see muted before it decides on
   // autoplay. A stable callback, so re-renders (the clock ticks every second) never touch the element again.
@@ -47,19 +51,40 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
     v.muted = true;
     v.src = src;
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
+    let wantSound = false;
+    try {
+      wantSound = localStorage.getItem(SOUND_KEY) === "1";
+    } catch {
+      /* private mode */
+    }
     const seek = () => {
       const t = expected();
       if (Number.isFinite(v.duration) && t > v.duration) return;
       v.currentTime = Math.max(0, t);
     };
-    const tryPlay = () => v.play().catch(() => {});
-    const onMeta = () => {
+    // Sound first if they chose it before; if the browser refuses, muted, and the tap shows.
+    const tryPlay = () => {
+      if (wantSound && v.muted) {
+        v.muted = false;
+        v.play()
+          .then(() => setSound(true))
+          .catch(() => {
+            v.muted = true;
+            v.play().catch(() => {});
+          });
+        return;
+      }
+      v.play().catch(() => {});
+    };
+    const sync = () => {
       seek();
       tryPlay();
     };
     const onWaiting = () => {
       if (stallTimer) clearTimeout(stallTimer);
-      stallTimer = setTimeout(() => setStalled(true), STALL_MS);
+      stallTimer = setTimeout(() => {
+        if (!v.paused && !document.hidden) setStalled(true);
+      }, STALL_MS);
     };
     const onPlaying = () => {
       if (stallTimer) clearTimeout(stallTimer);
@@ -69,26 +94,59 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
     const onTime = () => {
       if (!v.paused) onPlaying();
     };
-    v.addEventListener("loadedmetadata", onMeta);
+    // Away: pause and drop the media session so the lock screen shows no player. Back: the live minute, now.
+    const onVisibility = () => {
+      if (document.hidden) {
+        v.pause();
+        setStalled(false);
+        try {
+          navigator.mediaSession.metadata = null;
+          navigator.mediaSession.playbackState = "none";
+        } catch {
+          /* unsupported */
+        }
+      } else sync();
+    };
+    // Nothing on a lock screen or in a headset can scrub: every request lands back on the live minute.
+    try {
+      const ms = navigator.mediaSession;
+      for (const a of ["play", "pause", "seekbackward", "seekforward", "seekto", "previoustrack", "nexttrack", "stop"] as MediaSessionAction[]) {
+        try {
+          ms.setActionHandler(a, () => sync());
+        } catch {
+          /* unsupported action */
+        }
+      }
+    } catch {
+      /* unsupported */
+    }
+    v.addEventListener("loadedmetadata", sync);
     v.addEventListener("canplay", tryPlay);
     v.addEventListener("waiting", onWaiting);
     v.addEventListener("stalled", onWaiting);
     v.addEventListener("playing", onPlaying);
     v.addEventListener("timeupdate", onTime);
-    if (v.readyState >= 1) onMeta();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", sync);
+    window.addEventListener("focus", sync);
+    if (v.readyState >= 1) sync();
     const drift = setInterval(() => {
+      if (document.hidden) return;
       if (v.paused && !v.ended) tryPlay();
       if (Math.abs(v.currentTime - expected()) > DRIFT_SECONDS) seek();
-    }, 30_000);
+    }, 10_000);
     return () => {
       clearInterval(drift);
       if (stallTimer) clearTimeout(stallTimer);
-      v.removeEventListener("loadedmetadata", onMeta);
+      v.removeEventListener("loadedmetadata", sync);
       v.removeEventListener("canplay", tryPlay);
       v.removeEventListener("waiting", onWaiting);
       v.removeEventListener("stalled", onWaiting);
       v.removeEventListener("playing", onPlaying);
       v.removeEventListener("timeupdate", onTime);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", sync);
+      window.removeEventListener("focus", sync);
     };
     // expected is stable for the life of the room
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,8 +157,14 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
     if (!v) return;
     v.muted = false;
     v.volume = 1;
+    v.currentTime = Math.max(0, expected());
     v.play().catch(() => {});
     setSound(true);
+    try {
+      localStorage.setItem(SOUND_KEY, "1");
+    } catch {
+      /* private mode */
+    }
   }
 
   if (!available || failed) {
@@ -110,17 +174,7 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
 
   return (
     <>
-      <video
-        ref={attach}
-        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-        playsInline
-        autoPlay
-        muted
-        preload="auto"
-        tabIndex={-1}
-        disablePictureInPicture
-        disableRemotePlayback
-      />
+      <video ref={attach} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline autoPlay muted preload="auto" tabIndex={-1} disablePictureInPicture disableRemotePlayback />
       {!sound && (
         <button type="button" onClick={unmute} className="absolute inset-0 flex items-center justify-center bg-black/35 focus:outline-none" aria-label={touch ? "Tap for sound" : "Click for sound"}>
           <span className="inline-flex items-center gap-3 rounded-full bg-brand px-6 py-3.5 text-lg font-bold text-white shadow-[0_8px_30px_rgba(47,124,246,0.45)] ring-2 ring-white/20">

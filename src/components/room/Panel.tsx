@@ -6,7 +6,7 @@ import type { SimulatedRow } from "@/lib/chat";
 import { ChatPanel, type Mentionable } from "./ChatPanel";
 import { PeoplePanel } from "./PeoplePanel";
 
-export function Panel({ token, registrantId, firstName, hostName, simulatedNames, simulated, live, expected, onCount }: { token: string; registrantId: string; firstName: string; hostName: string; simulatedNames: string[]; simulated: SimulatedRow[]; live: boolean; expected: () => number; onCount: (n: number) => void }) {
+export function Panel({ token, registrantId, firstName, hostName, simulatedNames, simulated, live, expected, onCount, onRemoved }: { token: string; registrantId: string; firstName: string; hostName: string; simulatedNames: string[]; simulated: SimulatedRow[]; live: boolean; expected: () => number; onCount: (n: number) => void; onRemoved: () => void }) {
   const [tab, setTab] = useState<"chat" | "people">("chat");
   const [unread, setUnread] = useState(0);
   const [real, setReal] = useState<string[]>([]);
@@ -50,7 +50,7 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
         </Tab>
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "chat"}>
-        <ChatPanel token={token} registrantId={registrantId} people={people} simulated={simulated} live={live} expected={expected} visible={tab === "chat"} onUnread={() => setUnread((n) => n + 1)} />
+        <ChatPanel token={token} registrantId={registrantId} people={people} onRemoved={onRemoved} simulated={simulated} live={live} expected={expected} visible={tab === "chat"} onUnread={() => setUnread((n) => n + 1)} />
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "people"}>
         <PeoplePanel hostName={hostName} you={firstName} realNames={realNames} simulatedNames={simulatedNames} />

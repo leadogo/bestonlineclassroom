@@ -9,11 +9,11 @@ import { Avatar } from "./PeoplePanel";
 
 type Wire = { id: number; registrant_id: string | null; team_member_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; mentions: string[]; created_at: string };
 type Item = ChatItem & { mentionsMe?: boolean; mentionId?: string; local?: Record<string, number> };
-export type Mentionable = { id: string; name: string };
+export type Mentionable = { id: string; name: string; sub?: string };
 
 const POLL_MS = 3000;
 
-export function ChatPanel({ token, registrantId, simulated, live, expected, visible, onUnread, people }: { token: string; registrantId: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void; people: Mentionable[] }) {
+export function ChatPanel({ token, registrantId, simulated, live, expected, visible, onUnread, people, onRemoved }: { token: string; registrantId: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void; people: Mentionable[]; onRemoved: () => void }) {
   const [list, setList] = useState<Item[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -167,6 +167,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
       const j = (await res.json().catch(() => ({}))) as { message?: Wire; error?: string };
       if (res.status === 403) {
         setBlocked(true);
+        onRemoved();
         return;
       }
       if (!res.ok || !j.message) throw new Error(j.error ?? "Please try again.");
@@ -202,7 +203,8 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
               <li key={p.id}>
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p)} className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-base hover:bg-line">
                   <Avatar name={p.name} size="h-7 w-7 text-[11px]" />
-                  {p.name}
+                  <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                  {p.sub && <span className="shrink-0 text-xs text-muted">{p.sub}</span>}
                 </button>
               </li>
             ))}
@@ -254,7 +256,7 @@ function Message({ m, mine, onReact, onReactLocal, onReply }: { m: Item; mine: S
           {m.role === "moderator" && <span className="rounded bg-brand/15 px-1.5 py-px text-[11px] font-bold text-brand">Moderator</span>}
           <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{time}</span>
         </div>
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink">
+        <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink landscape-phone:text-base landscape-phone:leading-normal">
           {splitMentions(m.body).map((part, i) => (part.mention ? <span key={i} className="font-bold text-brand">{part.text}</span> : <span key={i}>{part.text}</span>))}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1">

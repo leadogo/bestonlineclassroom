@@ -15,6 +15,8 @@ export type EventRow = {
   cta_hide_seconds: number | null;
   cta_label: string | null;
   cta_href: string | null;
+  cta_title: string | null;
+  cta_subtitle: string | null;
   end_url: string;
   simulated_names: string[];
   logo_url: string | null;

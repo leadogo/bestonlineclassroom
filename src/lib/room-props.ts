@@ -24,7 +24,7 @@ export type RoomProps = {
   endsAt: number;
   serverNow: number;
   video: { available: boolean; seconds: number };
-  cta: { at: number; hide: number; label: string; href: string } | null;
+  cta: { at: number; hide: number; label: string; href: string; title: string; subtitle: string } | null;
   endUrl: string;
   params: Record<string, string>;
   simulatedNames: string[];
@@ -56,7 +56,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
   const endsAt = startsAt + seconds * 1000;
   const cta =
     event.cta_href && event.cta_at_seconds !== null
-      ? { at: event.cta_at_seconds, hide: event.cta_hide_seconds ?? seconds, label: event.cta_label ?? "Book your call", href: ctaHref(event.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, params) }
+      ? { at: event.cta_at_seconds, hide: event.cta_hide_seconds ?? seconds, label: event.cta_label ?? "Book your call", title: event.cta_title || "Ready to take the next step?", subtitle: event.cta_subtitle || `Book a call with ${event.host_name.split(" ")[0]}’s team while you’re here.`, href: ctaHref(event.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, params) }
       : null;
   return {
     kind: "room",

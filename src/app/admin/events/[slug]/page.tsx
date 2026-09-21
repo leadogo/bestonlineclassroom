@@ -86,6 +86,8 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Call to action button" name="cta_label" value={event.cta_label ?? ""} />
+            <Field label="Banner title" name="cta_title" value={event.cta_title ?? ""} placeholder="Ready to take the next step?" hint="The line above the button when the offer appears." />
+            <Field label="Banner subtitle" name="cta_subtitle" value={event.cta_subtitle ?? ""} placeholder="Book a call with William’s team while you’re here." />
             <Field label="Call to action link" name="cta_href" value={event.cta_href ?? ""} hint="The booking page. The person's name, email and phone are added for iClosed." />
             <Field label="Appears at" name="cta_at" value={secondsText(event.cta_at_seconds)} hint="h:mm:ss into the video" />
             <Field label="Hides at" name="cta_hide" value={secondsText(event.cta_hide_seconds)} hint="h:mm:ss, blank keeps it to the end" />

@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   }
   const ppl = await db()
     .from("attendance")
-    .select("last_seen_at, registrant_id, registrant:registrants!inner(first_name, source, event_id, ghosted_at, ip)")
+    .select("last_seen_at, joined_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip)")
     .eq("session_date", s.session.date)
     .eq("kind", "live")
     .eq("registrant.event_id", s.event.id)
@@ -47,10 +47,12 @@ export async function GET(request: Request) {
     .limit(300);
   const blocked = new Set(((await db().from("blocked_ips").select("ip")).data ?? []).map((b) => String(b.ip)));
   const people = (ppl.data ?? []).map((row) => {
-    const r = row.registrant as unknown as { first_name: string; source: string; ghosted_at: string | null; ip: string | null };
-    return { first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, registrant_id: row.registrant_id, ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)) };
+    const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null };
+    const masked = r.email ? r.email.replace(/^(.{3}).*(@.*)$/, "$1…$2") : "guest";
+    return { first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, joined_at: row.joined_at, registrant_id: row.registrant_id, ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked };
   });
-  return Response.json({ new: news, updated, people, now: new Date().toISOString(), edge: edgeConfigured() }, { headers: { "cache-control": "no-store" } });
+  const team = ((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => ({ id: `m:${m.id}`, name: m.display_name as string }));
+  return Response.json({ new: news, updated, people, team, now: new Date().toISOString(), edge: edgeConfigured() }, { headers: { "cache-control": "no-store" } });
 }
 
 /** POST { event, date, action: reply | delete | block | react, ... } */
@@ -73,7 +75,13 @@ export async function POST(request: Request) {
       const body = String(b.body ?? "").trim().slice(0, 500);
       if (!body) return Response.json({ error: "Type a reply first." }, { status: 422 });
       const offset = Math.max(0, Math.floor((Date.now() - s.session.start.getTime()) / 1000));
-      const { data, error } = await db().from("chat_messages").insert({ event_id: s.event.id, session_date: s.session.date, team_member_id: member.id, author_name: member.display_name, role: "moderator", body, offset_seconds: offset }).select(SELECT).single();
+      const wanted = Array.isArray(b.mentions) ? (b.mentions as unknown[]).map(String).slice(0, 10) : [];
+      const mentions: string[] = [];
+      const rids = wanted.filter((m) => /^[0-9a-f-]{36}$/i.test(m));
+      const mids = wanted.filter((m) => /^m:[0-9a-f-]{36}$/i.test(m)).map((m) => m.slice(2));
+      if (rids.length) mentions.push(...((await db().from("registrants").select("id").eq("event_id", s.event.id).eq("session_date", s.session.date).in("id", rids)).data ?? []).map((x) => x.id as string));
+      if (mids.length) mentions.push(...((await db().from("team_members").select("id").in("id", mids)).data ?? []).map((x) => `m:${x.id}`));
+      const { data, error } = await db().from("chat_messages").insert({ event_id: s.event.id, session_date: s.session.date, team_member_id: member.id, author_name: member.display_name, role: "moderator", body, offset_seconds: offset, mentions }).select(SELECT).single();
       if (error) return Response.json({ error: "Could not send." }, { status: 500 });
       return Response.json({ message: data });
     }

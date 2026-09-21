@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DeleteWebinar, NewWebinar } from "./dash-forms";
-import { btnQuiet, Empty, PageHeader, Stat } from "./ui";
+import { LiveStrip } from "./live-strip";
+import { btn, btnQuiet, Empty, PageHeader, Stat } from "./ui";
 import { assignedEventIds, getTeamMember } from "@/lib/auth";
 import { currentOrNextSession, scheduleOf } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
@@ -11,7 +12,6 @@ type Last = { session_date: string; registered: number; joined: number; live_at_
 
 const when = (d: Date, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(d);
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
-const untilText = (ms: number) => (ms < 3_600_000 ? `in ${Math.max(1, Math.round(ms / 60_000))} min` : ms < 86_400_000 ? `in ${Math.round(ms / 3_600_000)} h` : `in ${Math.round(ms / 86_400_000)} days`);
 
 /** The operating screen: every webinar, what is happening now, the next session and how the last one went. */
 export default async function AdminHome() {
@@ -33,7 +33,7 @@ export default async function AdminHome() {
         db().from("session_metrics").select("session_date, registered, joined, live_at_pitch, clicked_offer").eq("event_id", e.id).lt("session_date", session.date).order("session_date", { ascending: false }).limit(1).maybeSingle(),
       ]);
       const mods = (team.data ?? []).filter((m) => m.role === "admin" || (assigns.data ?? []).some((a) => a.member_id === m.id && a.event_id === e.id)).map((m) => m.display_name);
-      return { e, session, live, registrants: regs.count ?? 0, inRoom: inRoom.count ?? 0, last: (last.data as Last | null) ?? null, mods, minutesIn: Math.floor((now.getTime() - session.start.getTime()) / 60_000) };
+      return { e, session, live, registrants: regs.count ?? 0, inRoom: inRoom.count ?? 0, last: (last.data as Last | null) ?? null, mods };
     }),
   );
   return (
@@ -41,28 +41,9 @@ export default async function AdminHome() {
       <PageHeader title="Webinars" subtitle={me.role === "admin" ? "Everything that runs on BestOnlineClassroom, what is happening now, and how the last session went." : "The webinars you moderate."} />
       {cards.length === 0 && <Empty>No webinars yet.</Empty>}
       <ul className="flex flex-col gap-5">
-        {cards.map(({ e, session, live, registrants, inRoom, last, mods, minutesIn }) => (
+        {cards.map(({ e, session, live, registrants, inRoom, last, mods }) => (
           <li key={e.id} className={`overflow-hidden rounded-xl border bg-panel ${live ? "border-live" : "border-line"}`}>
-            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 text-sm ${live ? "bg-live/15" : "border-b border-line"}`}>
-              {live ? (
-                <>
-                  <span className="flex items-center gap-2 font-bold text-live">
-                    <span className="h-2.5 w-2.5 rounded-full bg-live live-dot" aria-hidden />
-                    Live now
-                  </span>
-                  <span className="tabular-nums">{inRoom} in the room</span>
-                  <span className="text-muted tabular-nums">{minutesIn} min in</span>
-                </>
-              ) : (
-                <>
-                  <span className="font-bold">Next session {when(session.start, e.timezone)}</span>
-                  <span className="text-muted">{untilText(session.start.getTime() - now.getTime())}</span>
-                </>
-              )}
-              <span className="ml-auto text-muted">
-                {e.days.length === 7 ? "Daily" : e.days.map((d) => DAY[d]).join(", ")} at {e.start_time.slice(0, 5)} {e.timezone.split("/")[1]?.replace("_", " ")}
-              </span>
-            </div>
+            <LiveStrip startsAt={session.start.getTime()} endsAt={session.end.getTime()} serverNow={now.getTime()} inRoom={inRoom} nextText={when(session.start, e.timezone)} scheduleText={`${e.days.length === 7 ? "Daily" : e.days.map((d) => DAY[d]).join(", ")} at ${e.start_time.slice(0, 5)} ${e.timezone.split("/")[1]?.replace("_", " ") ?? ""}`} />
             <div className="flex flex-col gap-5 px-5 py-5">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 {me.role === "admin" ? (
@@ -84,11 +65,11 @@ export default async function AdminHome() {
               </div>
               <p className="text-sm text-muted">Moderating: {mods.join(", ") || "nobody assigned"}</p>
               <div className="flex flex-wrap gap-2">
+                <Link href={`/mod/${e.slug}`} className={btn}>
+                  Moderate
+                </Link>
                 <Link href={`/admin/events/${e.slug}/sessions/${session.date}`} className={btnQuiet}>
                   Registrants
-                </Link>
-                <Link href={`/mod/${e.slug}`} className={btnQuiet}>
-                  Moderate
                 </Link>
                 <Link href={`/admin/events/${e.slug}/analytics`} className={btnQuiet}>
                   Analytics

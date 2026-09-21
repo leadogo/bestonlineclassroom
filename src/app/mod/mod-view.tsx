@@ -10,7 +10,8 @@ import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author"; mentions: string[] };
-type Person = { first_name: string; last_seen_at: string; source: string; registrant_id: string; ghosted: boolean; has_ip: boolean; ip_blocked: boolean };
+type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string };
+type Mentionable = { id: string; name: string; sub?: string };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean };
 
 export function ModView({ member, event, session, serverNow, backHref }: { member: { id: string; display_name: string; email: string }; event: { slug: string; title: string; iconUrl: string | null; hostName: string }; session: { date: string; startsAt: number; endsAt: number }; serverNow: number; backHref: string }) {
@@ -18,7 +19,10 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const router = useRouter();
   const [list, setList] = useState<Item[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
-  const [showSim, setShowSim] = useState(false);
+  const [showSim, setShowSim] = useState(true);
+  const [team, setTeam] = useState<Mentionable[]>([]);
+  const [picked, setPicked] = useState<Mentionable[]>([]);
+  const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [confirmBlock, setConfirmBlock] = useState<string | null>(null);
@@ -51,13 +55,14 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
           router.push("/login");
           return;
         }
-        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; now: string; edge?: boolean };
+        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; team?: Mentionable[]; now: string; edge?: boolean };
         const fresh: Item[] = j.new.map((m) => ({ key: `r${m.id}`, id: m.id, registrantId: m.registrant_id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, deleted: Boolean(m.deleted_at), ghost: m.visibility === "author", mentionsMe: (m.mentions ?? []).includes(`m:${member.id}`) }));
         setEdge(j.edge !== false);
         if (fresh.length) cursor.current.after = fresh[fresh.length - 1].id!;
         cursor.current.since = j.now;
         setList((l) => trimList([...mergeUpdates(l, j.updated).map((x) => (j.updated.find((u) => u.id === x.id)?.deleted ? { ...x, deleted: true } : x)), ...fresh.filter((f) => !l.some((x) => x.id === f.id))], 600) as Item[]);
         setPeople(j.people);
+        if (j.team) setTeam(j.team);
       } catch {
         /* next poll */
       }
@@ -116,7 +121,21 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
     e.preventDefault();
     const body = text.trim();
     if (!body) return;
-    if (await act({ action: "reply", body })) setText("");
+    const mentions = picked.filter((p) => body.includes(`@${p.name}`)).map((p) => p.id);
+    if (await act({ action: "reply", body, mentions })) {
+      setText("");
+      setPicked([]);
+    }
+  }
+  // "@" at the caret offers everyone in the room and the team (yourself included); refines as you type.
+  const atWord = /(?:^|\s)@([^@\s]*)$/.exec(text);
+  const options: Mentionable[] = atWord
+    ? [...people.map((p) => ({ id: p.registrant_id, name: p.first_name, sub: p.email_masked })), ...team].filter((p) => p.name.toLowerCase().startsWith(atWord[1].toLowerCase())).slice(0, 8)
+    : [];
+  function pick(p: Mentionable) {
+    setText(text.replace(/@[^@\s]*$/, `@${p.name} `));
+    setPicked((l) => (l.some((x) => x.id === p.id) ? l : [...l, p]));
+    input.current?.focus();
   }
 
   const shown = list.filter((m) => (m.role !== "simulated" || showSim) && (!onlyMentions || m.mentionsMe));
@@ -138,10 +157,9 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
             {session.date}, {live ? `live, ${Math.floor(Math.max(0, offsetNow) / 60)} min in` : now < session.startsAt ? "not started" : "ended"}. Replying as <span className="text-ink">{member.display_name}</span>
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input type="checkbox" checked={showSim} onChange={(e) => setShowSim(e.target.checked)} className="h-4 w-4 accent-brand" />
-          Show simulated chat
-        </label>
+        <button type="button" onClick={() => setShowSim((s) => !s)} className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-ink">
+          {showSim ? "Hide simulated chat" : "Show simulated chat"}
+        </button>
         <label className="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={onlyMentions} onChange={(e) => setOnlyMentions(e.target.checked)} className="h-4 w-4 accent-brand" />
           Mentions of me
@@ -168,7 +186,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
         {shown.length === 0 && <p className="py-8 text-center text-muted">No messages yet.</p>}
         {shown.map((m) => (
-          <div key={m.key} className={`flex gap-3 border-b border-line/60 py-2.5 ${m.deleted ? "opacity-40" : ""} ${m.mentionsMe ? "-mx-4 bg-brand/10 px-4" : ""}`}>
+          <div key={m.key} className={`flex gap-3 border-b border-line/60 py-2.5 ${m.deleted ? "opacity-40" : ""} ${m.mentionsMe ? "-mx-4 bg-brand/10 px-4" : m.role === "attendee" ? "-mx-4 bg-emerald-500/10 px-4" : ""}`}>
             <Avatar name={m.name} />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2">
@@ -209,7 +227,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                         <button type="button" onClick={() => setConfirmBlock(m.registrantId!)} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-live">
                           Block
                         </button>
-                        <button type="button" onClick={() => act({ action: person(m.registrantId)?.ghosted ? "unghost" : "ghost", registrant_id: m.registrantId })} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink" title="They keep chatting; only they see it">
+                        <button type="button" onClick={() => act({ action: person(m.registrantId)?.ghosted ? "unghost" : "ghost", registrant_id: m.registrantId })} className={`min-h-8 rounded-full px-2 text-sm ${person(m.registrantId)?.ghosted ? "bg-live/15 font-bold text-live" : "text-muted hover:text-ink"}`} title="They keep chatting; only they see it">
                           {person(m.registrantId)?.ghosted ? "Unghost" : "Ghost"}
                         </button>
                         {person(m.registrantId)?.ip_blocked && (
@@ -227,9 +245,22 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         ))}
       </div>
 
-      <form onSubmit={reply} className="border-t border-line p-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
+      <form onSubmit={reply} className="relative border-t border-line p-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
+        {options.length > 0 && (
+          <ul className="absolute bottom-full left-3 right-3 mb-1 max-w-md overflow-hidden rounded-xl border border-line bg-panel shadow-lg" role="listbox">
+            {options.map((p) => (
+              <li key={p.id}>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p)} className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-base hover:bg-line">
+                  <Avatar name={p.name} size="h-7 w-7 text-[11px]" />
+                  <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                  <span className="shrink-0 text-xs text-muted">{p.id.startsWith("m:") ? "team" : p.sub}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex items-end gap-2">
-          <input value={text} onChange={(e) => setText(e.target.value.slice(0, 500))} placeholder={`Reply as ${member.display_name}…`} autoComplete="off" enterKeyHint="send" className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-panel px-3 text-base focus:border-brand focus:outline-none" />
+          <input ref={input} value={text} onChange={(e) => setText(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Tab" && options[0]) { e.preventDefault(); pick(options[0]); } }} placeholder={`Reply as ${member.display_name}… type @ to mention`} autoComplete="off" enterKeyHint="send" className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-panel px-3 text-base focus:border-brand focus:outline-none" />
           <button type="submit" disabled={!text.trim()} className="min-h-11 rounded-xl bg-brand px-4 font-bold text-white disabled:opacity-40">
             Send
           </button>

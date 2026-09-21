@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { Room } from "@/components/room/Room";
+import { Removed } from "@/components/room/Removed";
 import { registrantByToken } from "@/lib/attendees";
 import { getTeamMember } from "@/lib/auth";
 import { TOKEN_RE } from "@/lib/registrants";
@@ -40,6 +41,7 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
       </main>
     );
   }
+  if (r.blocked_at) return <Removed logoUrl={r.event.logo_url} />;
   const team = sp.at ? Boolean(await getTeamMember().catch(() => null)) : false;
   const outcome = buildRoom(r.event, r, sp, new Date(), { team });
   const src = typeof sp.src === "string" ? sp.src : null;

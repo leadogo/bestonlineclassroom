@@ -7,6 +7,13 @@ import { trustDevice } from "@/lib/twofactor";
 
 export type AcceptState = { error?: string } | null;
 
+/** Signs the current account out and comes back to this invite. */
+export async function signOutHere(token: string) {
+  const sb = await supabaseServer();
+  await sb.auth.signOut();
+  redirect(`/invite/${token}`);
+}
+
 export async function accept(token: string, _prev: AcceptState, fd: FormData): Promise<AcceptState> {
   const inv = await openInvite(token);
   if (!inv) return { error: "This invite link has been used or has expired. Ask for a new one." };
