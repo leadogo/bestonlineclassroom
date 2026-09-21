@@ -1,4 +1,5 @@
 import { createGuest, type GuestSource } from "@/lib/attendees";
+import { cleanName } from "@/lib/chat-filter";
 import { getEvent } from "@/lib/events";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +15,8 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  const first_name = String(b.first_name ?? "").trim().slice(0, 40);
-  if (!first_name) return Response.json({ error: "Please enter your first name." }, { status: 422 });
+  const first_name = cleanName(String(b.first_name ?? ""));
+  if (!first_name) return Response.json({ error: "Please enter your first name, as you would like it shown." }, { status: 422 });
   const session_date = String(b.session_date ?? "");
   if (!DATE_RE.test(session_date)) return Response.json({ error: "Invalid session." }, { status: 422 });
   const event = await getEvent(String(b.slug ?? "")).catch(() => null);

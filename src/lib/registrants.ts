@@ -1,5 +1,6 @@
 // Everything about turning an opt-in into a registrant that can be tested without a database: the token, the
 // email identity, the attribution allowlist and the request validation (SPEC-registration-webhook.md).
+import { cleanName } from "./chat-filter.ts";
 import { createHash, randomBytes } from "node:crypto";
 
 /** Base32 without look-alikes (no i, l, o, 0, 1): fine to read out loud, safe in a URL. */
@@ -70,8 +71,10 @@ export function parseRegisterBody(body: unknown): { ok: true; input: RegisterInp
   const b = body as Record<string, unknown>;
   const event = String(b.event ?? "").trim();
   if (!/^[a-z0-9-]{1,40}$/.test(event)) return { ok: false, error: "event (slug) is required." };
-  const first_name = String(b.first_name ?? "").trim().slice(0, 60);
-  if (!first_name) return { ok: false, error: "first_name is required." };
+  const raw = String(b.first_name ?? "").trim().slice(0, 60);
+  if (!raw) return { ok: false, error: "first_name is required." };
+  // A name the room cannot show becomes "Guest"; the registration itself always goes through.
+  const first_name = cleanName(raw) ?? "Guest";
   const email = normalizeEmail(b.email);
   if (!email) return { ok: false, error: "email is not a valid address." };
   const phone = String(b.phone ?? "").trim().slice(0, 32);

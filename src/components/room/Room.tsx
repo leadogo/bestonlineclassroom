@@ -23,6 +23,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
   const [ctaClosed, setCtaClosed] = useState(false);
   const [full, setFull] = useState(false);
   const [chatHidden, setChatHidden] = useState(false);
+  const [cc, setCc] = useState(false);
   const [card, setCard] = useState(false);
   const cardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeFull = useClientValue(() => Boolean(document.fullscreenEnabled), false);
@@ -100,7 +101,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
   const showCta = Boolean(p.cta) && live && offset >= p.cta!.at && offset < p.cta!.hide;
   const ownFull = full && !nativeFull;
   void ownFull;
-  const banner = (overlay: boolean) => p.cta && <CtaBar label={p.cta.label} href={p.cta.href} title={p.cta.title} subtitle={p.cta.subtitle} iconUrl={p.iconUrl} token={p.token} overlay={overlay} slim={ctaClosed} onDismiss={() => setCtaClosed(true)} />;
+  const banner = (overlay: boolean) => p.cta && <CtaBar label={p.cta.label} href={p.cta.href} title={p.cta.title} subtitle={p.cta.subtitle} iconUrl={ctaClosed ? p.cta.stripIconUrl : p.cta.iconUrl} token={p.token} overlay={overlay} slim={ctaClosed} onDismiss={() => setCtaClosed(true)} />;
 
   return (
     <div ref={root} className={`flex h-dvh flex-col bg-room text-ink ${full && !nativeFull ? "fixed inset-0 z-50" : ""}`}>
@@ -108,7 +109,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row landscape-phone:flex-row">
         <div className={`relative flex w-full shrink-0 flex-col bg-black lg:min-h-0 lg:flex-1 landscape-phone:h-full landscape-phone:flex-1 ${!live || chatHidden ? "min-h-0 flex-1" : ""}`}>
           <div className={`relative w-full lg:aspect-auto lg:min-h-0 lg:flex-1 landscape-phone:aspect-auto landscape-phone:flex-1 ${!live || chatHidden ? "min-h-0 flex-1" : "aspect-video"}`} onClick={live ? revealCard : undefined}>
-            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} title={p.title} artwork={p.iconUrl} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} hostName={p.hostName} host={p.host} />}
+            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} title={p.title} artwork={p.artworkUrl} captions={p.captions} cc={cc} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} hostName={p.hostName} host={p.host} />}
             {live && card && (
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10 text-white">
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -116,16 +117,20 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
                   <div className="min-w-0">
                     <p className="truncate text-[15px] font-bold leading-tight">{p.title}</p>
                     <p className="truncate text-xs text-white/80">{p.hostName}{p.host.tagline ? `, ${p.host.tagline}` : ""}</p>
-                    <p className="mt-0.5 flex items-center gap-2 text-xs text-white/80">
-                      <span className="inline-flex items-center gap-1 rounded bg-live px-1.5 py-px font-bold text-white"><span className="h-1.5 w-1.5 rounded-full bg-white" aria-hidden />LIVE</span>
-                      <span className="tabular-nums">{watching} watching</span>
-                    </p>
+                    <p className="mt-0.5 text-xs text-white/80 tabular-nums">{watching} watching</p>
                   </div>
                 </div>
-                <button type="button" onClick={(e) => { e.stopPropagation(); setChatHidden((h) => !h); }} className="pointer-events-auto inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg bg-black/55 px-3 text-sm font-bold text-white hover:bg-black/75" aria-label={chatHidden ? "Show the chat" : "Hide the chat"}>
+                <div className="pointer-events-auto flex shrink-0 gap-2">
+                {p.captions && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setCc((c) => !c); }} className={`inline-flex min-h-9 items-center rounded-lg px-3 text-sm font-bold ${cc ? "bg-white text-black" : "bg-black/55 text-white hover:bg-black/75"}`} aria-pressed={cc} aria-label={cc ? "Turn captions off" : "Turn captions on"}>
+                    CC
+                  </button>
+                )}
+                <button type="button" onClick={(e) => { e.stopPropagation(); setChatHidden((h) => !h); }} className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg bg-black/55 px-3 text-sm font-bold text-white hover:bg-black/75" aria-label={chatHidden ? "Show the chat" : "Hide the chat"}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
                   {chatHidden ? "Show chat" : "Hide chat"}
                 </button>
+                </div>
               </div>
             )}
             {live && (

@@ -11,8 +11,9 @@ const DRIFT_SECONDS = 5;
 const STALL_MS = 5000;
 const SOUND_KEY = "bc_sound";
 
-export function VideoStage({ token, available, expected, videoRef, title, artwork }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null>; title: string; artwork: string | null }) {
+export function VideoStage({ token, available, expected, videoRef, title, artwork, captions, cc }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null>; title: string; artwork: string | null; captions: boolean; cc: boolean }) {
   const [ready, setReady] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [sound, setSound] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -64,6 +65,13 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
       v.currentTime = Math.max(0, t);
     };
     // Sound first if they chose it before; if the browser refuses, muted, and the tap shows.
+    // The phone may refuse to start any video without a tap (Low Power Mode, some Safari settings): then say so.
+    const mutedPlay = () =>
+      v.play()
+        .then(() => setBlocked(false))
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === "NotAllowedError") setBlocked(true);
+        });
     const tryPlay = () => {
       if (wantSound && v.muted) {
         v.muted = false;
@@ -71,11 +79,11 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
           .then(() => setSound(true))
           .catch(() => {
             v.muted = true;
-            v.play().catch(() => {});
+            mutedPlay();
           });
         return;
       }
-      v.play().catch(() => {});
+      mutedPlay();
     };
     const sync = () => {
       seek();
@@ -155,6 +163,12 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, title, artwork]);
 
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    for (const t of Array.from(v.textTracks)) t.mode = cc ? "showing" : "hidden";
+  }, [cc, videoRef, src]);
+
   function unmute() {
     const v = videoRef.current;
     if (!v) return;
@@ -163,6 +177,7 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
     v.currentTime = Math.max(0, expected());
     v.play().catch(() => {});
     setSound(true);
+    setBlocked(false);
     try {
       localStorage.setItem(SOUND_KEY, "1");
     } catch {
@@ -177,11 +192,13 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
 
   return (
     <>
-      <video ref={attach} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline autoPlay muted preload="auto" tabIndex={-1} disablePictureInPicture disableRemotePlayback />
-      {!ready && (
+      <video ref={attach} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline autoPlay muted preload="auto" tabIndex={-1} disablePictureInPicture disableRemotePlayback>
+        {captions && <track kind="subtitles" srcLang="en" label="English" src={`/api/captions?token=${encodeURIComponent(token)}`} default={cc} />}
+      </video>
+      {!ready && !blocked && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 flex items-center justify-center gap-2 text-sm text-white/80" aria-live="polite">
           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden />
-          Connecting to the live session…
+          Connecting to the session…
         </div>
       )}
       {!sound && (
@@ -192,7 +209,7 @@ export function VideoStage({ token, available, expected, videoRef, title, artwor
               <path d="M15.5 8.5a5 5 0 0 1 0 7" />
               <path d="M19 5.5a10 10 0 0 1 0 13" />
             </svg>
-            {touch ? "Tap for sound" : "Click for sound"}
+            {blocked ? "Tap to start" : touch ? "Tap for sound" : "Click for sound"}
           </span>
         </button>
       )}

@@ -25,7 +25,9 @@ export type RoomProps = {
   endsAt: number;
   serverNow: number;
   video: { available: boolean; seconds: number };
-  cta: { at: number; hide: number; label: string; href: string; title: string; subtitle: string } | null;
+  cta: { at: number; hide: number; label: string; href: string; title: string; subtitle: string; iconUrl: string | null; stripIconUrl: string | null } | null;
+  artworkUrl: string | null;
+  captions: boolean;
   endUrl: string;
   params: Record<string, string>;
   simulatedNames: string[];
@@ -57,7 +59,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
   const endsAt = startsAt + seconds * 1000;
   const cta =
     event.cta_href && event.cta_at_seconds !== null
-      ? { at: event.cta_at_seconds, hide: event.cta_hide_seconds ?? seconds, label: event.cta_label ?? "Book your call", title: event.cta_title || "Ready to take the next step?", subtitle: event.cta_subtitle || `Pick a time with ${event.host_name.split(" ")[0]}’s team. It takes two minutes.`, href: ctaHref(event.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, params) }
+      ? { at: event.cta_at_seconds, hide: event.cta_hide_seconds ?? seconds, label: event.cta_label ?? "Book your call", title: event.cta_title || "Ready to take the next step?", subtitle: event.cta_subtitle || `Pick a time with ${event.host_name.split(" ")[0]}’s team. It takes two minutes.`, iconUrl: event.cta_icon_url ?? null, stripIconUrl: event.cta_strip_icon_url ?? event.cta_icon_url ?? null, href: ctaHref(event.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, params) }
       : null;
   return {
     kind: "room",
@@ -69,6 +71,8 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       title: event.title,
       hostName: event.host_name,
       host: { avatarUrl: event.host_avatar_url ?? null, tagline: event.host_tagline ?? null },
+      artworkUrl: event.artwork_url ?? event.icon_url ?? null,
+      captions: Boolean(event.captions_url),
       logoUrl: event.logo_url,
       iconUrl: event.icon_url,
       state,

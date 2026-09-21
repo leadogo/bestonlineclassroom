@@ -34,8 +34,8 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const sim = useRef<{ rows: SimulatedRow[]; next: number }>({ rows: [], next: 0 });
   const scroller = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
   const [pending, setPending] = useState(0);
-  const seen = useRef(0);
   const offset = () => (Date.now() + skew.current - session.startsAt) / 1000;
   const offsetNow = (now - session.startsAt) / 1000;
   const live = now >= session.startsAt && now < session.endsAt;
@@ -63,6 +63,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         setEdge(j.edge !== false);
         if (fresh.length) cursor.current.after = fresh[fresh.length - 1].id!;
         cursor.current.since = j.now;
+        if (fresh.length && !atBottomRef.current) setPending((n) => n + fresh.length);
         setList((l) => trimList([...mergeUpdates(l, j.updated).map((x) => (j.updated.find((u) => u.id === x.id)?.deleted ? { ...x, deleted: true } : x)), ...fresh.filter((f) => !l.some((x) => x.id === f.id))], 600) as Item[]);
         setPeople(j.people);
         if (j.team) setTeam(j.team);
@@ -90,6 +91,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
       const { items, nextIndex } = simulatedCursor(sim.current.rows, offset(), sim.current.next);
       if (!items.length) return;
       sim.current.next = nextIndex;
+      if (!atBottomRef.current) setPending((c) => c + items.length);
       const n = Date.now();
       setList((l) => trimList([...l, ...items.map((r, i) => ({ key: `s${nextIndex}-${i}`, name: r.name, role: "simulated" as const, body: r.body, at: n - (offset() - r.offset_seconds) * 1000, reactions: {} }))], 600) as Item[]);
     }, 1000);
@@ -99,15 +101,13 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
 
   useEffect(() => {
     const el = scroller.current;
-    if (!el) return;
-    if (atBottom) el.scrollTop = el.scrollHeight;
-    else if (list.length > seen.current) setPending((n) => n + (list.length - seen.current));
-    seen.current = list.length;
-  }, [list, atBottom]);
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [list]);
   function onScroll() {
     const el = scroller.current;
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    atBottomRef.current = near;
     setAtBottom(near);
     if (near) setPending(0);
   }
@@ -155,7 +155,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const recent = people.filter((p) => now - new Date(p.last_seen_at).getTime() < 120_000);
 
   return (
-    <div className="flex h-dvh flex-col bg-room text-ink">
+    <div className="relative flex h-dvh flex-col bg-room text-ink">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-4 py-2" style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}>
         <a href={backHref} className="flex min-h-9 items-center gap-1 rounded-md px-2 text-sm text-muted hover:bg-panel hover:text-ink" aria-label="Back to the admin">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -167,7 +167,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold">{event.title}</h1>
           <p className="text-sm text-muted">
-            {session.date}, {live ? `live, ${Math.floor(Math.max(0, offsetNow) / 60)} min in` : now < session.startsAt ? "not started" : "ended"}. Replying as <span className="text-ink">{member.display_name}</span>
+            {session.date}, {live ? `live, ${Math.floor(Math.max(0, offsetNow) / 60)} min in, ` : now < session.startsAt ? "not started. " : "ended. "}{live && <span className="font-bold text-ink tabular-nums">{recent.filter((p) => p.source !== "test").length} in the room</span>}{live && ". "}Replying as <span className="text-ink">{member.display_name}</span>
           </p>
         </div>
         <a href={`/admin/blocked?event=${event.slug}`} className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-ink">
@@ -262,7 +262,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
       </div>
 
       {pending > 0 && !atBottom && (
-        <button type="button" onClick={() => { setAtBottom(true); setPending(0); scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }} className="mx-auto -mt-10 mb-2 rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow">
+        <button type="button" onClick={() => { atBottomRef.current = true; setAtBottom(true); setPending(0); scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }} className="absolute bottom-20 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow-lg">
           {pending} new message{pending > 1 ? "s" : ""} ↓
         </button>
       )}

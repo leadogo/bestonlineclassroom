@@ -14,7 +14,7 @@ export function CtaBar({ label, href, title, subtitle, iconUrl, token, overlay =
       /* best-effort */
     }
   }
-  const button = "cta-glow inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-cta-ink px-4 text-[15px] font-bold text-cta focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
+  const button = "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-cta-ink px-4 text-[15px] font-bold text-cta focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
   if (slim) {
     return (
       <div className={overlay ? "bg-gradient-to-t from-black/85 to-transparent px-3 pb-2 pt-6" : "border-b border-line bg-panel px-3 py-1.5"} role="region" aria-label="Offer">

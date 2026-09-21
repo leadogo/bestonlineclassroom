@@ -7,6 +7,7 @@ import { cleanParams, toQuery } from "@/lib/params";
 import { createGuest } from "@/lib/attendees";
 import { emailHash, isTestIdentity, normalizeEmail } from "@/lib/registrants";
 import { logClick } from "@/lib/clicks";
+import { cleanName } from "@/lib/chat-filter";
 import { after } from "next/server";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
@@ -34,7 +35,7 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
   const src = (["legacy", "skool", "sms", "email"].includes(srcRaw) ? srcRaw : !srcRaw ? "skool" : "guest") as "legacy" | "skool" | "sms" | "email" | "guest";
   const email = normalizeEmail(one("e"));
   const eh = (email ? emailHash(email) : one("eh")).toLowerCase();
-  const fn = one("fn").trim().slice(0, 40);
+  const fn = cleanName(one("fn")) ?? "";
   const rid = UUID_RE.test(one("rid")) ? one("rid").toLowerCase() : undefined;
   const ph = one("ph").replace(/[^\d+() .-]/g, "").trim().slice(0, 32);
   const passthrough = { ...cleanParams(sp), ...(one("at") ? { at: one("at") } : {}), ...(one("key") ? { key: one("key") } : {}) };

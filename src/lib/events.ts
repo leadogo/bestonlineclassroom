@@ -19,6 +19,10 @@ export type EventRow = {
   cta_href: string | null;
   cta_title: string | null;
   cta_subtitle: string | null;
+  cta_icon_url: string | null;
+  cta_strip_icon_url: string | null;
+  artwork_url: string | null;
+  captions_url: string | null;
   end_url: string;
   simulated_names: string[];
   logo_url: string | null;
