@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 /** One field, one button: the name shown in chat and the people list. Creates a guest registrant and opens their link. */
-export function GuestForm({ slug, title, sessionDate, src, rid, passthrough }: { slug: string; title: string; sessionDate: string; src: string; rid: string | null; passthrough: Record<string, string> }) {
+export function GuestForm({ slug, title, logoUrl, sessionDate, src, rid, passthrough }: { slug: string; title: string; logoUrl: string | null; sessionDate: string; src: string; rid: string | null; passthrough: Record<string, string> }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -27,10 +27,11 @@ export function GuestForm({ slug, title, sessionDate, src, rid, passthrough }: {
   }
 
   return (
-    <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-900/70 p-6">
-      <p className="text-xs uppercase tracking-wide text-slate-400">Joining</p>
-      <h1 className="mt-1 text-lg font-semibold leading-snug">{title}</h1>
-      <label htmlFor="first_name" className="mt-5 block text-sm text-slate-300">
+    <form onSubmit={submit} className="w-full max-w-sm">
+      {logoUrl && <img src={logoUrl} alt="BestOnlineClassroom" className="mx-auto mb-8 h-9 w-auto sm:h-10" />}
+      <h1 className="text-center text-2xl font-bold leading-snug text-balance">{title}</h1>
+      <p className="mt-2 text-center text-base text-muted">Tell us your first name and you&apos;re in.</p>
+      <label htmlFor="first_name" className="mt-8 block text-base font-bold">
         Your first name
       </label>
       <input
@@ -42,11 +43,11 @@ export function GuestForm({ slug, title, sessionDate, src, rid, passthrough }: {
         maxLength={40}
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-base outline-none focus:border-sky-500"
-        placeholder="e.g. Sarah"
+        className="mt-2 min-h-13 w-full rounded-xl border border-line bg-panel px-4 text-lg text-ink placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+        placeholder="Sarah"
       />
-      {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-      <button type="submit" disabled={busy || !name.trim()} className="mt-4 w-full rounded-md bg-sky-500 px-4 py-2.5 font-medium text-slate-950 disabled:opacity-50">
+      {error && <p className="mt-2 text-base text-live">{error}</p>}
+      <button type="submit" disabled={busy || !name.trim()} className="mt-4 min-h-13 w-full rounded-xl bg-brand text-lg font-bold text-white shadow-[0_6px_24px_rgba(47,124,246,0.35)] disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50">
         {busy ? "Joining…" : "Join the session"}
       </button>
     </form>

@@ -17,6 +17,8 @@ export type EventRow = {
   cta_href: string | null;
   end_url: string;
   simulated_names: string[];
+  logo_url: string | null;
+  icon_url: string | null;
 };
 
 const TTL_MS = 60_000;

@@ -1,5 +1,47 @@
 @import "tailwindcss";
 
+/* The room's palette: a dark, slightly cool ground so the video is the brightest thing on screen; the brand blue
+   for anything you can press; red only for LIVE; one warm colour reserved for the call to action. */
+@theme {
+  --color-room: #0e1116;
+  --color-panel: #151a21;
+  --color-line: #262d37;
+  --color-ink: #f3f6f9;
+  --color-muted: #9aa5b4;
+  --color-brand: #2f7cf6;
+  --color-brand-deep: #1f5fd0;
+  --color-live: #e5484d;
+  --color-cta: #f5b324;
+  --color-cta-ink: #151a21;
+}
+
+/* A phone held sideways: video left, chat right, like a stream. */
+@custom-variant landscape-phone (@media (orientation: landscape) and (max-height: 540px));
+
 :root {
   color-scheme: dark;
+}
+
+/* Simulated live: the browser's own player must never appear. */
+video::-webkit-media-controls,
+video::-webkit-media-controls-enclosure,
+video::-webkit-media-controls-panel {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 320ms ease-out both;
+  }
+}
+@keyframes rise {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }

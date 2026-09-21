@@ -24,14 +24,14 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
   const sessionDate = sessionFor(schedule, one("sd"))?.date ?? currentOrNextSession(schedule).date;
   const src = one("src") === "legacy" ? "legacy" : one("src") === "skool" || !one("src") ? "skool" : "guest";
   const rid = UUID_RE.test(one("rid")) ? one("rid").toLowerCase() : undefined;
-  const passthrough = { ...cleanParams(sp), ...(one("at") && one("key") ? { at: one("at"), key: one("key") } : {}) };
+  const passthrough = { ...cleanParams(sp), ...(one("at") ? { at: one("at") } : {}), ...(one("key") ? { key: one("key") } : {}) };
 
   const known = await resolveForSession(event.id, sessionDate, { eh: one("eh").toLowerCase(), rid }, src).catch(() => null);
   if (known) redirect(`/j/${known.token}${toQuery(passthrough)}`);
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <GuestForm slug={slug} title={event.title} sessionDate={sessionDate} src={src} rid={rid ?? null} passthrough={passthrough} />
+    <main className="flex min-h-screen items-center justify-center px-6 py-10">
+      <GuestForm slug={slug} title={event.title} logoUrl={event.logo_url} sessionDate={sessionDate} src={src} rid={rid ?? null} passthrough={passthrough} />
     </main>
   );
 }

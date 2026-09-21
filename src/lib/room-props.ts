@@ -1,6 +1,6 @@
 // Everything the room page hands the browser, computed once on the server: the state and the instants (so the
 // phone's clock never decides the offset), the video, the finished CTA link, the names for the people panel.
-// A team preview (`?at=<seconds>&key=<PREVIEW_KEY>`) forces the live state at that offset.
+// A preview (`?at=<seconds>` with `key=<PREVIEW_KEY>` or a signed-in team member) forces the live state there.
 import { fourZones, roomState, scheduleOf } from "./daily-schedule.ts";
 import { ctaHref } from "./cta.ts";
 import type { EventRow } from "./events.ts";
@@ -13,8 +13,11 @@ export type RoomProps = {
   token: string;
   registrantId: string;
   firstName: string;
+  eventSlug: string;
   title: string;
   hostName: string;
+  logoUrl: string | null;
+  iconUrl: string | null;
   state: "countdown" | "live";
   /** ms since epoch */
   startsAt: number;
@@ -27,19 +30,17 @@ export type RoomProps = {
   simulatedNames: string[];
   sessionDate: string;
   preview: boolean;
-  /** "Monday, September 21 at 5:00 PM MDT" in the event's zone, for the countdown. */
-  startLabel: string;
   zones: Array<[string, string]>;
 };
 
 export type RoomOutcome = { kind: "room"; props: RoomProps } | { kind: "ended"; to: string };
 
-export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, string | string[] | undefined>, now = new Date()): RoomOutcome {
+export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, string | string[] | undefined>, now = new Date(), opts: { team?: boolean } = {}): RoomOutcome {
   const params = cleanParams(sp);
   const one = (k: string) => (Array.isArray(sp[k]) ? (sp[k] as string[])[0] : (sp[k] as string | undefined)) ?? "";
   const schedule = scheduleOf(event);
   const seconds = event.video_seconds ?? 0;
-  const preview = Boolean(PREVIEW_KEY) && one("key") === PREVIEW_KEY && /^\d+$/.test(one("at"));
+  const preview = /^\d+$/.test(one("at")) && ((Boolean(PREVIEW_KEY) && one("key") === PREVIEW_KEY) || Boolean(opts.team));
 
   const rs = roomState(schedule, now, r.session_date);
   let state: "countdown" | "live";
@@ -53,7 +54,6 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
     startsAt = rs.session.start.getTime();
   }
   const endsAt = startsAt + seconds * 1000;
-  const startLabel = new Intl.DateTimeFormat("en-US", { timeZone: event.timezone, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(rs.session.start).replace(", ", ", ").replace(" at ", " at ");
   const cta =
     event.cta_href && event.cta_at_seconds !== null
       ? { at: event.cta_at_seconds, hide: event.cta_hide_seconds ?? seconds, label: event.cta_label ?? "Book your call", href: ctaHref(event.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, params) }
@@ -64,8 +64,11 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       token: r.token,
       registrantId: r.id,
       firstName: r.first_name,
+      eventSlug: event.slug,
       title: event.title,
       hostName: event.host_name,
+      logoUrl: event.logo_url,
+      iconUrl: event.icon_url,
       state,
       startsAt,
       endsAt,
@@ -77,7 +80,6 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       simulatedNames: event.simulated_names ?? [],
       sessionDate: r.session_date,
       preview,
-      startLabel,
       zones: fourZones(rs.session),
     },
   };

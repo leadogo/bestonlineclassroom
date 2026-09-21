@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Room } from "@/components/room/Room";
 import { registrantByToken } from "@/lib/attendees";
+import { getTeamMember } from "@/lib/auth";
 import { TOKEN_RE } from "@/lib/registrants";
 import { buildRoom } from "@/lib/room-props";
 
@@ -16,11 +17,11 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   if (!r) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
-        <div>
-          <h1 className="text-lg font-semibold">This link isn&apos;t valid</h1>
-          <p className="mt-2 text-sm text-slate-400">
-            Check the link in your email or calendar invite, or{" "}
-            <a className="text-sky-400 underline" href={SITE}>
+        <div className="max-w-sm">
+          <h1 className="text-2xl font-bold">This link isn&apos;t valid</h1>
+          <p className="mt-3 text-base text-muted">
+            Use the link in your email or calendar invite, or{" "}
+            <a className="text-brand underline" href={SITE}>
               register again
             </a>
             .
@@ -29,7 +30,8 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
       </main>
     );
   }
-  const outcome = buildRoom(r.event, r, sp);
+  const team = sp.at ? Boolean(await getTeamMember().catch(() => null)) : false;
+  const outcome = buildRoom(r.event, r, sp, new Date(), { team });
   if (outcome.kind === "ended") redirect(outcome.to);
   return <Room {...outcome.props} />;
 }
