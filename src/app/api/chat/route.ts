@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { MAX_BODY, POST_GAP_MS, slackLine } from "@/lib/chat";
+import { checkMessage } from "@/lib/chat-filter";
 import { db } from "@/lib/db";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { mine } from "@/lib/reactions";
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
   if (!r.ip && ip) after(async () => { await db().from("registrants").update({ ip, ip_seen_at: new Date().toISOString() }).eq("id", r.id).is("ip", null); });
   const body = String(b.body ?? "").trim().slice(0, MAX_BODY);
   if (!body) return Response.json({ error: "Type a message first." }, { status: 422 });
+  const verdict = checkMessage(body);
+  if (!verdict.ok) return Response.json({ error: verdict.reason }, { status: 422 });
 
   const last = await db().from("chat_messages").select("created_at").eq("registrant_id", r.id).order("id", { ascending: false }).limit(1).maybeSingle();
   if (last.data && Date.now() - new Date(last.data.created_at).getTime() < POST_GAP_MS) {
