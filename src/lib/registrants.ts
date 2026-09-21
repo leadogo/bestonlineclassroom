@@ -93,8 +93,8 @@ export function parseRegisterBody(body: unknown): { ok: true; input: RegisterInp
   };
 }
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://bestonlineclassroom.com").replace(/\/$/, "");
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bestonlineclassroom.com";
 
 export function joinUrl(token: string, base = APP_URL): string {
-  return `${base}/j/${token}`;
+  return `${base.replace(/\/+$/, "")}/j/${token}`;
 }
