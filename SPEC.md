@@ -36,6 +36,7 @@ EasyWebinar event 206685's admin on 2026-09-20.
 | `analytics` | Per session: registered, attended, missed, live at the pitch, CTA clicks, replay, retention curve (views `registrant_outcomes`, `session_metrics`); the nine EasyWebinar outcomes as ActiveCampaign tags (hourly cron, logged); `GET /api/metrics` for leadogo's Funnel Performance in place of EasyWebinar's API. Built 2026-09-20 evening; see `SPEC-analytics.md`. Leadogo-side swap and iClosed push still open. | `attendance` data, `admin` | this + leadogo | 3 |
 | `design-pass` | Zoom-faithful UX designed in a tool, then applied to the room without changing its data flow. | `room`, `chat` | this | 3 |
 | `ai-moderator` | A persona answering in chat when no human is on; rate-limited; hands off to the human. | `moderator` | this | 3 |
+| `phase-4` | Operate many webinars: weekday schedules, admin and moderator roles with email invitations and per-webinar assignments, the dashboard, ghost and IP blocks, reactions and @mentions for everyone. Map and module notes in `SPEC-phase4.md` (draft 2026-09-20 late). | phases 1 to 3 | this | 4 |
 
 Build order (phase 1, tonight): `schedule` and `data-model` in parallel → `registration-webhook` and `room` in
 parallel → `chat` → `moderator` → `site-cutover` (before 5:00 PM Mountain 2026-09-21).
