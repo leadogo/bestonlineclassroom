@@ -14,5 +14,9 @@ test("chat filter: links, swearing, scam lines and shouting are refused; ordinar
   assert.equal(checkMessage("text me on WhatsApp").ok, false);
   assert.equal(checkMessage("YESSSSSSSSSSSSSSSSSSS").ok, false);
   assert.equal(checkMessage("Is it 5 pm ET or MT?").ok, true, "no false positive on plain text");
+  assert.equal(checkMessage("kick ass session").ok, false, "milder swearing too");
+  assert.equal(checkMessage("email me at jane@example.com").ok, false, "no contact details");
+  assert.equal(checkMessage("call 403-555-1234").ok, false, "no phone numbers");
+  assert.equal(checkMessage("I closed 12 deals in 2025").ok, true, "numbers in sentences are fine");
   assert.equal(checkMessage("I use Google Sheets and a CRM").ok, true, "product names are fine");
 });

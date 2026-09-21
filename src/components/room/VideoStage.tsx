@@ -11,7 +11,8 @@ const DRIFT_SECONDS = 5;
 const STALL_MS = 5000;
 const SOUND_KEY = "bc_sound";
 
-export function VideoStage({ token, available, expected, videoRef }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null> }) {
+export function VideoStage({ token, available, expected, videoRef, title, artwork }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null>; title: string; artwork: string | null }) {
+  const [ready, setReady] = useState(false);
   const [sound, setSound] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -90,7 +91,15 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
       if (stallTimer) clearTimeout(stallTimer);
       stallTimer = null;
       setStalled(false);
+      if (v.currentTime > 0) setReady(true);
     };
+    // The lock screen and control centre show our name and picture, never the file host's.
+    try {
+      const art = artwork ? [{ src: new URL(artwork, location.href).toString(), sizes: "512x512", type: "image/png" }] : [];
+      navigator.mediaSession.metadata = new MediaMetadata({ title, artist: "Live session", artwork: art });
+    } catch {
+      /* unsupported */
+    }
     const onTime = () => {
       if (!v.paused) onPlaying();
     };
@@ -99,12 +108,6 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
       if (document.hidden) {
         v.pause();
         setStalled(false);
-        try {
-          navigator.mediaSession.metadata = null;
-          navigator.mediaSession.playbackState = "none";
-        } catch {
-          /* unsupported */
-        }
       } else sync();
     };
     // Nothing on a lock screen or in a headset can scrub: every request lands back on the live minute.
@@ -150,7 +153,7 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
     };
     // expected is stable for the life of the room
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+  }, [src, title, artwork]);
 
   function unmute() {
     const v = videoRef.current;
@@ -175,6 +178,12 @@ export function VideoStage({ token, available, expected, videoRef }: { token: st
   return (
     <>
       <video ref={attach} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline autoPlay muted preload="auto" tabIndex={-1} disablePictureInPicture disableRemotePlayback />
+      {!ready && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex items-center justify-center gap-2 text-sm text-white/80" aria-live="polite">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden />
+          Connecting to the live session…
+        </div>
+      )}
       {!sound && (
         <button type="button" onClick={unmute} className="absolute inset-0 flex items-center justify-center bg-black/35 focus:outline-none" aria-label={touch ? "Tap for sound" : "Click for sound"}>
           <span className="inline-flex items-center gap-3 rounded-full bg-brand px-6 py-3.5 text-lg font-bold text-white shadow-[0_8px_30px_rgba(47,124,246,0.45)] ring-2 ring-white/20">

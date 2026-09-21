@@ -42,8 +42,9 @@ export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut }: { webina
                 <Link href={`/admin/events/${w.slug}/analytics`} className={sub(path.endsWith("/analytics"))}>
                   Analytics
                 </Link>
-                <Link href={`/mod/${w.slug}`} className={sub(false)}>
+                <Link href={`/mod/${w.slug}`} className={`mt-1 flex min-h-9 items-center justify-between rounded-md px-3 text-sm font-bold text-white ${w.live ? "bg-live" : "bg-brand"}`}>
                   Moderate
+                  {w.live && <span className="text-xs font-bold">Live</span>}
                 </Link>
               </div>
             )}

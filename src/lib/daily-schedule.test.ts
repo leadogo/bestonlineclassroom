@@ -42,6 +42,14 @@ test("currentOrNextSession: tonight's session while it runs, otherwise the next 
   assert.equal(currentOrNextSession(S, new Date("2026-09-21T22:00:00Z")).date, "2026-09-21", "4 PM MT: tonight");
 });
 
+test("a late session still running past midnight is the current one (found 2026-09-21 00:02 in a test run)", () => {
+  const late = { ...S, startHour: 23, startMinute: 46 };
+  const s = currentOrNextSession(late, mt(2026, 9, 21, 0, 2));
+  assert.equal(s.date, "2026-09-20", "yesterday's session, not tomorrow's countdown");
+  assert.equal(roomState(late, mt(2026, 9, 21, 0, 2)).state, "live");
+  assert.equal(currentOrNextSession(late, mt(2026, 9, 21, 2, 30)).date, "2026-09-21", "after it ends: tonight's");
+});
+
 test("roomState without a date: countdown, live at the offset, then tomorrow's countdown", () => {
   const a = roomState(S, mt(2026, 9, 21, 16, 59, 59));
   assert.deepEqual([a.state, a.offsetSeconds, a.session.date], ["countdown", 0, "2026-09-21"]);

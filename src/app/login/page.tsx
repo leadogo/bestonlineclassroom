@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 /** Team sign-in. No sign-up, no reset: accounts come from `npm run team:add`. */
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const signedIn = await getSignedIn().catch(() => null);
-  if (signedIn) redirect((await deviceTrusted(signedIn.id)) ? "/mod" : "/login/verify");
+  if (signedIn) redirect((await deviceTrusted(signedIn.id)) ? "/admin" : "/login/verify");
   const { error } = await searchParams;
   const event = await getEvent("ailg-r").catch(() => null);
   return (

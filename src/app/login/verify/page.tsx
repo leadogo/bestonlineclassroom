@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function VerifyPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const m = await getSignedIn();
   if (!m) redirect("/login");
-  if (await deviceTrusted(m.id)) redirect("/mod");
+  if (await deviceTrusted(m.id)) redirect("/admin");
   const { error } = await searchParams;
   const event = await getEvent("ailg-r").catch(() => null);
   const masked = m.email.replace(/^(.{2}).*(@.*)$/, "$1…$2");

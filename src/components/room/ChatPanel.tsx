@@ -75,6 +75,10 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
         try {
           const q = new URLSearchParams({ token, after: String(cursor.current.after), since: cursor.current.since });
           const res = await fetch(`/api/chat?${q}`, { cache: "no-store" });
+          if (res.status === 403) {
+            onRemoved();
+            return;
+          }
           if (res.ok) {
             const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; now: string; mine?: Array<{ id: number; emoji: string }> };
             const fresh = j.new.map(toItem);

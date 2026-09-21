@@ -26,5 +26,5 @@ export async function accept(token: string, _prev: AcceptState, fd: FormData): P
   const { error } = await sb.auth.signInWithPassword({ email: inv.email, password });
   if (error) redirect("/login");
   await trustDevice(res.id, (await headers()).get("user-agent"));
-  redirect(inv.role === "admin" ? "/admin" : "/mod");
+  redirect("/admin");
 }

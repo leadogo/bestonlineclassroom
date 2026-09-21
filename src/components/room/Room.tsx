@@ -22,6 +22,9 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
   const [removed, setRemoved] = useState(false);
   const [ctaClosed, setCtaClosed] = useState(false);
   const [full, setFull] = useState(false);
+  const [chatHidden, setChatHidden] = useState(false);
+  const [card, setCard] = useState(false);
+  const cardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeFull = useClientValue(() => Boolean(document.fullscreenEnabled), false);
 
   useEffect(() => {
@@ -86,21 +89,47 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
     setFull((f) => !f);
   }
 
+  function revealCard() {
+    setCard(true);
+    if (cardTimer.current) clearTimeout(cardTimer.current);
+    cardTimer.current = setTimeout(() => setCard(false), 4000);
+  }
+
   if (removed) return <Removed logoUrl={p.logoUrl} />;
 
-  const showCta = Boolean(p.cta) && live && !ctaClosed && offset >= p.cta!.at && offset < p.cta!.hide;
+  const showCta = Boolean(p.cta) && live && offset >= p.cta!.at && offset < p.cta!.hide;
   const ownFull = full && !nativeFull;
-  const banner = (overlay: boolean) => p.cta && <CtaBar label={p.cta.label} href={p.cta.href} title={p.cta.title} subtitle={p.cta.subtitle} iconUrl={p.iconUrl} token={p.token} overlay={overlay} onDismiss={() => setCtaClosed(true)} />;
+  void ownFull;
+  const banner = (overlay: boolean) => p.cta && <CtaBar label={p.cta.label} href={p.cta.href} title={p.cta.title} subtitle={p.cta.subtitle} iconUrl={p.iconUrl} token={p.token} overlay={overlay} slim={ctaClosed} onDismiss={() => setCtaClosed(true)} />;
 
   return (
-    <div ref={root} className={`flex h-dvh flex-col bg-room text-ink ${ownFull ? "fixed inset-0 z-50" : ""}`}>
-      {!ownFull && <TopBar title={p.title} iconUrl={p.iconUrl} live={live} offset={offset} watching={watching} preview={p.preview} />}
+    <div ref={root} className={`flex h-dvh flex-col bg-room text-ink ${full && !nativeFull ? "fixed inset-0 z-50" : ""}`}>
+      {!(full && !nativeFull) && <TopBar title={p.title} iconUrl={p.iconUrl} live={live} offset={offset} watching={watching} preview={p.preview} />}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row landscape-phone:flex-row">
-        <div className={`relative flex w-full shrink-0 flex-col bg-black lg:min-h-0 lg:flex-1 landscape-phone:h-full landscape-phone:flex-1 ${ownFull || !live ? "min-h-0 flex-1" : ""}`}>
-          <div className={`relative w-full lg:aspect-auto lg:min-h-0 lg:flex-1 landscape-phone:aspect-auto landscape-phone:flex-1 ${ownFull || !live ? "min-h-0 flex-1" : "aspect-video"}`}>
-            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} hostName={p.hostName} host={p.host} />}
+        <div className={`relative flex w-full shrink-0 flex-col bg-black lg:min-h-0 lg:flex-1 landscape-phone:h-full landscape-phone:flex-1 ${!live || chatHidden ? "min-h-0 flex-1" : ""}`}>
+          <div className={`relative w-full lg:aspect-auto lg:min-h-0 lg:flex-1 landscape-phone:aspect-auto landscape-phone:flex-1 ${!live || chatHidden ? "min-h-0 flex-1" : "aspect-video"}`} onClick={live ? revealCard : undefined}>
+            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} title={p.title} artwork={p.iconUrl} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} hostName={p.hostName} host={p.host} />}
+            {live && card && (
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 pb-10 text-white">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {p.host.avatarUrl ? <img src={p.host.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/40" /> : null}
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-bold leading-tight">{p.title}</p>
+                    <p className="truncate text-xs text-white/80">{p.hostName}{p.host.tagline ? `, ${p.host.tagline}` : ""}</p>
+                    <p className="mt-0.5 flex items-center gap-2 text-xs text-white/80">
+                      <span className="inline-flex items-center gap-1 rounded bg-live px-1.5 py-px font-bold text-white"><span className="h-1.5 w-1.5 rounded-full bg-white" aria-hidden />LIVE</span>
+                      <span className="tabular-nums">{watching} watching</span>
+                    </p>
+                  </div>
+                </div>
+                <button type="button" onClick={(e) => { e.stopPropagation(); setChatHidden((h) => !h); }} className="pointer-events-auto inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg bg-black/55 px-3 text-sm font-bold text-white hover:bg-black/75" aria-label={chatHidden ? "Show the chat" : "Hide the chat"}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                  {chatHidden ? "Show chat" : "Hide chat"}
+                </button>
+              </div>
+            )}
             {live && (
-              <button type="button" onClick={toggleFull} className="absolute bottom-2 right-2 z-10 grid h-10 w-10 place-items-center rounded-lg bg-black/55 text-white/90 hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70" aria-label={full ? "Leave full screen" : "Full screen"}>
+              <button type="button" onClick={(e) => { e.stopPropagation(); toggleFull(); }} className="absolute bottom-2 right-2 z-10 grid h-10 w-10 place-items-center rounded-lg bg-black/55 text-white/90 hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70" aria-label={full ? "Leave full screen" : "Full screen"}>
                 {full ? (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5" />
@@ -113,12 +142,12 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
               </button>
             )}
             {showCta && (
-              <div className={`absolute inset-x-0 bottom-0 ${ownFull ? "block" : "hidden lg:block landscape-phone:block"}`}>{banner(true)}</div>
+              <div className={`absolute inset-x-0 bottom-0 ${chatHidden ? "block" : "hidden lg:block landscape-phone:block"}`}>{banner(true)}</div>
             )}
           </div>
-          {showCta && !ownFull && <div className="lg:hidden landscape-phone:hidden">{banner(false)}</div>}
+          {showCta && !chatHidden && <div className="lg:hidden landscape-phone:hidden">{banner(false)}</div>}
         </div>
-        {live && !ownFull && <Panel token={p.token} registrantId={p.registrantId} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} onRemoved={() => setRemoved(true)} />}
+        {live && !chatHidden && <Panel token={p.token} registrantId={p.registrantId} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} onRemoved={() => setRemoved(true)} />}
       </div>
     </div>
   );

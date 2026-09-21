@@ -28,6 +28,7 @@ export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
   const r = await registrant(q.get("token") ?? "");
   if (!r) return Response.json({ error: "Not found" }, { status: 404 });
+  if (r.blocked_at) return Response.json({ error: "Removed" }, { status: 403 });
   const after_ = Number(q.get("after") ?? 0) || 0;
   const since = q.get("since") ?? "";
   // Ghosted people see their own rows; nobody else does.

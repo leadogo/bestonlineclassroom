@@ -72,10 +72,13 @@ export function sessionFor(s: Schedule, date: string | null | undefined): Sessio
   return runsOn(s, partsInTz(c.start, s.timezone).weekday) ? c : null;
 }
 
-/** Today's session while it is in progress (start ≤ now < end), otherwise the next one. */
+/** The session in progress right now (today's, or yesterday's still running past midnight), otherwise the next one. */
 export function currentOrNextSession(s: Schedule, now: Date = new Date()): Session {
+  const running = (d: Session | null) => Boolean(d && d.start.getTime() <= now.getTime() && now.getTime() < d.end.getTime());
   const tonight = sessionFor(s, localDate(s, now));
-  if (tonight && tonight.start.getTime() <= now.getTime() && now.getTime() < tonight.end.getTime()) return tonight;
+  if (running(tonight)) return tonight!;
+  const yesterday = sessionFor(s, localDate(s, new Date(now.getTime() - 86_400_000)));
+  if (running(yesterday)) return yesterday!;
   return nextSession(s, now);
 }
 

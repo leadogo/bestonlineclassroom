@@ -25,5 +25,7 @@ export async function GET(request: Request) {
   const rows = (data ?? []).map((row) => ({ id: row.registrant_id as string, joined_at: row.joined_at as string, ...(row.registrant as unknown as { first_name: string; source: string }) })).filter((r) => r.source !== "test");
   const names = Array.from(new Set(rows.map((r) => r.first_name)));
   const people = rows.map((r) => ({ id: r.id, name: r.first_name, sub: `joined ${new Date(r.joined_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` }));
-  return Response.json({ names, people }, { headers: { "cache-control": "no-store" } });
+  const mods = await db().from("team_presence").select("member_id, member:team_members!inner(display_name)").eq("event_id", reg.data.event_id).eq("session_date", reg.data.session_date).gte("last_seen_at", since);
+  const moderators = (mods.data ?? []).map((m) => ({ id: `m:${m.member_id}`, name: (m.member as unknown as { display_name: string }).display_name }));
+  return Response.json({ names, people, moderators }, { headers: { "cache-control": "no-store" } });
 }

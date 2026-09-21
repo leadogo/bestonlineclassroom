@@ -33,6 +33,9 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const cursor = useRef({ after: 0, since: "" });
   const sim = useRef<{ rows: SimulatedRow[]; next: number }>({ rows: [], next: 0 });
   const scroller = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [pending, setPending] = useState(0);
+  const seen = useRef(0);
   const offset = () => (Date.now() + skew.current - session.startsAt) / 1000;
   const offsetNow = (now - session.startsAt) / 1000;
   const live = now >= session.startsAt && now < session.endsAt;
@@ -96,8 +99,18 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
 
   useEffect(() => {
     const el = scroller.current;
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 200) el.scrollTop = el.scrollHeight;
-  }, [list]);
+    if (!el) return;
+    if (atBottom) el.scrollTop = el.scrollHeight;
+    else if (list.length > seen.current) setPending((n) => n + (list.length - seen.current));
+    seen.current = list.length;
+  }, [list, atBottom]);
+  function onScroll() {
+    const el = scroller.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    setAtBottom(near);
+    if (near) setPending(0);
+  }
 
   async function act(body: object): Promise<boolean> {
     const res = await fetch("/api/mod", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: event.slug, date: session.date, ...body }) });
@@ -186,7 +199,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         </div>
       )}
 
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+      <div ref={scroller} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-4 py-2">
         {shown.length === 0 && <p className="py-8 text-center text-muted">No messages yet.</p>}
         {shown.map((m) => (
           <div key={m.key} className={`flex gap-3 border-b border-line/60 py-2.5 ${m.deleted ? "opacity-40" : ""} ${m.mentionsMe ? "-mx-4 bg-brand/10 px-4" : m.role === "attendee" ? "-mx-4 bg-emerald-500/10 px-4" : ""}`}>
@@ -248,6 +261,11 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         ))}
       </div>
 
+      {pending > 0 && !atBottom && (
+        <button type="button" onClick={() => { setAtBottom(true); setPending(0); scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }} className="mx-auto -mt-10 mb-2 rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow">
+          {pending} new message{pending > 1 ? "s" : ""} ↓
+        </button>
+      )}
       <form onSubmit={reply} className="relative border-t border-line p-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
         {options.length > 0 && (
           <ul className="absolute bottom-full left-3 right-3 mb-1 max-w-md overflow-hidden rounded-xl border border-line bg-panel shadow-lg" role="listbox">

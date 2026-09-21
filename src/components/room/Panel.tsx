@@ -11,6 +11,7 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
   const [unread, setUnread] = useState(0);
   const [real, setReal] = useState<string[]>([]);
   const [people, setPeople] = useState<Mentionable[]>([]);
+  const [mods, setMods] = useState<string[]>([]);
 
   useEffect(() => {
     if (!live) return;
@@ -18,9 +19,10 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
     const load = async () => {
       try {
         const res = await fetch(`/api/people?token=${encodeURIComponent(token)}`, { cache: "no-store" });
-        const j = (await res.json()) as { names?: string[]; people?: Mentionable[] };
+        const j = (await res.json()) as { names?: string[]; people?: Mentionable[]; moderators?: Array<{ id: string; name: string }> };
         if (!stop && Array.isArray(j.names)) setReal(j.names);
         if (!stop && Array.isArray(j.people)) setPeople(j.people);
+        if (!stop && Array.isArray(j.moderators)) setMods(j.moderators.map((m) => m.name));
       } catch {
         /* keep the last list */
       }
@@ -34,7 +36,7 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
   }, [live, token]);
 
   const realNames = real.includes(firstName) ? real : [firstName, ...real];
-  const count = 1 + realNames.length + simulatedNames.length;
+  const count = 1 + mods.length + realNames.length + simulatedNames.length;
   useEffect(() => onCount(count), [count, onCount]);
 
   return (
@@ -53,7 +55,7 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
         <ChatPanel token={token} registrantId={registrantId} people={people} onRemoved={onRemoved} simulated={simulated} live={live} expected={expected} visible={tab === "chat"} onUnread={() => setUnread((n) => n + 1)} />
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "people"}>
-        <PeoplePanel hostName={hostName} you={firstName} realNames={realNames} simulatedNames={simulatedNames} />
+        <PeoplePanel hostName={hostName} moderators={mods} you={firstName} realNames={realNames} simulatedNames={simulatedNames} />
       </div>
     </aside>
   );

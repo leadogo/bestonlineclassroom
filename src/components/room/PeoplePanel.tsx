@@ -17,8 +17,8 @@ export function Avatar({ name, size = "h-8 w-8 text-xs" }: { name: string; size?
   return <span className={`grid shrink-0 place-items-center rounded-full font-bold text-white ${tone(name)} ${size}`}>{initials(name)}</span>;
 }
 
-export function PeoplePanel({ hostName, you, realNames, simulatedNames }: { hostName: string; you: string; realNames: string[]; simulatedNames: string[] }) {
-  const rows: Array<{ name: string; tag?: string }> = [{ name: hostName, tag: "Host" }, ...realNames.map((n) => ({ name: n, tag: n === you ? "You" : undefined })), ...simulatedNames.map((n) => ({ name: n }))];
+export function PeoplePanel({ hostName, moderators = [], you, realNames, simulatedNames }: { hostName: string; moderators?: string[]; you: string; realNames: string[]; simulatedNames: string[] }) {
+  const rows: Array<{ name: string; tag?: string }> = [{ name: hostName, tag: "Host" }, ...moderators.map((n) => ({ name: n, tag: "Moderator" })), ...realNames.map((n) => ({ name: n, tag: n === you ? "You" : undefined })), ...simulatedNames.map((n) => ({ name: n }))];
   return (
     <ul className="h-full overflow-y-auto py-1">
       {rows.map((p, i) => (
