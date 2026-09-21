@@ -12,10 +12,14 @@ export function GuestForm({ slug, title, logoUrl, sessionDate, src, rid, passthr
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
+    await join(name);
+  }
+
+  async function join(who: string) {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug, first_name: name, session_date: sessionDate, src, rid }) });
+      const res = await fetch("/api/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug, first_name: who, session_date: sessionDate, src, rid }) });
       const j = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
       if (!res.ok || !j.token) throw new Error(j.error ?? "Please try again.");
       const q = new URLSearchParams(passthrough).toString();
@@ -49,6 +53,9 @@ export function GuestForm({ slug, title, logoUrl, sessionDate, src, rid, passthr
       {error && <p className="mt-2 text-base text-live">{error}</p>}
       <button type="submit" disabled={busy || !name.trim()} className="mt-4 min-h-13 w-full rounded-xl bg-brand text-lg font-bold text-white shadow-[0_6px_24px_rgba(47,124,246,0.35)] disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50">
         {busy ? "Joining…" : "Join the session"}
+      </button>
+      <button type="button" disabled={busy} onClick={() => join("Guest")} className="mt-3 min-h-11 w-full text-base text-muted underline-offset-2 hover:text-ink hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+        I prefer to stay anonymous
       </button>
     </form>
   );

@@ -4,14 +4,21 @@ import { resolveForSession } from "@/lib/attendees";
 import { currentOrNextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { getEvent } from "@/lib/events";
 import { cleanParams, toQuery } from "@/lib/params";
+import { createGuest } from "@/lib/attendees";
+import { emailHash, isTestIdentity, normalizeEmail } from "@/lib/registrants";
+import { logClick } from "@/lib/clicks";
+import { after } from "next/server";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The open link (Skool, legacy calendar links, anyone): finds the person from `eh` (email hash) or `rid` (the
- * site's registration id) and sends them to their own link for tonight; otherwise asks for a first name.
+ * The open link (Skool, SMS and email sends, legacy calendar links, anyone): finds the person from `e` (email,
+ * hashed here) or `eh` (email hash) or `rid` (the site's registration id) and sends them to their own link for
+ * tonight. An unknown person with `e` and `fn` (first name) on the link is registered on the spot and walks
+ * straight in; otherwise a one-field name prompt.
  */
 export default async function OpenPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
@@ -22,12 +29,22 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
   const one = (k: string) => (Array.isArray(sp[k]) ? (sp[k] as string[])[0] : (sp[k] as string | undefined)) ?? "";
   const schedule = scheduleOf(event);
   const sessionDate = sessionFor(schedule, one("sd"))?.date ?? currentOrNextSession(schedule).date;
-  const src = one("src") === "legacy" ? "legacy" : one("src") === "skool" || !one("src") ? "skool" : "guest";
+  const srcRaw = one("src");
+  const src = (["legacy", "skool", "sms", "email"].includes(srcRaw) ? srcRaw : !srcRaw ? "skool" : "guest") as "legacy" | "skool" | "sms" | "email" | "guest";
+  const email = normalizeEmail(one("e"));
+  const eh = (email ? emailHash(email) : one("eh")).toLowerCase();
+  const fn = one("fn").trim().slice(0, 40);
   const rid = UUID_RE.test(one("rid")) ? one("rid").toLowerCase() : undefined;
   const passthrough = { ...cleanParams(sp), ...(one("at") ? { at: one("at") } : {}), ...(one("key") ? { key: one("key") } : {}) };
 
-  const known = await resolveForSession(event.id, sessionDate, { eh: one("eh").toLowerCase(), rid, lk: one("lk").toLowerCase() }, src).catch(() => null);
+  const known = await resolveForSession(event.id, sessionDate, { eh, rid, lk: one("lk").toLowerCase() }, src).catch(() => null);
   if (known) redirect(`/j/${known.token}${toQuery(passthrough)}`);
+  if (email && fn) {
+    const made = await createGuest({ eventId: event.id, sessionDate, firstName: fn, source: isTestIdentity(email) ? ("test" as never) : src, email, emailHash: eh, siteRegistrationId: rid }).catch(() => null);
+    if (made) redirect(`/j/${made.token}${toQuery(passthrough)}`);
+  }
+  const ua = (await headers()).get("user-agent");
+  after(() => logClick({ path: "w", outcome: "prompt", eventId: event.id, sessionDate, src, userAgent: ua }));
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">

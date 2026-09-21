@@ -7,6 +7,8 @@ import { getTeamMember } from "@/lib/auth";
 import { TOKEN_RE } from "@/lib/registrants";
 import { buildRoom } from "@/lib/room-props";
 import { getSimulatedRows } from "@/lib/simulated";
+import { logClick } from "@/lib/clicks";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,9 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const { token } = await params;
   const sp = await searchParams;
   const r = TOKEN_RE.test(token) ? await registrantByToken(token).catch(() => null) : null;
+  const ua = (await headers()).get("user-agent");
   if (!r) {
+    after(() => logClick({ path: "j", outcome: "invalid", token, userAgent: ua }));
     return (
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-sm">
@@ -35,7 +39,12 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   }
   const team = sp.at ? Boolean(await getTeamMember().catch(() => null)) : false;
   const outcome = buildRoom(r.event, r, sp, new Date(), { team });
-  if (outcome.kind === "ended") redirect(outcome.to);
+  const src = typeof sp.src === "string" ? sp.src : null;
+  if (outcome.kind === "ended") {
+    after(() => logClick({ path: "j", outcome: "ended", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua }));
+    redirect(outcome.to);
+  }
+  if (!outcome.props.preview) after(() => logClick({ path: "j", outcome: outcome.props.state, token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua }));
   const simulated = await getSimulatedRows(r.event.id).catch(() => []);
   // ponytail: the site's /join records room_join for leadogo, the ritual sheet and Slack; calling it once here keeps
   // all three without a new contract. Replace with a direct leadogo event when analytics N2 lands.

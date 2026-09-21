@@ -7,6 +7,8 @@ import { TOKEN_RE } from "@/lib/registrants";
 import { after } from "next/server";
 import { replayCopy } from "@/lib/replay-content";
 import { tagNow } from "@/lib/tagging";
+import { logClick } from "@/lib/clicks";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,9 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   const { token } = await params;
   const sp = await searchParams;
   const r = TOKEN_RE.test(token) ? await registrantByToken(token).catch(() => null) : null;
+  const ua = (await headers()).get("user-agent");
   if (!r || !r.event.video_url) {
+    after(() => logClick({ path: "replay", outcome: "invalid", token, userAgent: ua }));
     return (
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-sm">
@@ -53,9 +57,11 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   }
   const expiresAt = openedAt && e.replay_hours > 0 ? openedAt.getTime() + e.replay_hours * 3_600_000 : null;
   if (expiresAt !== null && now.getTime() >= expiresAt) {
+    after(() => logClick({ path: "replay", outcome: "replay_expired", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
     return <ReplayExpired logoUrl={e.logo_url} cta={cta} onClickHref={SITE} copy={replayCopy(e.replay_copy)} />;
   }
 
+  after(() => logClick({ path: "replay", outcome: "replay", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
   const chapters = (Array.isArray(e.chapters) ? e.chapters : []).filter((c) => typeof c?.at === "number" && typeof c?.label === "string").sort((a, b) => a.at - b.at);
   return <ReplayView token={r.token} firstName={r.first_name} title={e.title} logoUrl={e.logo_url} videoUrl={videoUrl} seconds={e.video_seconds ?? 0} cta={cta} chapters={chapters} params={p} expiresAt={expiresAt} serverNow={now.getTime()} copy={replayCopy(e.replay_copy)} />;
 }

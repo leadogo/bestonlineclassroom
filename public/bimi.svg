@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny-ps" viewBox="0 0 256 256">
+  <title>BestOnlineClassroom</title>
+  <rect width="256" height="256" fill="#0E1116"/>
+  <polygon points="128,64 232,110 128,156 24,110" fill="#F3F6F9"/>
+  <path d="M72 128 L72 168 Q128 200 184 168 L184 128 Q128 160 72 128 Z" fill="#F3F6F9"/>
+  <rect x="224" y="110" width="8" height="52" fill="#2F7CF6"/>
+  <polygon points="228,158 240,190 232,186 236,200 226,196 222,186 216,190" fill="#2F7CF6"/>
+</svg>

@@ -40,7 +40,7 @@ async function latestBy(eventId: string, column: "email_hash" | "site_registrati
   return (data as Registrant | null) ?? null;
 }
 
-export type GuestSource = "skool" | "legacy" | "guest";
+export type GuestSource = "skool" | "legacy" | "guest" | "sms" | "email";
 
 export async function createGuest(input: { eventId: string; sessionDate: string; firstName: string; source: GuestSource | "legacy-import"; email?: string | null; emailHash?: string; phone?: string | null; siteRegistrationId?: string | null; legacyKey?: string | null }): Promise<Registrant> {
   const { data, error } = await db()
