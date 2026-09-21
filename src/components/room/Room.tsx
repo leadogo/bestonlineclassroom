@@ -3,6 +3,7 @@
 // Countdown until startsAt, live until endsAt, then the end URL. Three shapes: phone upright (video on top,
 // chat below), phone sideways and desktop (video left, chat right).
 import { useEffect, useRef, useState } from "react";
+import type { SimulatedRow } from "@/lib/chat";
 import type { RoomProps } from "@/lib/room-props";
 import { useClientValue } from "@/lib/use-client-value";
 import { CtaBar } from "./CtaBar";
@@ -10,7 +11,7 @@ import { Panel } from "./Panel";
 import { TopBar } from "./TopBar";
 import { VideoStage } from "./VideoStage";
 
-export function Room(p: RoomProps) {
+export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
   const skew = useRef(0);
   const [now, setNow] = useState(p.serverNow);
   const root = useRef<HTMLDivElement>(null);
@@ -82,7 +83,7 @@ export function Room(p: RoomProps) {
             </div>
           )}
         </div>
-        <Panel token={p.token} eventSlug={p.eventSlug} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} live={live} expected={expected} onCount={setWatching} />
+        <Panel token={p.token} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} />
       </div>
     </div>
   );

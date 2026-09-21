@@ -2,10 +2,11 @@
 // The side of the room: Chat and People. Chat stays mounted behind the People tab so it keeps up and can show
 // an unread count. Large tabs, nothing to learn.
 import { useEffect, useState } from "react";
+import type { SimulatedRow } from "@/lib/chat";
 import { ChatPanel } from "./ChatPanel";
 import { PeoplePanel } from "./PeoplePanel";
 
-export function Panel({ token, eventSlug, firstName, hostName, simulatedNames, live, expected, onCount }: { token: string; eventSlug: string; firstName: string; hostName: string; simulatedNames: string[]; live: boolean; expected: () => number; onCount: (n: number) => void }) {
+export function Panel({ token, firstName, hostName, simulatedNames, simulated, live, expected, onCount }: { token: string; firstName: string; hostName: string; simulatedNames: string[]; simulated: SimulatedRow[]; live: boolean; expected: () => number; onCount: (n: number) => void }) {
   const [tab, setTab] = useState<"chat" | "people">("chat");
   const [unread, setUnread] = useState(0);
   const [real, setReal] = useState<string[]>([]);
@@ -47,7 +48,7 @@ export function Panel({ token, eventSlug, firstName, hostName, simulatedNames, l
         </Tab>
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "chat"}>
-        <ChatPanel token={token} eventSlug={eventSlug} firstName={firstName} live={live} expected={expected} visible={tab === "chat"} onUnread={() => setUnread((n) => n + 1)} />
+        <ChatPanel token={token} firstName={firstName} simulated={simulated} live={live} expected={expected} visible={tab === "chat"} onUnread={() => setUnread((n) => n + 1)} />
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "people"}>
         <PeoplePanel hostName={hostName} you={firstName} realNames={realNames} simulatedNames={simulatedNames} />

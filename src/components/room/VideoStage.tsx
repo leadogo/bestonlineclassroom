@@ -1,7 +1,7 @@
 "use client";
 // The recording, played as if live: opened at the expected offset, kept within 5 s of it, muted until the
 // viewer taps for sound (mobile autoplay rules), no controls, no scrubbing, no clicks reaching the element.
-import { useEffect, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useState, type MutableRefObject } from "react";
 import { useClientValue } from "@/lib/use-client-value";
 
 const DRIFT_SECONDS = 5;
@@ -11,6 +11,16 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
   const [sound, setSound] = useState(false);
   const [stalled, setStalled] = useState(false);
   const touch = useClientValue(() => window.matchMedia("(pointer: coarse)").matches, false);
+
+  // Attached once: React does not write the muted attribute, and the browser must see muted before it decides on
+  // autoplay. A stable callback, so re-renders (the clock ticks every second) never touch the element again.
+  const attach = useCallback(
+    (el: HTMLVideoElement | null) => {
+      if (el && videoRef.current !== el) el.muted = true;
+      videoRef.current = el;
+    },
+    [videoRef],
+  );
 
   useEffect(() => {
     const v = videoRef.current;
@@ -80,11 +90,7 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
   return (
     <>
       <video
-        ref={(el) => {
-          // React does not write the muted attribute; the browser must see muted before it decides on autoplay.
-          if (el) el.muted = true;
-          videoRef.current = el;
-        }}
+        ref={attach}
         src={src}
         className="pointer-events-none absolute inset-0 h-full w-full object-contain"
         playsInline

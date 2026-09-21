@@ -4,6 +4,7 @@ import { registrantByToken } from "@/lib/attendees";
 import { getTeamMember } from "@/lib/auth";
 import { TOKEN_RE } from "@/lib/registrants";
 import { buildRoom } from "@/lib/room-props";
+import { getSimulatedRows } from "@/lib/simulated";
 
 export const dynamic = "force-dynamic";
 
@@ -33,5 +34,6 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const team = sp.at ? Boolean(await getTeamMember().catch(() => null)) : false;
   const outcome = buildRoom(r.event, r, sp, new Date(), { team });
   if (outcome.kind === "ended") redirect(outcome.to);
-  return <Room {...outcome.props} />;
+  const simulated = await getSimulatedRows(r.event.id).catch(() => []);
+  return <Room {...outcome.props} simulated={simulated} />;
 }

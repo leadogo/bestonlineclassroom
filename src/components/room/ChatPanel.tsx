@@ -9,14 +9,14 @@ type Wire = { id: number; author_name: string; role: "attendee" | "moderator"; b
 
 const POLL_MS = 3000;
 
-export function ChatPanel({ token, eventSlug, firstName, live, expected, visible, onUnread }: { token: string; eventSlug: string; firstName: string; live: boolean; expected: () => number; visible: boolean; onUnread: () => void }) {
+export function ChatPanel({ token, firstName, simulated, live, expected, visible, onUnread }: { token: string; firstName: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void }) {
   const [list, setList] = useState<ChatItem[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [pending, setPending] = useState(0);
-  const sim = useRef<{ rows: SimulatedRow[]; next: number }>({ rows: [], next: 0 });
+  const sim = useRef<{ rows: SimulatedRow[]; next: number }>({ rows: simulated, next: 0 });
   const cursor = useRef({ after: 0, since: "" });
   const lastPost = useRef<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -32,24 +32,10 @@ export function ChatPanel({ token, eventSlug, firstName, live, expected, visible
     [visible, atBottom, onUnread],
   );
 
-  // The simulated crowd, once per room open.
-  useEffect(() => {
-    let stop = false;
-    fetch(`/api/simulated?event=${encodeURIComponent(eventSlug)}`)
-      .then((r) => r.json())
-      .then((j: { rows?: SimulatedRow[] }) => {
-        if (!stop && Array.isArray(j.rows)) sim.current = { rows: j.rows, next: 0 };
-      })
-      .catch(() => {});
-    return () => {
-      stop = true;
-    };
-  }, [eventSlug]);
-
-  // Every second, release what the video's clock has reached.
+  // The simulated crowd: the whole history at once on open, then every second what the video's clock has reached.
   useEffect(() => {
     if (!live) return;
-    const id = setInterval(() => {
+    const run = () => {
       const { items, nextIndex } = simulatedCursor(sim.current.rows, expected(), sim.current.next);
       if (items.length === 0) return;
       const first = sim.current.next === 0;
@@ -58,8 +44,13 @@ export function ChatPanel({ token, eventSlug, firstName, live, expected, visible
       const mapped = items.map((r) => ({ key: `s${seq.current++}`, name: r.name, role: "simulated" as const, body: r.body, at: now - (expected() - r.offset_seconds) * 1000, reactions: {} }));
       if (first) setList((l) => trimList([...mapped, ...l]));
       else append(mapped);
-    }, 1000);
-    return () => clearInterval(id);
+    };
+    const t = setTimeout(run, 0);
+    const id = setInterval(run, 1000);
+    return () => {
+      clearTimeout(t);
+      clearInterval(id);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, append]);
 
