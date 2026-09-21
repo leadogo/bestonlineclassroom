@@ -102,6 +102,9 @@ export default async function AdminHome() {
               <Link href={`/mod/${e.slug}`} className="text-brand underline">
                 Moderate
               </Link>
+              <Link href={`/admin/events/${e.slug}/analytics`} className="text-brand underline">
+                Analytics
+              </Link>
               <a href={`/w/${e.slug}?at=0`} className="text-brand underline" target="_blank" rel="noopener">
                 Preview room
               </a>

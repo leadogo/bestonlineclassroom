@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { distinctNames, parseChatCsv, parseCsv, parseTimestamp } from "./csv.ts";
+import { distinctNames, parseChatCsv, parseCsv, parseTimestamp, toCsv } from "./csv.ts";
 
 test("timestamps: h:mm:ss, mm:ss, garbage", () => {
   assert.equal(parseTimestamp("0:00:33"), 33);
@@ -29,4 +29,8 @@ test("parseChatCsv: header by name, ordered by offset, empties dropped", () => {
   ]);
   assert.deepEqual(distinctNames([...rows, { offset_seconds: 5000, name: "Connor", body: "again" }]), ["Connor", "Zippy"]);
   assert.throws(() => parseChatCsv("a,b,c\n1,2,3\n"), /header/);
+});
+
+test("toCsv quotes commas, quotes and newlines", () => {
+  assert.equal(toCsv([["a", "b,c", 'say "hi"', "x\ny", null, 3]]), 'a,"b,c","say ""hi""","x\ny",,3\r\n');
 });

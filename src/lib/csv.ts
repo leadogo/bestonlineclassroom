@@ -65,3 +65,12 @@ export function distinctNames(rows: SimulatedRow[]): string[] {
   for (const r of rows) if (!seen.has(r.name)) { seen.add(r.name); out.push(r.name); }
   return out;
 }
+
+/** Rows to RFC 4180 text: quotes around anything with a comma, quote or newline. */
+export function toCsv(rows: Array<Array<string | number | null | undefined>>): string {
+  const cell = (v: string | number | null | undefined) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+}

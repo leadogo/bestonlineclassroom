@@ -1,6 +1,6 @@
 "use client";
 import { useActionState } from "react";
-import { createEvent, deleteEvent, type DashState } from "./actions";
+import { createEvent, deleteEvent } from "./actions";
 
 const input = "rounded-md border border-line bg-room px-3 py-2 text-base focus:border-brand focus:outline-none";
 
