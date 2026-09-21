@@ -1,7 +1,9 @@
 // Which tags a registrant's outcomes earn (SPEC-analytics.md), the same nine EasyWebinar sent. Pure, tested.
-// "attended" and "missed" are decided once the session has ended; "watched_replay" can arrive days later.
+// "registered" goes as soon as the contact exists; "attended" (15 min or more live) and "missed" are decided once
+// the session has ended; "watched_replay" can arrive days later.
 
 export type Outcome = {
+  registered: boolean;
   attended: boolean;
   missed: boolean;
   watched_replay: boolean;
@@ -12,7 +14,7 @@ export type Outcome = {
   saw_offer_no_click: boolean;
 };
 
-export const OUTCOME_KEYS = ["attended", "missed", "watched_replay", "left_early", "stayed_40min", "asked_question", "clicked_offer", "saw_offer_no_click"] as const;
+export const OUTCOME_KEYS = ["registered", "attended", "missed", "watched_replay", "left_early", "stayed_40min", "asked_question", "clicked_offer", "saw_offer_no_click"] as const;
 
 export type TagNames = Record<string, string>;
 
@@ -30,6 +32,7 @@ export function tagsFor(o: Outcome, names: TagNames, sessionOver: boolean): stri
     add("stayed_40min");
     add("saw_offer_no_click");
   }
+  add("registered");
   add("watched_replay");
   add("asked_question");
   add("clicked_offer");

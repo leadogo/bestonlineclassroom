@@ -1,6 +1,6 @@
 import { retentionCurve } from "@/lib/outcomes";
 
-export type Metrics = { registered: number; attended: number; missed: number; live_at_pitch: number; clicked_offer: number; saw_offer_no_click: number; watched_replay: number; stayed_40min: number; asked_question: number; left_early: number; avg_live_seconds: number };
+export type Metrics = { registered: number; joined: number; attended: number; missed: number; live_at_pitch: number; clicked_offer: number; saw_offer_no_click: number; watched_replay: number; stayed_40min: number; asked_question: number; left_early: number; avg_live_seconds: number };
 
 function pct(n: number, d: number): string {
   return d ? `${Math.round((n / d) * 100)}%` : "—";
@@ -11,11 +11,12 @@ export function SessionMetrics({ m, offsets, videoSeconds, ctaAt }: { m: Metrics
   if (!m) return <p className="text-sm text-muted">No numbers yet for this session.</p>;
   const tiles: Array<[string, string, string]> = [
     ["Registered", String(m.registered), ""],
-    ["Joined live", String(m.attended), pct(m.attended, m.registered) + " show-up"],
-    ["Live at the pitch", String(m.live_at_pitch), pct(m.live_at_pitch, m.attended) + " of joiners"],
-    ["Clicked the offer", String(m.clicked_offer), pct(m.clicked_offer, m.attended) + " of joiners"],
+    ["Joined live", String(m.joined), pct(m.joined, m.registered) + " show-up"],
+    ["Attended (15 min+)", String(m.attended), pct(m.attended, m.joined) + " of joiners"],
+    ["Live at the pitch", String(m.live_at_pitch), pct(m.live_at_pitch, m.joined) + " of joiners"],
+    ["Clicked the offer", String(m.clicked_offer), pct(m.clicked_offer, m.joined) + " of joiners"],
     ["Saw it, didn't click", String(m.saw_offer_no_click), ""],
-    ["Stayed 40 min+", String(m.stayed_40min), pct(m.stayed_40min, m.attended)],
+    ["Stayed 40 min+", String(m.stayed_40min), pct(m.stayed_40min, m.joined)],
     ["Asked a question", String(m.asked_question), ""],
     ["Left before the pitch", String(m.left_early), ""],
     ["Watched the replay", String(m.watched_replay), ""],

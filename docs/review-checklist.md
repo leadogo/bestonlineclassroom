@@ -27,13 +27,14 @@ What to look at, in the order it matters. Tick as you go; anything wrong becomes
 - [ ] Which numbers you want on Funnel Performance beyond joined / retention / live at pitch.
 
 ## ActiveCampaign and iClosed tags
-- [ ] Put `ACTIVECAMPAIGN_API_URL` and `ACTIVECAMPAIGN_API_KEY` in Doppler `bestonlineclassroom` prd (the site never had them; every opt-in tonight shows `activecampaign: false`).
+- [x] `ACTIVECAMPAIGN_API_URL` and `ACTIVECAMPAIGN_API_KEY` in Doppler prd (2026-09-20 evening; the key lists the `ailgr_*` tags).
 - [ ] Tag names in `/admin/events/ailg-r` (defaults `ailgr_registered` … `ailgr_sawoffernoclick`, matching EasyWebinar's).
 - [ ] After the first session: `GET /api/cron/outcomes?dry=1` (Bearer `CRON_SECRET`) lists who gets what; then check a real contact in ActiveCampaign.
 - [ ] iClosed: how you want events pushed (their API or a webhook), and which events. Not built yet.
 
 ## Reminders
-- [ ] Postmark: a server, the sender domain verified (DKIM + return-path on bestonlineclassroom.com), then `POSTMARK_SERVER_TOKEN` and `REMINDER_FROM` in Doppler prd.
+- [x] Postmark server token and `REMINDER_FROM` (`William Kabrall <william@bestonlineclassroom.com>`) in Doppler prd.
+- [ ] Postmark: verify the domain. Postmark → Sender Signatures → Add Domain → `bestonlineclassroom.com`; add the DKIM TXT record and the Return-Path CNAME it shows in Cloudflare (DNS only); click Verify on both. Until then every send is refused with "not a Sender Signature".
 - [ ] Reminder text in `/admin/events/ailg-r` (50 and 30 minutes are seeded; a third slot is available).
 - [ ] `GET /api/cron/reminders?dry=1` at 16:12 MT lists tomorrow's 50-minute sends; a Test Sample receives both emails once Postmark is on.
 - [ ] Decide whether ActiveCampaign's reminders stay on alongside ours.

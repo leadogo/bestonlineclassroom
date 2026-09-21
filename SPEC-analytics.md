@@ -10,11 +10,13 @@ retention, how many were live at the pitch, who clicked; per person, the nine ou
 feed leadogo's Funnel Performance can read in place of EasyWebinar's API.
 
 ## Definitions (view `registrant_outcomes`, migration 006; test rows excluded from totals)
-- **attended**: a `live` attendance row. **missed**: no live row and no replay row.
-- **live_at_pitch**: furthest live offset ≥ `cta_at_seconds`. **left_early**: joined, furthest offset before the
-  pitch. **stayed_40min**: 2400 s or more of live heartbeats.
+- **registered**: every registrant with an email (tagged within the hour, once the Zap has created the contact).
+- **attended**: at least 15 minutes of live heartbeats. **missed**: fewer than 15 minutes live (a replay does not
+  change it). **joined**: any live row (the show-up count on the admin page).
+- **live_at_pitch**: furthest live offset ≥ `cta_at_seconds`. **left_early**: attended, furthest offset before
+  the pitch. **stayed_40min**: 2400 s or more of live heartbeats.
 - **asked_question**: at least one chat message. **clicked_offer**: a CTA click (live or replay).
-  **saw_offer_no_click**: live at the pitch and no click. **watched_replay**: a replay row with ≥ 60 s.
+  **saw_offer_no_click**: live at the pitch and no click. **watched_replay**: opened the replay page.
 - **Retention curve**: of joiners, the share whose furthest offset reaches each 10-minute mark.
 - `session_metrics`: the counts per event and session date, plus average live seconds.
 
@@ -27,7 +29,7 @@ feed leadogo's Funnel Performance can read in place of EasyWebinar's API.
   an email gets the ActiveCampaign tags their outcomes earn (`events.tags`, default `ailgr_*`). Attended, missed,
   left early, stayed 40 min and saw-offer-no-click wait until 30 minutes after the recording ends; watched replay,
   asked a question and clicked offer go within the hour. `outcome_tags` logs what was sent, so nothing repeats.
-  The **registered** tag is the site's job (it already adds the list and tag on opt-in).
+  **registered** is sent by the same job, so it no longer depends on the site's own ActiveCampaign call.
 - iClosed: planned, not built. iClosed reads the prefill parameters on the CTA link today; a server-side push
   needs their API details from William.
 

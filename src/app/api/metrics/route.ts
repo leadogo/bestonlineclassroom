@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   for (const row of data ?? []) {
     const att = await db().from("attendance").select("max_offset, registrant:registrants!inner(source)").eq("session_date", row.session_date).eq("kind", "live").eq("registrant.event_id", event.id);
     const offsets = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test").map((a) => a.max_offset as number);
-    sessions.push({ ...row, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.attended / row.registered : 0 });
+    sessions.push({ ...row, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
   }
   return Response.json({ event: event.slug, sessions }, { headers: { "cache-control": "no-store" } });
 }
