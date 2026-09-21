@@ -7,8 +7,27 @@ import { useClientValue } from "@/lib/use-client-value";
 const DRIFT_SECONDS = 5;
 const STALL_MS = 5000;
 
-export function VideoStage({ src, expected, videoRef }: { src: string | null; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null> }) {
+export function VideoStage({ token, available, expected, videoRef }: { token: string; available: boolean; expected: () => number; videoRef: MutableRefObject<HTMLVideoElement | null> }) {
   const [sound, setSound] = useState(false);
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  // The address comes from a token-checked call after mount, never from the page source.
+  useEffect(() => {
+    if (!available) return;
+    let stop = false;
+    fetch(`/api/video?token=${encodeURIComponent(token)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((j: { url: string }) => {
+        if (!stop) setSrc(j.url);
+      })
+      .catch(() => {
+        if (!stop) setFailed(true);
+      });
+    return () => {
+      stop = true;
+    };
+  }, [token, available]);
   const [stalled, setStalled] = useState(false);
   const touch = useClientValue(() => window.matchMedia("(pointer: coarse)").matches, false);
 
@@ -84,9 +103,10 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
     setSound(true);
   }
 
-  if (!src) {
-    return <div className="absolute inset-0 flex items-center justify-center text-base text-muted">The video is not available yet.</div>;
+  if (!available || failed) {
+    return <div className="absolute inset-0 flex items-center justify-center text-base text-muted">{failed ? "The video could not load. Refresh the page." : "The video is not available yet."}</div>;
   }
+  if (!src) return null;
 
   return (
     <>

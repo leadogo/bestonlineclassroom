@@ -23,7 +23,7 @@ export type RoomProps = {
   startsAt: number;
   endsAt: number;
   serverNow: number;
-  video: { url: string | null; seconds: number };
+  video: { available: boolean; seconds: number };
   cta: { at: number; hide: number; label: string; href: string } | null;
   endUrl: string;
   params: Record<string, string>;
@@ -73,7 +73,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       startsAt,
       endsAt,
       serverNow: now.getTime(),
-      video: { url: event.video_url, seconds },
+      video: { available: Boolean(event.video_url), seconds },
       cta,
       endUrl: withParams(event.end_url, params),
       params,

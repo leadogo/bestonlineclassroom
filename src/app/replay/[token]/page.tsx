@@ -42,7 +42,6 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
     );
   }
   const e = r.event;
-  const videoUrl = e.video_url as string;
   const p = cleanParams(sp);
   const now = new Date();
   const cta = e.cta_href ? { label: e.cta_label ?? "Book your call", href: ctaHref(e.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, p), at: e.cta_at_seconds ?? 0 } : null;
@@ -63,5 +62,5 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
 
   after(() => logClick({ path: "replay", outcome: "replay", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
   const chapters = (Array.isArray(e.chapters) ? e.chapters : []).filter((c) => typeof c?.at === "number" && typeof c?.label === "string").sort((a, b) => a.at - b.at);
-  return <ReplayView token={r.token} firstName={r.first_name} title={e.title} logoUrl={e.logo_url} videoUrl={videoUrl} seconds={e.video_seconds ?? 0} cta={cta} chapters={chapters} params={p} expiresAt={expiresAt} serverNow={now.getTime()} copy={replayCopy(e.replay_copy)} />;
+  return <ReplayView token={r.token} firstName={r.first_name} title={e.title} logoUrl={e.logo_url} seconds={e.video_seconds ?? 0} cta={cta} chapters={chapters} params={p} expiresAt={expiresAt} serverNow={now.getTime()} copy={replayCopy(e.replay_copy)} />;
 }

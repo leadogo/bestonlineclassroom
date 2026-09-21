@@ -50,7 +50,7 @@ function CtaButton({ cta, size = "lg", onClick }: { cta: Cta; size?: "lg" | "sm"
   );
 }
 
-export function ReplayView({ token, firstName, title, logoUrl, videoUrl, seconds, cta, chapters, params, expiresAt, serverNow, copy }: { token: string; firstName: string; title: string; logoUrl: string | null; videoUrl: string; seconds: number; cta: Cta | null; chapters: Chapter[]; params: Record<string, string>; expiresAt: number | null; serverNow: number; copy: ReplayCopy }) {
+export function ReplayView({ token, firstName, title, logoUrl, seconds, cta, chapters, params, expiresAt, serverNow, copy }: { token: string; firstName: string; title: string; logoUrl: string | null; seconds: number; cta: Cta | null; chapters: Chapter[]; params: Record<string, string>; expiresAt: number | null; serverNow: number; copy: ReplayCopy }) {
   const REPLAY_COPY = copy;
   const player = useRef<ReplayPlayerHandle>(null);
   const last = useRef(0);
@@ -150,7 +150,7 @@ export function ReplayView({ token, firstName, title, logoUrl, videoUrl, seconds
       </section>
 
       <div className="relative overflow-hidden rounded-xl ring-1 ring-line">
-        <ReplayPlayer ref={player} src={videoUrl} seconds={seconds} chapters={chapters} logoUrl={logoUrl} onTime={onTime} />
+        <ReplayPlayer ref={player} token={token} seconds={seconds} chapters={chapters} logoUrl={logoUrl} onTime={onTime} />
         {resumeAt !== null && (
           <div className="absolute inset-x-0 top-0 flex flex-wrap items-center justify-between gap-2 bg-room/90 px-4 py-2 text-sm">
             <span>You were at {clock(resumeAt)}.</span>

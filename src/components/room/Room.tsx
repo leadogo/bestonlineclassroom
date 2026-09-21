@@ -70,7 +70,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row landscape-phone:flex-row">
         <div className="relative flex w-full shrink-0 flex-col bg-black lg:min-h-0 lg:flex-1 landscape-phone:h-full landscape-phone:flex-1">
           <div className="relative aspect-video w-full lg:aspect-auto lg:min-h-0 lg:flex-1 landscape-phone:aspect-auto landscape-phone:flex-1">
-            {live ? <VideoStage src={p.video.url} expected={expected} videoRef={video} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} />}
+            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} />}
             {showCta && p.cta && (
               <div className="absolute inset-x-0 bottom-0 hidden lg:block landscape-phone:block">
                 <CtaBar label={p.cta.label} href={p.cta.href} token={p.token} overlay />

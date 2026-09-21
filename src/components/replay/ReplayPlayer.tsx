@@ -16,7 +16,23 @@ function fmt(s: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { src: string; seconds: number; chapters: Chapter[]; logoUrl: string | null; onTime?: (t: number) => void; onPlay?: () => void }>(function ReplayPlayer({ src, seconds, chapters, logoUrl, onTime, onPlay }, ref) {
+export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { token: string; seconds: number; chapters: Chapter[]; logoUrl: string | null; onTime?: (t: number) => void; onPlay?: () => void }>(function ReplayPlayer({ token, seconds, chapters, logoUrl, onTime, onPlay }, ref) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let stop = false;
+    fetch(`/api/video?token=${encodeURIComponent(token)}&kind=replay`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((j: { url: string }) => {
+        if (!stop) setSrc(j.url);
+      })
+      .catch(() => {
+        if (!stop) setFailed(true);
+      });
+    return () => {
+      stop = true;
+    };
+  }, [token]);
   const box = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [started, setStarted] = useState(false);
@@ -44,7 +60,7 @@ export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { src: string; second
 
   useEffect(() => {
     const v = video.current;
-    if (!v) return;
+    if (!v || !src) return;
     v.src = src;
     const onT = () => {
       setCurrent(v.currentTime);
@@ -125,6 +141,7 @@ export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { src: string; second
       {(!started || !attached) && (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-panel to-room">
           {logoUrl && <img src={logoUrl} alt="" className="absolute top-5 h-7 w-auto opacity-80 sm:h-8" />}
+          {failed && <p className="text-base text-muted">The video could not load. Refresh the page.</p>}
         </div>
       )}
       <button type="button" onClick={toggle} aria-label={playing ? "Pause" : "Play"} className="absolute inset-0 flex items-center justify-center focus:outline-none">
