@@ -14,7 +14,8 @@
     "team:add": "doppler run -- node scripts/team-add.ts",
     "db:migrate": "doppler run -- node scripts/migrate.ts",
     "env:push": "doppler run --config prd -- node scripts/env-push.ts",
-    "upload:brand": "doppler run -- node scripts/upload-brand.ts"
+    "upload:brand": "doppler run -- node scripts/upload-brand.ts",
+    "simulated:remove": "doppler run -- node scripts/remove-simulated-name.ts"
   },
   "dependencies": {
     "next": "16.3.5",
