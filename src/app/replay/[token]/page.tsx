@@ -4,6 +4,7 @@ import { ctaHref } from "@/lib/cta";
 import { db } from "@/lib/db";
 import { cleanParams } from "@/lib/params";
 import { TOKEN_RE } from "@/lib/registrants";
+import { replayCopy } from "@/lib/replay-content";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +50,9 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   }
   const expiresAt = openedAt && e.replay_hours > 0 ? openedAt.getTime() + e.replay_hours * 3_600_000 : null;
   if (expiresAt !== null && now.getTime() >= expiresAt) {
-    return <ReplayExpired logoUrl={e.logo_url} cta={cta} onClickHref={SITE} />;
+    return <ReplayExpired logoUrl={e.logo_url} cta={cta} onClickHref={SITE} copy={replayCopy(e.replay_copy)} />;
   }
 
   const chapters = (Array.isArray(e.chapters) ? e.chapters : []).filter((c) => typeof c?.at === "number" && typeof c?.label === "string").sort((a, b) => a.at - b.at);
-  return <ReplayView token={r.token} firstName={r.first_name} title={e.title} logoUrl={e.logo_url} videoUrl={videoUrl} seconds={e.video_seconds ?? 0} cta={cta} chapters={chapters} params={p} expiresAt={expiresAt} serverNow={now.getTime()} />;
+  return <ReplayView token={r.token} firstName={r.first_name} title={e.title} logoUrl={e.logo_url} videoUrl={videoUrl} seconds={e.video_seconds ?? 0} cta={cta} chapters={chapters} params={p} expiresAt={expiresAt} serverNow={now.getTime()} copy={replayCopy(e.replay_copy)} />;
 }

@@ -21,10 +21,15 @@ export type EventRow = {
   icon_url: string | null;
   chapters: Array<{ at: number; label: string }>;
   replay_hours: number;
+  replay_copy: Record<string, unknown>;
 };
 
 const TTL_MS = 60_000;
 const cache = new Map<string, { at: number; row: EventRow | null }>();
+
+export function forgetEvent(slug: string): void {
+  cache.delete(slug);
+}
 
 export async function getEvent(slug: string): Promise<EventRow | null> {
   const hit = cache.get(slug);

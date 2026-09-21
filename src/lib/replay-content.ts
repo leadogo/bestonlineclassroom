@@ -2,6 +2,19 @@
 // lib/embed-testimonials.ts (the agent's actual words, "Verified Book More Showings Agent"); do not paraphrase.
 // The admin UI will own this later; until then it is edited here.
 
+export type ReplayCopy = typeof REPLAY_COPY;
+
+/** The defaults with an event's overrides on top (only string and string-list fields can be overridden). */
+export function replayCopy(overrides: Record<string, unknown> | null | undefined): ReplayCopy {
+  const out = { ...REPLAY_COPY } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(overrides ?? {})) {
+    if (!(k in REPLAY_COPY)) continue;
+    if (typeof v === "string" && v.trim()) out[k] = v;
+    else if (Array.isArray(v) && v.length) out[k] = v;
+  }
+  return out as ReplayCopy;
+}
+
 export const REPLAY_COPY = {
   kicker: "Your replay of the AI For Agents Masterclass",
   headline: "How agents book appointments with an AI setter instead of cold calling",

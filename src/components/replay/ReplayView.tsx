@@ -5,7 +5,7 @@
 // countdown of the 72-hour window, nothing that leads off the page. Watching is recorded as `replay` attendance.
 import { useEffect, useRef, useState } from "react";
 import { ReplayPlayer, type Chapter, type ReplayPlayerHandle } from "./ReplayPlayer";
-import { REPLAY_COPY, TESTIMONIALS } from "@/lib/replay-content";
+import { TESTIMONIALS, type ReplayCopy } from "@/lib/replay-content";
 import { useClientValue } from "@/lib/use-client-value";
 
 type Cta = { label: string; href: string; at: number };
@@ -50,7 +50,8 @@ function CtaButton({ cta, size = "lg", onClick }: { cta: Cta; size?: "lg" | "sm"
   );
 }
 
-export function ReplayView({ token, firstName, title, logoUrl, videoUrl, seconds, cta, chapters, params, expiresAt, serverNow }: { token: string; firstName: string; title: string; logoUrl: string | null; videoUrl: string; seconds: number; cta: Cta | null; chapters: Chapter[]; params: Record<string, string>; expiresAt: number | null; serverNow: number }) {
+export function ReplayView({ token, firstName, title, logoUrl, videoUrl, seconds, cta, chapters, params, expiresAt, serverNow, copy }: { token: string; firstName: string; title: string; logoUrl: string | null; videoUrl: string; seconds: number; cta: Cta | null; chapters: Chapter[]; params: Record<string, string>; expiresAt: number | null; serverNow: number; copy: ReplayCopy }) {
+  const REPLAY_COPY = copy;
   const player = useRef<ReplayPlayerHandle>(null);
   const last = useRef(0);
   const skew = useRef(0);
@@ -252,7 +253,8 @@ export function ReplayView({ token, firstName, title, logoUrl, videoUrl, seconds
   );
 }
 
-export function ReplayExpired({ logoUrl, cta, onClickHref }: { logoUrl: string | null; cta: Cta | null; onClickHref: string }) {
+export function ReplayExpired({ logoUrl, cta, onClickHref, copy }: { logoUrl: string | null; cta: Cta | null; onClickHref: string; copy: ReplayCopy }) {
+  const REPLAY_COPY = copy;
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-5 px-6 py-10">
       {logoUrl && <img src={logoUrl} alt="BestOnlineClassroom" className="h-8 w-auto self-start" />}
