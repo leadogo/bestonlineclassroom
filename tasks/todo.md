@@ -63,12 +63,13 @@
 ## CP3 checkpoint: William moderates from his phone — accepted
 
 ## T10 Site cutover (SPEC-site-cutover.md, in ~/orca/futurerealestateagent)
-- [ ] Task: `src/lib/classroom.ts` (+ test), register route calls it first and EasyWebinar while `EASYWEBINAR_PARALLEL=1`, `join-link.ts` token form, `/join` (token → `/j/`, legacy hash → `/w/ailg-r?rid&sd&src=legacy`), `/live` → `/w/ailg-r?src&eh`, `optin.ts` gains `classroom_join_link` and `classroom_registered`, `calendar-links.ts` accepts our link, tests re-pinned; env `CLASSROOM_URL`, `CLASSROOM_REGISTER_SECRET`, `EASYWEBINAR_PARALLEL=1` in Vercel and Doppler.
+- [x] Task: `src/lib/classroom.ts` (+ test), register route calls it first and EasyWebinar while `EASYWEBINAR_PARALLEL=1`, `join-link.ts` token form, `/join` (token → `/j/`, legacy hash → `/w/ailg-r?rid&sd&src=legacy`), `/live` → `/w/ailg-r?src&eh`, `optin.ts` gains `classroom_join_link` and `classroom_registered`, `calendar-links.ts` accepts our link, tests re-pinned; env `CLASSROOM_URL`, `CLASSROOM_REGISTER_SECRET`, `EASYWEBINAR_PARALLEL=1` in Vercel and Doppler.
   - Acceptance: one commit; SPEC-site-cutover.md testing section passes on production with the Test Sample identity; no Zapier field renamed.
   - Verify: `npm test` in the site; production Test Sample opt-in → thank-you page calendar link → our room; `/live` → room; legacy `/join?k=<32 hex>` → name prompt
   - Files: src/lib/classroom.ts (+ test), src/app/api/register/route.ts, src/lib/join-link.ts (+ test), src/app/join/route.ts, src/app/live/route.ts, src/lib/optin.ts, src/lib/calendar-links.ts
 
 ## CP4 checkpoint: production Test Sample path works end to end — go / no-go for 5:00 PM MT
+- 2026-09-20 evening: William approved the merge; site `main` at 84f8f25 (fast-forward from feat/classroom-cutover). Test Sample check follows the deploy.
 
 ## T11 Launch (2026-09-21, frozen at 16:30 MT)
 - [ ] Task: run the checklist: DNS resolves to Vercel; every env set in production; the Blob video plays from the domain on a phone; `/w/ailg-r?at=…` at 16:00; William signed in at `/mod`; Slack relay seen; `EASYWEBINAR_PARALLEL=1` on; EasyWebinar reminders left on; 16:55 to 17:10 watched live with the room open in two browsers; `attendance` counts checked at 17:30 and 18:30 against the room-count post.
