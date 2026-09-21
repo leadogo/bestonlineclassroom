@@ -70,6 +70,7 @@
 
 ## CP4 checkpoint: production Test Sample path works end to end — go / no-go for 5:00 PM MT
 - 2026-09-20 evening: William approved the merge; site `main` at 84f8f25 (fast-forward from feat/classroom-cutover). Test Sample check follows the deploy.
+- CP4 passed 2026-09-20 ~20:10 MT after one fix (the site must call the www host; a cross-host redirect drops the bearer). Test Sample opt-in on the live site: our link in the response, the thank-you page and the calendar entry; `/join`, `/live` (hashed email) and a legacy EasyWebinar hash with rid all land in the registrant's own room; the room shows tomorrow's countdown. EasyWebinar still registers in parallel. **Go for 2026-09-21.**
 
 ## T11 Launch (2026-09-21, frozen at 16:30 MT)
 - [ ] Task: run the checklist: DNS resolves to Vercel; every env set in production; the Blob video plays from the domain on a phone; `/w/ailg-r?at=…` at 16:00; William signed in at `/mod`; Slack relay seen; `EASYWEBINAR_PARALLEL=1` on; EasyWebinar reminders left on; 16:55 to 17:10 watched live with the room open in two browsers; `attendance` counts checked at 17:30 and 18:30 against the room-count post.
