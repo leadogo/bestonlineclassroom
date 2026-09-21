@@ -66,7 +66,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Title" name="title" value={event.title} />
             <Field label="Host name" name="host_name" value={event.host_name} />
-            <Field label="Start time (24 h)" name="start_time" value={event.start_time.slice(0, 5)} hint="Every day at this time." />
+            <Field label="Start time (24 h)" name="start_time" value={event.start_time.slice(0, 5)} hint="On the days ticked below, at this time." />
             <Field label="Timezone" name="timezone" value={event.timezone} hint="IANA name, e.g. America/Edmonton" />
             <Field label="CTA button label" name="cta_label" value={event.cta_label ?? ""} />
             <Field label="CTA link" name="cta_href" value={event.cta_href ?? ""} hint="The booking page. The person's name, email and phone are added for iClosed." />
@@ -75,6 +75,15 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             <Field label="After the session ends, send people to" name="end_url" value={event.end_url} />
             <Field label="Replay access window (hours)" name="replay_hours" type="number" value={String(event.replay_hours)} hint="0 = no limit" />
           </div>
+          <fieldset className="flex flex-wrap gap-3 text-sm">
+            <legend className="mb-1 w-full font-bold">Days it runs</legend>
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+              <label key={d} className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-2">
+                <input type="checkbox" name={`day_${i}`} defaultChecked={(event.days ?? [0, 1, 2, 3, 4, 5, 6]).includes(i)} className="h-4 w-4 accent-brand" />
+                {d}
+              </label>
+            ))}
+          </fieldset>
           <Field label="Replay chapters" name="chapters" rows={8} value={chaptersText(event.chapters ?? [])} hint="One per line: time then label, e.g. 1:15:00 Offer and next steps" />
         </ActionForm>
       </section>

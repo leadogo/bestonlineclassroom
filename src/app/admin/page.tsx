@@ -18,7 +18,7 @@ export default async function AdminHome() {
                 {e.title}
               </Link>
               <p className="mt-1 text-sm text-muted">
-                Daily at {e.start_time.slice(0, 5)} {e.timezone}. Next: {next.date}. {e.video_seconds ? `${Math.round(e.video_seconds / 60)} min video.` : "No video yet."}
+                {(e.days ?? []).length === 7 ? "Daily" : (e.days ?? []).map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")} at {e.start_time.slice(0, 5)} {e.timezone}. Next: {next.date}. {e.video_seconds ? `${Math.round(e.video_seconds / 60)} min video.` : "No video yet."}
               </p>
               <div className="mt-3 flex flex-wrap gap-3 text-sm">
                 <Link href={`/admin/events/${e.slug}`} className="text-brand underline">

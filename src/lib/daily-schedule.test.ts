@@ -67,9 +67,21 @@ test("roomState with a registrant's date: that session, past â†’ ended, future â
   assert.equal(roomState(S, mt(2026, 9, 21, 12, 0), "garbage").session.date, "2026-09-21", "a bad date falls back to the rule");
 });
 
+test("weekdays: a Tue/Thu schedule skips the other days everywhere", () => {
+  const tt = { ...S, days: [2, 4] };
+  // 2026-09-23 is a Wednesday: the next session is Thursday the 24th
+  assert.equal(nextSession(tt, mt(2026, 9, 23, 12)).date, "2026-09-24");
+  // Thursday at 17:00 sharp: already next Tuesday
+  assert.equal(nextSession(tt, mt(2026, 9, 24, 17, 0)).date, "2026-09-29");
+  assert.equal(sessionFor(tt, "2026-09-23"), null, "no session on a Wednesday");
+  assert.equal(sessionFor(tt, "2026-09-24")?.date, "2026-09-24");
+  assert.equal(roomState(tt, mt(2026, 9, 23, 18), "2026-09-23").session.date, "2026-09-24", "a registrant dated an off day is shown the next session");
+  assert.equal(currentOrNextSession(tt, mt(2026, 9, 24, 17, 30)).date, "2026-09-24", "Thursday's room while it runs");
+});
+
 test("scheduleOf reads an events row; fourZones is computed from the start", () => {
   const s = scheduleOf({ timezone: "America/Edmonton", start_time: "17:00:00", video_seconds: 8386 });
-  assert.deepEqual(s, AILG_R);
+  assert.deepEqual(s, { ...AILG_R, days: [0, 1, 2, 3, 4, 5, 6] });
   assert.deepEqual(scheduleOf({ timezone: "America/New_York", start_time: "19:30", video_seconds: 10 }).startMinute, 30);
   assert.throws(() => scheduleOf({ timezone: "UTC", start_time: "noon", video_seconds: 1 }));
   assert.deepEqual(fourZones(nextSession(S, mt(2026, 9, 21, 12))), [

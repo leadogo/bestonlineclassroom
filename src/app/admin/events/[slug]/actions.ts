@@ -45,7 +45,9 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     end_url: str(fd, "end_url", 500) || event.end_url,
     replay_hours: Number.isFinite(replay_hours) && replay_hours >= 0 ? Math.floor(replay_hours) : 72,
     chapters: parseChapters(str(fd, "chapters", 4000)),
+    days: [0, 1, 2, 3, 4, 5, 6].filter((d) => fd.get(`day_${d}`) === "on"),
   };
+  if (patch.days.length === 0) return { error: "Pick at least one day." };
   const { error } = await db().from("events").update(patch).eq("id", event.id);
   if (error) return { error: "Could not save." };
   done(slug);

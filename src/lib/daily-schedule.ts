@@ -12,7 +12,12 @@ export type Schedule = {
   startMinute: number;
   /** The video's length: the session ends exactly when the recording does. */
   seconds: number;
+  /** Weekdays with a session, 0 = Sunday … 6 = Saturday. All seven = daily. */
+  days?: number[];
 };
+
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+const runsOn = (s: Schedule, weekday: number) => (s.days && s.days.length ? s.days : ALL_DAYS).includes(weekday);
 
 export type Session = {
   start: Date;
@@ -44,18 +49,27 @@ function sessionAt(s: Schedule, year: number, month: number, day: number): Sessi
   return { start, end: new Date(start.getTime() + s.seconds * 1000), date: localDate(s, start) };
 }
 
-/** The evergreen rule: today's session until it starts, then tomorrow's. At the start instant it is already tomorrow. */
+/**
+ * The evergreen rule: today's session until it starts, then the next day the webinar runs. At the start instant
+ * it is already the next one. Days the webinar does not run are skipped.
+ */
 export function nextSession(s: Schedule, now: Date = new Date()): Session {
   const p = partsInTz(now, s.timezone);
-  const today = sessionAt(s, p.year, p.month, p.day);
-  return now.getTime() < today.start.getTime() ? today : sessionAt(s, p.year, p.month, p.day + 1);
+  for (let add = 0; add < 8; add++) {
+    const c = sessionAt(s, p.year, p.month, p.day + add);
+    if (!runsOn(s, partsInTz(c.start, s.timezone).weekday)) continue;
+    if (add === 0 && now.getTime() >= c.start.getTime()) continue;
+    return c;
+  }
+  return sessionAt(s, p.year, p.month, p.day + 1);
 }
 
-/** The session on a given local calendar date (YYYY-MM-DD), e.g. the one a registrant was booked for. Null if malformed. */
+/** The session on a given local calendar date (YYYY-MM-DD), e.g. the one a registrant was booked for. Null if malformed or a day the webinar does not run. */
 export function sessionFor(s: Schedule, date: string | null | undefined): Session | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date ?? "");
   if (!m) return null;
-  return sessionAt(s, Number(m[1]), Number(m[2]), Number(m[3]));
+  const c = sessionAt(s, Number(m[1]), Number(m[2]), Number(m[3]));
+  return runsOn(s, partsInTz(c.start, s.timezone).weekday) ? c : null;
 }
 
 /** Today's session while it is in progress (start ≤ now < end), otherwise the next one. */
@@ -79,10 +93,10 @@ export function roomState(s: Schedule, now: Date = new Date(), date?: string | n
 }
 
 /** The Schedule for an `events` row (`start_time` is Postgres `time`: "17:00:00" or "17:00"). */
-export function scheduleOf(event: { timezone: string; start_time: string; video_seconds: number | null }): Schedule {
+export function scheduleOf(event: { timezone: string; start_time: string; video_seconds: number | null; days?: number[] | null }): Schedule {
   const m = /^(\d{1,2}):(\d{2})/.exec(event.start_time);
   if (!m) throw new Error(`Bad start_time: ${event.start_time}`);
-  return { timezone: event.timezone, startHour: Number(m[1]), startMinute: Number(m[2]), seconds: event.video_seconds ?? 0 };
+  return { timezone: event.timezone, startHour: Number(m[1]), startMinute: Number(m[2]), seconds: event.video_seconds ?? 0, days: event.days && event.days.length ? event.days : ALL_DAYS };
 }
 
 const ZONES: Array<[string, string]> = [
