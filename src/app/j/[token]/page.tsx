@@ -9,6 +9,7 @@ import { buildRoom } from "@/lib/room-props";
 import { getSimulatedRows } from "@/lib/simulated";
 import { logClick } from "@/lib/clicks";
 import { headers } from "next/headers";
+import { clientIp, ipBlocked } from "@/lib/ip";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +19,10 @@ const SITE = "https://thefuturerealestateagent.com/ai-training";
 export default async function JoinPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { token } = await params;
   const sp = await searchParams;
+  const h = await headers();
+  const ua = h.get("user-agent");
+  if (await ipBlocked(clientIp(h))) return <main className="flex min-h-screen items-center justify-center p-6 text-center text-base text-muted">This room isn&apos;t available.</main>;
   const r = TOKEN_RE.test(token) ? await registrantByToken(token).catch(() => null) : null;
-  const ua = (await headers()).get("user-agent");
   if (!r) {
     after(() => logClick({ path: "j", outcome: "invalid", token, userAgent: ua }));
     return (

@@ -1,10 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyReaction, EMOJIS } from "./moderation.ts";
+import { countReactions, EMOJIS } from "./moderation.ts";
 
-test("reactions: increments within the set, rejects anything else", () => {
-  assert.deepEqual(applyReaction(null, "❤️"), { "❤️": 1 });
-  assert.deepEqual(applyReaction({ "❤️": 2, "🔥": 1 }, "🔥"), { "❤️": 2, "🔥": 2 });
-  assert.equal(applyReaction({}, "💀"), null);
+test("reactions: one row per person per emoji becomes counts; anything outside the set is ignored", () => {
+  assert.deepEqual(countReactions([{ emoji: "❤️" }, { emoji: "❤️" }, { emoji: "🔥" }, { emoji: "💀" }]), { "❤️": 2, "🔥": 1 });
+  assert.deepEqual(countReactions([]), {});
   assert.equal(EMOJIS.length, 5);
 });

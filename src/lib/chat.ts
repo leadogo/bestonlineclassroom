@@ -54,3 +54,18 @@ export function slackLine(name: string, email: string | null, body: string): str
 export function trimList(list: ChatItem[], max = 400): ChatItem[] {
   return list.length > max ? list.slice(list.length - max) : list;
 }
+
+/** Splits a body into plain text and `@Name` runs (a capitalized word, optionally followed by more capitalized words). */
+// ponytail: name = capitalized words after "@"; "@Sam from William's team" highlights "@Sam". Store names on the row if it matters.
+export function splitMentions(body: string): Array<{ text: string; mention: boolean }> {
+  const out: Array<{ text: string; mention: boolean }> = [];
+  const re = /@([A-Z][\w'’-]*(?: [A-Z][\w'’-]*)*)/g;
+  let last = 0;
+  for (const m of body.matchAll(re)) {
+    if (m.index > last) out.push({ text: body.slice(last, m.index), mention: false });
+    out.push({ text: m[0], mention: true });
+    last = m.index + m[0].length;
+  }
+  if (last < body.length) out.push({ text: body.slice(last), mention: false });
+  return out;
+}

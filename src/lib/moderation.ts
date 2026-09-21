@@ -1,4 +1,4 @@
-// What a moderator can do to a message, kept pure: the fixed reaction set and the counter update.
+// Reactions, kept pure: the fixed set and how per-person rows become the counts shown on a message.
 export const EMOJIS = ["❤️", "👍", "🔥", "😂", "👏"] as const;
 export type Emoji = (typeof EMOJIS)[number];
 
@@ -6,10 +6,9 @@ export function isEmoji(s: string): s is Emoji {
   return (EMOJIS as readonly string[]).includes(s);
 }
 
-/** A new reactions map with `emoji` incremented, or null when the emoji is not in the set. */
-export function applyReaction(reactions: Record<string, number> | null | undefined, emoji: string): Record<string, number> | null {
-  if (!isEmoji(emoji)) return null;
-  const out = { ...(reactions ?? {}) };
-  out[emoji] = (out[emoji] ?? 0) + 1;
+/** Counts per emoji from one row per person per emoji; unknown emojis are ignored. */
+export function countReactions(rows: Array<{ emoji: string }>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) if (isEmoji(r.emoji)) out[r.emoji] = (out[r.emoji] ?? 0) + 1;
   return out;
 }

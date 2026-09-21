@@ -17,6 +17,8 @@ export async function GET(request: Request) {
   const dry = new URL(request.url).searchParams.get("dry") === "1";
   if (!activeCampaignConfigured() && !dry) return Response.json({ error: "ActiveCampaign not configured" }, { status: 503 });
   const since = new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 10);
+  // IPs are kept 30 days for blocking, then dropped (SPEC-phase4 chat-moderation).
+  if (!dry) await db().from("registrants").update({ ip: null, ip_seen_at: null }).lt("ip_seen_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
   const { data: events } = await db().from("events").select("*");
   const now = Date.now();
   let sent = 0;

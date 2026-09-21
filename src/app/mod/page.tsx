@@ -33,7 +33,7 @@ export async function ModSeat({ slug, date }: { slug?: string; date?: string }) 
   const session = sessionFor(schedule, sp.date) ?? currentOrNextSession(schedule);
   return (
     <ModView
-      member={member}
+      member={{ id: member.id, display_name: member.display_name, email: member.email }}
       event={{ slug: event.slug, title: event.title, iconUrl: event.icon_url, hostName: event.host_name }}
       session={{ date: session.date, startsAt: session.start.getTime(), endsAt: session.end.getTime() }}
       serverNow={new Date().getTime()}

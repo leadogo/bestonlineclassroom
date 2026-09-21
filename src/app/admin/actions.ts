@@ -31,7 +31,7 @@ export async function createEvent(_prev: DashState, fd: FormData): Promise<DashS
   if (!/^\d{1,2}:\d{2}$/.test(start_time.slice(0, 5))) return { error: "Start time as HH:MM." };
   const { data: created, error } = await db().from("events").insert({ ...settings, slug, title, start_time }).select("id").single();
   if (error || !created) return { error: error?.code === "23505" ? "That slug is taken." : "Could not create it." };
-  const sim = await db().from("simulated_messages").select("author_name, body, offset_seconds").eq("event_id", fromId);
+  const sim = await db().from("simulated_messages").select("name, body, offset_seconds").eq("event_id", fromId);
   if (sim.data?.length) await db().from("simulated_messages").insert(sim.data.map((m) => ({ ...m, event_id: created.id })));
   revalidatePath("/admin");
   redirect(`/admin/events/${slug}`);

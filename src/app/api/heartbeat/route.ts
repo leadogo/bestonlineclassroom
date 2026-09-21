@@ -1,5 +1,6 @@
 import { nextAttendance, type AttendanceRow } from "@/lib/attendance";
 import { db } from "@/lib/db";
+import { clientIp } from "@/lib/ip";
 import { cleanParams } from "@/lib/params";
 import { TOKEN_RE } from "@/lib/registrants";
 
@@ -18,9 +19,13 @@ export async function POST(request: Request) {
   const offset = typeof b.offset === "number" && Number.isFinite(b.offset) ? b.offset : 0;
   const kind = b.kind === "replay" ? "replay" : "live";
 
-  const reg = await db().from("registrants").select("id, session_date").eq("token", token).maybeSingle();
+  const reg = await db().from("registrants").select("id, session_date, ip").eq("token", token).maybeSingle();
   if (reg.error || !reg.data) return new Response(null, { status: 404 });
   const { id, session_date } = reg.data;
+  if (!reg.data.ip) {
+    const ip = clientIp(request.headers);
+    if (ip) await db().from("registrants").update({ ip, ip_seen_at: new Date().toISOString() }).eq("id", id).is("ip", null);
+  }
 
   const prev = await db().from("attendance").select("seconds_watched, max_offset, last_seen_at, params").eq("registrant_id", id).eq("session_date", session_date).eq("kind", kind).maybeSingle();
   const next = nextAttendance((prev.data as AttendanceRow | null) ?? null, new Date(), offset);

@@ -83,7 +83,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
             </div>
           )}
         </div>
-        <Panel token={p.token} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} />
+        <Panel token={p.token} registrantId={p.registrantId} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} />
       </div>
     </div>
   );

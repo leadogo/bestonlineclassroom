@@ -1,31 +1,41 @@
 "use client";
 // The chat (SPEC-chat.md): the simulated crowd plays on the video's clock, real people and moderators arrive by a
-// 3 s poll, and the viewer types into one box. A late joiner sees the room as it already is.
+// 3 s poll, and the viewer types into one box. A late joiner sees the room as it already is. Phase 4 chat-social:
+// everyone reacts (one per emoji per person, tap again to remove) and can @mention people in the room.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { canPost, MAX_BODY, mergeUpdates, simulatedCursor, trimList, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
+import { canPost, MAX_BODY, mergeUpdates, simulatedCursor, splitMentions, trimList, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
+import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "./PeoplePanel";
 
-type Wire = { id: number; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; created_at: string };
+type Wire = { id: number; registrant_id: string | null; team_member_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; mentions: string[]; created_at: string };
+type Item = ChatItem & { mentionsMe?: boolean; mentionId?: string };
+export type Mentionable = { id: string; name: string };
 
 const POLL_MS = 3000;
 
-export function ChatPanel({ token, firstName, simulated, live, expected, visible, onUnread }: { token: string; firstName: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void }) {
-  const [list, setList] = useState<ChatItem[]>([]);
+export function ChatPanel({ token, registrantId, simulated, live, expected, visible, onUnread, people }: { token: string; registrantId: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void; people: Mentionable[] }) {
+  const [list, setList] = useState<Item[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [pending, setPending] = useState(0);
+  const [mine, setMine] = useState<Set<string>>(new Set());
+  const [picked, setPicked] = useState<Mentionable[]>([]);
   const sim = useRef<{ rows: SimulatedRow[]; next: number }>({ rows: simulated, next: 0 });
   const cursor = useRef({ after: 0, since: "" });
   const lastPost = useRef<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   const seq = useRef(0);
+  const [mods, setMods] = useState<Mentionable[]>([]);
+
+  const toItem = (m: Wire): Item => ({ key: `r${m.id}`, id: m.id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, mine: m.registrant_id === registrantId, mentionsMe: (m.mentions ?? []).includes(registrantId), mentionId: m.team_member_id ? `m:${m.team_member_id}` : (m.registrant_id ?? undefined) });
 
   const append = useCallback(
-    (items: ChatItem[]) => {
+    (items: Item[]) => {
       if (items.length === 0) return;
-      setList((l) => trimList([...l, ...items]));
+      setList((l) => trimList([...l, ...items]) as Item[]);
       if (!visible) items.forEach(onUnread);
       else if (!atBottom) setPending((n) => n + items.length);
     },
@@ -41,8 +51,8 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
       const first = sim.current.next === 0;
       sim.current.next = nextIndex;
       const now = Date.now();
-      const mapped = items.map((r) => ({ key: `s${seq.current++}`, name: r.name, role: "simulated" as const, body: r.body, at: now - (expected() - r.offset_seconds) * 1000, reactions: {} }));
-      if (first) setList((l) => trimList([...mapped, ...l]));
+      const mapped: Item[] = items.map((r) => ({ key: `s${seq.current++}`, name: r.name, role: "simulated" as const, body: r.body, at: now - (expected() - r.offset_seconds) * 1000, reactions: {} }));
+      if (first) setList((l) => trimList([...mapped, ...l]) as Item[]);
       else append(mapped);
     };
     const t = setTimeout(run, 0);
@@ -66,12 +76,15 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
           const q = new URLSearchParams({ token, after: String(cursor.current.after), since: cursor.current.since });
           const res = await fetch(`/api/chat?${q}`, { cache: "no-store" });
           if (res.ok) {
-            const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; now: string };
-            const fresh = j.new.map((m) => ({ key: `r${m.id}`, id: m.id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, mine: m.author_name === firstName && m.role === "attendee" }));
+            const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; now: string; mine?: Array<{ id: number; emoji: string }> };
+            const fresh = j.new.map(toItem);
+            const newMods = j.new.filter((m) => m.role === "moderator" && m.team_member_id).map((m) => ({ id: `m:${m.team_member_id}`, name: m.author_name }));
+            if (newMods.length) setMods((l) => [...l, ...newMods.filter((n) => !l.some((x) => x.id === n.id))]);
             if (fresh.length) cursor.current.after = fresh[fresh.length - 1].id!;
             cursor.current.since = j.now;
-            if (j.updated.length) setList((l) => mergeUpdates(l, j.updated));
-            if (cursor.current.after && fresh.length && list.length === 0) setList((l) => trimList([...l, ...fresh]));
+            if (j.mine?.length) setMine((s) => new Set([...s, ...j.mine!.map((r) => `${r.id}:${r.emoji}`)]));
+            if (j.updated.length) setList((l) => mergeUpdates(l, j.updated) as Item[]);
+            if (cursor.current.after && fresh.length && list.length === 0) setList((l) => trimList([...l, ...fresh]) as Item[]);
             else append(fresh.filter((f) => !list.some((x) => x.id === f.id)));
           }
         } catch {
@@ -102,6 +115,33 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
     if (near) setPending(0);
   }
 
+  async function react(id: number, emoji: string) {
+    const key = `${id}:${emoji}`;
+    try {
+      const res = await fetch("/api/react", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, id, emoji }) });
+      const j = (await res.json().catch(() => ({}))) as { reactions?: Record<string, number>; on?: boolean };
+      if (!res.ok || !j.reactions) return;
+      setMine((s) => {
+        const n = new Set(s);
+        if (j.on) n.add(key);
+        else n.delete(key);
+        return n;
+      });
+      setList((l) => l.map((m) => (m.id === id ? { ...m, reactions: j.reactions! } : m)));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // "@" at the caret offers people in the room; picking one writes "@Name " and remembers the id.
+  const atWord = /(?:^|\s)@([^@\s]*)$/.exec(text);
+  const options: Mentionable[] = atWord ? [...people.filter((p) => p.id !== registrantId), ...mods].filter((p) => p.name.toLowerCase().startsWith(atWord[1].toLowerCase())).slice(0, 6) : [];
+  function pick(p: Mentionable) {
+    setText(text.replace(/@[^@\s]*$/, `@${p.name} `));
+    setPicked((l) => (l.some((x) => x.id === p.id) ? l : [...l, p]));
+    input.current?.focus();
+  }
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const body = text.trim();
@@ -111,8 +151,9 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
       return;
     }
     setError("");
+    const mentions = picked.filter((p) => body.includes(`@${p.name}`)).map((p) => p.id);
     try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, body, offset: Math.floor(expected()) }) });
+      const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, body, offset: Math.floor(expected()), mentions }) });
       const j = (await res.json().catch(() => ({}))) as { message?: Wire; error?: string };
       if (res.status === 403) {
         setBlocked(true);
@@ -123,8 +164,9 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
       const m = j.message;
       cursor.current.after = Math.max(cursor.current.after, m.id);
       setText("");
+      setPicked([]);
       setAtBottom(true);
-      setList((l) => trimList([...l, { key: `r${m.id}`, id: m.id, name: m.author_name, role: m.role, body: m.body, at: Date.now(), reactions: {}, mine: true }]));
+      setList((l) => trimList([...l, { ...toItem(m), at: Date.now(), mine: true }]) as Item[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Please try again.");
     }
@@ -135,7 +177,7 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
       <div ref={scroller} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {!live && <p className="px-1 py-6 text-center text-base text-muted">The chat opens when the session starts.</p>}
         {list.map((m) => (
-          <Message key={m.key} m={m} />
+          <Message key={m.key} m={m} mine={mine} onReact={react} />
         ))}
       </div>
       {pending > 0 && !atBottom && (
@@ -143,7 +185,19 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
           {pending} new message{pending > 1 ? "s" : ""} ↓
         </button>
       )}
-      <form onSubmit={send} className="border-t border-line p-2" style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}>
+      <form onSubmit={send} className="relative border-t border-line p-2" style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}>
+        {options.length > 0 && (
+          <ul className="absolute bottom-full left-2 right-2 mb-1 overflow-hidden rounded-xl border border-line bg-panel shadow-lg" role="listbox">
+            {options.map((p) => (
+              <li key={p.id}>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p)} className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-base hover:bg-line">
+                  <Avatar name={p.name} size="h-7 w-7 text-[11px]" />
+                  {p.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         {blocked ? (
           <p className="px-2 py-2 text-center text-sm text-muted">Chat is unavailable.</p>
         ) : (
@@ -153,8 +207,10 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
             </label>
             <input
               id="chat-input"
+              ref={input}
               value={text}
               onChange={(e) => setText(e.target.value.slice(0, MAX_BODY))}
+              onKeyDown={(e) => { if (e.key === "Tab" && options[0]) { e.preventDefault(); pick(options[0]); } }}
               placeholder={live ? "Say something…" : "Chat opens at start"}
               disabled={!live}
               autoComplete="off"
@@ -173,11 +229,12 @@ export function ChatPanel({ token, firstName, simulated, live, expected, visible
   );
 }
 
-function Message({ m }: { m: ChatItem }) {
+function Message({ m, mine, onReact }: { m: Item; mine: Set<string>; onReact: (id: number, emoji: string) => void }) {
   const time = new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const entries = Object.entries(m.reactions).filter(([, n]) => n > 0);
+  const real = m.id !== undefined;
   return (
-    <div className="flex gap-2.5 py-1.5">
+    <div className={`group flex gap-2.5 py-1.5 ${m.mentionsMe ? "-mx-3 bg-brand/10 px-3" : ""}`}>
       <Avatar name={m.name} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
@@ -185,14 +242,30 @@ function Message({ m }: { m: ChatItem }) {
           {m.role === "moderator" && <span className="rounded bg-brand/15 px-1.5 py-px text-[11px] font-bold text-brand">Moderator</span>}
           <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{time}</span>
         </div>
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink">{m.body}</p>
-        {entries.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
+        <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink">
+          {splitMentions(m.body).map((part, i) => (part.mention ? <span key={i} className="font-bold text-brand">{part.text}</span> : <span key={i}>{part.text}</span>))}
+        </p>
+        {(entries.length > 0 || real) && (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
             {entries.map(([e, n]) => (
-              <span key={e} className="rounded-full bg-panel px-2 py-0.5 text-xs tabular-nums">
+              <button key={e} type="button" disabled={!real} onClick={() => real && onReact(m.id!, e)} className={`min-h-7 rounded-full px-2 text-xs tabular-nums ${real && mine.has(`${m.id}:${e}`) ? "border border-brand bg-brand/15 text-ink" : "bg-panel text-ink/90"}`} aria-pressed={real && mine.has(`${m.id}:${e}`)} aria-label={`${e} ${n}`}>
                 {e} {n}
-              </span>
+              </button>
             ))}
+            {real && (
+              <details className="relative">
+                <summary className="grid min-h-7 min-w-7 cursor-pointer list-none place-items-center rounded-full bg-panel px-2 text-xs text-muted hover:text-ink" aria-label="React">
+                  +
+                </summary>
+                <div className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border border-line bg-panel p-1 shadow-lg">
+                  {EMOJIS.map((e) => (
+                    <button key={e} type="button" onClick={(ev) => { onReact(m.id!, e); (ev.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); }} className="grid h-9 w-9 place-items-center rounded-full text-lg hover:bg-line" aria-label={`React ${e}`}>
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canPost, mergeUpdates, simulatedCursor, slackLine, trimList, type ChatItem } from "./chat.ts";
+import { canPost, mergeUpdates, simulatedCursor, slackLine, trimList, type ChatItem, splitMentions } from "./chat.ts";
 
 const rows = [33, 37, 37, 60, 4460].map((o, i) => ({ offset_seconds: o, name: `n${i}`, body: `b${i}` }));
 
@@ -34,4 +34,14 @@ test("posting rule and Slack line", () => {
   assert.equal(slackLine("Ana", "ana@x.com", "Is this recorded?"), "Ana / ana@x.com / Is this recorded?");
   assert.equal(slackLine("Bo", null, "hi"), "Bo / guest / hi");
   assert.equal(trimList(Array.from({ length: 450 }, (_, i) => ({ key: String(i), name: "", role: "simulated" as const, body: "", at: i, reactions: {} }))).length, 400);
+});
+
+test("splitMentions: @Name runs are marked, the rest is plain", () => {
+  assert.deepEqual(splitMentions("hi @Sarah Lee how are you @bob"), [
+    { text: "hi ", mention: false },
+    { text: "@Sarah Lee", mention: true },
+    { text: " how are you @bob", mention: false },
+  ]);
+  assert.deepEqual(splitMentions("no mentions"), [{ text: "no mentions", mention: false }]);
+  assert.deepEqual(splitMentions("@Ann"), [{ text: "@Ann", mention: true }]);
 });
