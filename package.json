@@ -8,10 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --no-warnings --test src/lib/*.test.ts",
-    "seed": "node --experimental-strip-types scripts/seed-event.ts",
-    "import:chat": "node --experimental-strip-types scripts/import-chat.ts",
-    "upload:video": "node --experimental-strip-types scripts/upload-video.ts",
-    "team:add": "node --experimental-strip-types scripts/team-add.ts"
+    "seed": "node --env-file=.env.local scripts/seed-event.ts",
+    "import:chat": "node --env-file=.env.local scripts/import-chat.ts",
+    "upload:video": "node --env-file=.env.local scripts/upload-video.ts",
+    "team:add": "node --env-file=.env.local scripts/team-add.ts"
   },
   "dependencies": {
     "next": "16.3.5",

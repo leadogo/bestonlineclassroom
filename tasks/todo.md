@@ -1,13 +1,13 @@
 # Todo: phase 1 (see plan.md)
 
 ## T1 Scaffold
-- [ ] Task: Create the Next 16 app (TypeScript, Tailwind 4, ESLint, App Router, `src/`), add `@supabase/supabase-js`, `@supabase/ssr`, `@vercel/blob`, an `npm test` script (`node --test src/lib/*.test.ts`), `.env.example` listing every env name from the specs, a dark placeholder page, and push to a new private GitHub repo.
+- [x] Task: Create the Next 16 app (TypeScript, Tailwind 4, ESLint, App Router, `src/`), add `@supabase/supabase-js`, `@supabase/ssr`, `@vercel/blob`, an `npm test` script (`node --test src/lib/*.test.ts`), `.env.example` listing every env name from the specs, a dark placeholder page, and push to a new private GitHub repo.
   - Acceptance: `npm run build` and `npm run lint` pass; `.env.local` is git-ignored; the repo is on GitHub for William to connect Vercel.
   - Verify: `npm run build && npm test && git log --oneline -1`
   - Files: package.json, next.config.ts, src/app/layout.tsx, src/app/page.tsx, .env.example
 
 ## T2 Schedule (SPEC-schedule.md)
-- [ ] Task: Copy `tz.ts` and `daily-schedule.ts` from the site, generalise to a `Schedule` argument, add `roomState` and `scheduleOf`, port the tests and add the six `roomState` cases.
+- [x] Task: Copy `tz.ts` and `daily-schedule.ts` from the site, generalise to a `Schedule` argument, add `roomState` and `scheduleOf`, port the tests and add the six `roomState` cases.
   - Acceptance: every case in SPEC-schedule.md passes, including the DST date.
   - Verify: `npm test`
   - Files: src/lib/tz.ts, src/lib/daily-schedule.ts, src/lib/daily-schedule.test.ts
