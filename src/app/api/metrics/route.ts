@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
-import { retentionCurve } from "@/lib/outcomes";
+import { peakConcurrent, retentionCurve } from "@/lib/outcomes";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +24,11 @@ export async function GET(request: Request) {
   if (error) return Response.json({ error: "Lookup failed" }, { status: 500 });
   const sessions = [];
   for (const row of data ?? []) {
-    const att = await db().from("attendance").select("max_offset, registrant:registrants!inner(source)").eq("session_date", row.session_date).eq("kind", "live").eq("registrant.event_id", event.id);
-    const offsets = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test").map((a) => a.max_offset as number);
-    sessions.push({ ...row, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
+    const att = await db().from("attendance").select("max_offset, joined_at, last_seen_at, registrant:registrants!inner(source)").eq("session_date", row.session_date).eq("kind", "live").eq("registrant.event_id", event.id);
+    const real = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test");
+    const offsets = real.map((a) => a.max_offset as number);
+    const peak_live = peakConcurrent(real.map((a) => ({ from: new Date(a.joined_at as string).getTime(), to: new Date(a.last_seen_at as string).getTime() })));
+    sessions.push({ ...row, peak_live, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
   }
   return Response.json({ event: event.slug, sessions }, { headers: { "cache-control": "no-store" } });
 }

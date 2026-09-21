@@ -49,3 +49,16 @@ export function retentionCurve(maxOffsets: number[], videoSeconds: number, stepS
   }
   return out;
 }
+
+/** The most people in the room at once: intervals [from, to] in ms, sampled every `stepMs`. */
+export function peakConcurrent(intervals: Array<{ from: number; to: number }>, stepMs = 60_000): number {
+  if (intervals.length === 0) return 0;
+  const start = Math.min(...intervals.map((i) => i.from));
+  const end = Math.max(...intervals.map((i) => i.to));
+  let peak = 0;
+  for (let t = start; t <= end; t += stepMs) {
+    const n = intervals.filter((i) => i.from <= t && t <= i.to).length;
+    if (n > peak) peak = n;
+  }
+  return peak;
+}
