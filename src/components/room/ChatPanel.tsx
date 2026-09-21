@@ -8,7 +8,7 @@ import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "./PeoplePanel";
 
 type Wire = { id: number; registrant_id: string | null; team_member_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; mentions: string[]; created_at: string };
-type Item = ChatItem & { mentionsMe?: boolean; mentionId?: string };
+type Item = ChatItem & { mentionsMe?: boolean; mentionId?: string; local?: Record<string, number> };
 export type Mentionable = { id: string; name: string };
 
 const POLL_MS = 3000;
@@ -115,6 +115,16 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
     if (near) setPending(0);
   }
 
+  // Simulated messages have no row to react to: the tap counts on this screen only.
+  function reactLocal(key: string, emoji: string) {
+    setList((l) => l.map((m) => (m.key !== key ? m : { ...m, local: { ...(m.local ?? {}), [emoji]: (m.local?.[emoji] ?? 0) === 1 ? 0 : 1 }, reactions: { ...m.reactions, [emoji]: Math.max(0, (m.reactions[emoji] ?? 0) + ((m.local?.[emoji] ?? 0) === 1 ? -1 : 1)) } })));
+  }
+  function replyTo(m: Item) {
+    setText((t) => (t.trim() ? `${t.trimEnd()} @${m.name} ` : `@${m.name} `));
+    if (m.mentionId) setPicked((l) => (l.some((x) => x.id === m.mentionId) ? l : [...l, { id: m.mentionId!, name: m.name }]));
+    input.current?.focus();
+  }
+
   async function react(id: number, emoji: string) {
     const key = `${id}:${emoji}`;
     try {
@@ -177,7 +187,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
       <div ref={scroller} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {!live && <p className="px-1 py-6 text-center text-base text-muted">The chat opens when the session starts.</p>}
         {list.map((m) => (
-          <Message key={m.key} m={m} mine={mine} onReact={react} />
+          <Message key={m.key} m={m} mine={mine} onReact={react} onReactLocal={reactLocal} onReply={replyTo} />
         ))}
       </div>
       {pending > 0 && !atBottom && (
@@ -229,10 +239,12 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
   );
 }
 
-function Message({ m, mine, onReact }: { m: Item; mine: Set<string>; onReact: (id: number, emoji: string) => void }) {
+function Message({ m, mine, onReact, onReactLocal, onReply }: { m: Item; mine: Set<string>; onReact: (id: number, emoji: string) => void; onReactLocal: (key: string, emoji: string) => void; onReply: (m: Item) => void }) {
   const time = new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const entries = Object.entries(m.reactions).filter(([, n]) => n > 0);
   const real = m.id !== undefined;
+  const pressed = (e: string) => (real ? mine.has(`${m.id}:${e}`) : (m.local?.[e] ?? 0) === 1);
+  const tap = (e: string) => (real ? onReact(m.id!, e) : onReactLocal(m.key, e));
   return (
     <div className={`group flex gap-2.5 py-1.5 ${m.mentionsMe ? "-mx-3 bg-brand/10 px-3" : ""}`}>
       <Avatar name={m.name} />
@@ -245,29 +257,30 @@ function Message({ m, mine, onReact }: { m: Item; mine: Set<string>; onReact: (i
         <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink">
           {splitMentions(m.body).map((part, i) => (part.mention ? <span key={i} className="font-bold text-brand">{part.text}</span> : <span key={i}>{part.text}</span>))}
         </p>
-        {(entries.length > 0 || real) && (
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {entries.map(([e, n]) => (
-              <button key={e} type="button" disabled={!real} onClick={() => real && onReact(m.id!, e)} className={`min-h-7 rounded-full px-2 text-xs tabular-nums ${real && mine.has(`${m.id}:${e}`) ? "border border-brand bg-brand/15 text-ink" : "bg-panel text-ink/90"}`} aria-pressed={real && mine.has(`${m.id}:${e}`)} aria-label={`${e} ${n}`}>
-                {e} {n}
-              </button>
-            ))}
-            {real && (
-              <details className="relative">
-                <summary className="grid min-h-7 min-w-7 cursor-pointer list-none place-items-center rounded-full bg-panel px-2 text-xs text-muted hover:text-ink" aria-label="React">
-                  +
-                </summary>
-                <div className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border border-line bg-panel p-1 shadow-lg">
-                  {EMOJIS.map((e) => (
-                    <button key={e} type="button" onClick={(ev) => { onReact(m.id!, e); (ev.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); }} className="grid h-9 w-9 place-items-center rounded-full text-lg hover:bg-line" aria-label={`React ${e}`}>
-                      {e}
-                    </button>
-                  ))}
-                </div>
-              </details>
-            )}
-          </div>
-        )}
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {entries.map(([e, n]) => (
+            <button key={e} type="button" onClick={() => tap(e)} className={`min-h-7 rounded-full px-2 text-xs tabular-nums ${pressed(e) ? "border border-brand bg-brand/15 text-ink" : "bg-panel text-ink/90"}`} aria-pressed={pressed(e)} aria-label={`${e} ${n}`}>
+              {e} {n}
+            </button>
+          ))}
+          <details className="relative">
+            <summary className="grid min-h-7 min-w-7 cursor-pointer list-none place-items-center rounded-full bg-panel px-2 text-xs text-muted hover:text-ink" aria-label="React">
+              +
+            </summary>
+            <div className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border border-line bg-panel p-1 shadow-lg">
+              {EMOJIS.map((e) => (
+                <button key={e} type="button" onClick={(ev) => { tap(e); (ev.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); }} className="grid h-9 w-9 place-items-center rounded-full text-lg hover:bg-line" aria-label={`React ${e}`}>
+                  {e}
+                </button>
+              ))}
+            </div>
+          </details>
+          {!m.mine && (
+            <button type="button" onClick={() => onReply(m)} className="min-h-7 rounded-full px-2 text-xs text-muted hover:text-ink">
+              Reply
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

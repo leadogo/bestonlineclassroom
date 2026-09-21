@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DeleteWebinar, NewWebinar } from "./dash-forms";
+import { btnQuiet, Empty, PageHeader, Stat } from "./ui";
 import { assignedEventIds, getTeamMember } from "@/lib/auth";
 import { currentOrNextSession, scheduleOf } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
@@ -8,8 +9,9 @@ import type { EventRow } from "@/lib/events";
 const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 type Last = { session_date: string; registered: number; joined: number; live_at_pitch: number; clicked_offer: number };
 
-const when = (d: Date, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(d);
+const when = (d: Date, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(d);
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
+const untilText = (ms: number) => (ms < 3_600_000 ? `in ${Math.max(1, Math.round(ms / 60_000))} min` : ms < 86_400_000 ? `in ${Math.round(ms / 3_600_000)} h` : `in ${Math.round(ms / 86_400_000)} days`);
 
 /** The operating screen: every webinar, what is happening now, the next session and how the last one went. */
 export default async function AdminHome() {
@@ -31,93 +33,90 @@ export default async function AdminHome() {
         db().from("session_metrics").select("session_date, registered, joined, live_at_pitch, clicked_offer").eq("event_id", e.id).lt("session_date", session.date).order("session_date", { ascending: false }).limit(1).maybeSingle(),
       ]);
       const mods = (team.data ?? []).filter((m) => m.role === "admin" || (assigns.data ?? []).some((a) => a.member_id === m.id && a.event_id === e.id)).map((m) => m.display_name);
-      return { e, session, live, registrants: regs.count ?? 0, inRoom: inRoom.count ?? 0, last: (last.data as Last | null) ?? null, mods };
+      return { e, session, live, registrants: regs.count ?? 0, inRoom: inRoom.count ?? 0, last: (last.data as Last | null) ?? null, mods, minutesIn: Math.floor((now.getTime() - session.start.getTime()) / 60_000) };
     }),
   );
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Webinars</h1>
-      <ul className="grid gap-4 lg:grid-cols-2">
-        {cards.map(({ e, session, live, registrants, inRoom, last, mods }) => (
-          <li key={e.id} className={`flex flex-col gap-3 rounded-xl border bg-panel p-4 ${live ? "border-live" : "border-line"}`}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              {me.role === "admin" ? (
-                <Link href={`/admin/events/${e.slug}`} className="text-lg font-bold hover:underline">
-                  {e.title}
-                </Link>
-              ) : (
-                <span className="text-lg font-bold">{e.title}</span>
-              )}
+    <div className="flex flex-col gap-8">
+      <PageHeader title="Webinars" subtitle={me.role === "admin" ? "Everything that runs on BestOnlineClassroom, what is happening now, and how the last session went." : "The webinars you moderate."} />
+      {cards.length === 0 && <Empty>No webinars yet.</Empty>}
+      <ul className="flex flex-col gap-5">
+        {cards.map(({ e, session, live, registrants, inRoom, last, mods, minutesIn }) => (
+          <li key={e.id} className={`overflow-hidden rounded-xl border bg-panel ${live ? "border-live" : "border-line"}`}>
+            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 text-sm ${live ? "bg-live/15" : "border-b border-line"}`}>
               {live ? (
-                <span className="rounded-full bg-live px-2.5 py-0.5 text-xs font-bold text-white">
-                  LIVE now · {inRoom} in the room
-                </span>
+                <>
+                  <span className="flex items-center gap-2 font-bold text-live">
+                    <span className="h-2.5 w-2.5 rounded-full bg-live live-dot" aria-hidden />
+                    Live now
+                  </span>
+                  <span className="tabular-nums">{inRoom} in the room</span>
+                  <span className="text-muted tabular-nums">{minutesIn} min in</span>
+                </>
               ) : (
-                <span className="text-xs text-muted">/w/{e.slug}</span>
+                <>
+                  <span className="font-bold">Next session {when(session.start, e.timezone)}</span>
+                  <span className="text-muted">{untilText(session.start.getTime() - now.getTime())}</span>
+                </>
               )}
+              <span className="ml-auto text-muted">
+                {e.days.length === 7 ? "Daily" : e.days.map((d) => DAY[d]).join(", ")} at {e.start_time.slice(0, 5)} {e.timezone.split("/")[1]?.replace("_", " ")}
+              </span>
             </div>
-            <p className="text-sm text-muted">
-              {e.days.length === 7 ? "Daily" : e.days.map((d) => DAY[d]).join(", ")} at {e.start_time.slice(0, 5)} {e.timezone}. {e.video_seconds ? `${Math.round(e.video_seconds / 60)} min video.` : "No video yet."}
-            </p>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted">{live ? "Tonight" : "Next session"}</dt>
-                <dd className="font-bold">{when(session.start, e.timezone)}</dd>
+            <div className="flex flex-col gap-5 px-5 py-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                {me.role === "admin" ? (
+                  <Link href={`/admin/events/${e.slug}`} className="text-xl font-bold hover:underline">
+                    {e.title}
+                  </Link>
+                ) : (
+                  <span className="text-xl font-bold">{e.title}</span>
+                )}
+                <span className="text-sm text-muted">
+                  {e.video_seconds ? `${Math.round(e.video_seconds / 60)} min video` : "No video yet"} · link /w/{e.slug}
+                </span>
               </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted">Registered for it</dt>
-                <dd className="font-bold tabular-nums">{registrants}</dd>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+                <Stat label={live ? "registered tonight" : "registered for it"} value={registrants} />
+                <Stat label={last ? `joined last time (${last.session_date.slice(5)})` : "joined last time"} value={last ? last.joined : "—"} sub={last ? `${pct(last.joined, last.registered)} of ${last.registered} registered` : "no session yet"} />
+                <Stat label="live at the pitch" value={last ? last.live_at_pitch : "—"} sub={last ? pct(last.live_at_pitch, last.joined) + " of joiners" : undefined} />
+                <Stat label="clicked the offer" value={last ? last.clicked_offer : "—"} tone={last && last.clicked_offer ? "cta" : undefined} />
               </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted">Moderating</dt>
-                <dd>{mods.join(", ") || "nobody assigned"}</dd>
-              </div>
-              <div className="col-span-2 sm:col-span-3">
-                <dt className="text-xs uppercase tracking-wide text-muted">Last session {last ? `(${last.session_date})` : ""}</dt>
-                <dd className="tabular-nums">
-                  {last ? (
-                    <>
-                      {last.registered} registered · {last.joined} joined ({pct(last.joined, last.registered)} show-up) · {last.live_at_pitch} live at the pitch · {last.clicked_offer} clicks
-                    </>
-                  ) : (
-                    "no session yet"
-                  )}
-                </dd>
-              </div>
-            </dl>
-            <div className="flex flex-wrap gap-3 text-sm">
-              {me.role === "admin" && (
-                <Link href={`/admin/events/${e.slug}`} className="text-brand underline">
-                  Settings
+              <p className="text-sm text-muted">Moderating: {mods.join(", ") || "nobody assigned"}</p>
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/admin/events/${e.slug}/sessions/${session.date}`} className={btnQuiet}>
+                  Registrants
                 </Link>
-              )}
-              <Link href={`/admin/events/${e.slug}/sessions/${session.date}`} className="text-brand underline">
-                Registrants
-              </Link>
-              {last && (
-                <Link href={`/admin/events/${e.slug}/sessions/${last.session_date}`} className="text-brand underline">
-                  Last session
+                <Link href={`/mod/${e.slug}`} className={btnQuiet}>
+                  Moderate
                 </Link>
-              )}
-              <Link href={`/mod/${e.slug}`} className="text-brand underline">
-                Moderate
-              </Link>
-              <Link href={`/admin/events/${e.slug}/analytics`} className="text-brand underline">
-                Analytics
-              </Link>
-              <a href={`/w/${e.slug}?at=0`} className="text-brand underline" target="_blank" rel="noopener">
-                Preview room
-              </a>
-              <a href={`/w/${e.slug}?at=${e.cta_at_seconds ?? 0}`} className="text-brand underline" target="_blank" rel="noopener">
-                Preview at the CTA
-              </a>
+                <Link href={`/admin/events/${e.slug}/analytics`} className={btnQuiet}>
+                  Analytics
+                </Link>
+                {me.role === "admin" && (
+                  <Link href={`/admin/events/${e.slug}`} className={btnQuiet}>
+                    Settings
+                  </Link>
+                )}
+                <a href={`/w/${e.slug}?at=0`} className={btnQuiet} target="_blank" rel="noopener">
+                  Preview room
+                </a>
+                <a href={`/w/${e.slug}?at=${e.cta_at_seconds ?? 0}`} className={btnQuiet} target="_blank" rel="noopener">
+                  Preview at the pitch
+                </a>
+                {last && (
+                  <Link href={`/admin/events/${e.slug}/sessions/${last.session_date}`} className={btnQuiet}>
+                    Last session
+                  </Link>
+                )}
+              </div>
+              {me.role === "admin" && e.slug !== "ailg-r" && <DeleteWebinar slug={e.slug} />}
             </div>
-            {me.role === "admin" && e.slug !== "ailg-r" && <DeleteWebinar slug={e.slug} />}
           </li>
         ))}
       </ul>
       {me.role === "admin" && <NewWebinar events={events.map((e) => ({ slug: e.slug, title: e.title, start_time: e.start_time }))} />}
-      <p className="text-xs text-muted">Live counts are people seen in the last two minutes.</p>
+      <p className="text-xs text-muted">Live counts are people seen in the last two minutes. Previews open the room as it looks at that minute; only the team can use them.</p>
     </div>
   );
 }

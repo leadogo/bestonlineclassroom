@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { btnQuiet, PageHeader, th } from "../../../ui";
 import { notFound } from "next/navigation";
 import type { Metrics } from "../sessions/[date]/metrics";
 import { canModerate, getTeamMember } from "@/lib/auth";
@@ -58,13 +59,17 @@ export default async function Analytics({ params, searchParams }: { params: Prom
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-bold">{event.title}: analytics</h1>
-        <nav className="flex gap-3 text-sm">
-          <Link href={`/admin/events/${slug}/analytics?days=30`} className={days === 30 ? "font-bold" : "text-brand underline"}>Last 30 days</Link>
-          <Link href={`/admin/events/${slug}/analytics?days=90`} className={days === 90 ? "font-bold" : "text-brand underline"}>Last 90 days</Link>
-        </nav>
-      </div>
+      <PageHeader
+        crumbs={[["Webinars", "/admin"], [event.title, me.role === "admin" ? `/admin/events/${slug}` : `/admin/events/${slug}/analytics`]]}
+        title="Analytics"
+        subtitle={`${event.title}, every session in the last ${days} days.`}
+        action={
+          <>
+            <Link href={`/admin/events/${slug}/analytics?days=30`} className={`${btnQuiet} ${days === 30 ? "border-brand" : ""}`}>Last 30 days</Link>
+            <Link href={`/admin/events/${slug}/analytics?days=90`} className={`${btnQuiet} ${days === 90 ? "border-brand" : ""}`}>Last 90 days</Link>
+          </>
+        }
+      />
 
       {rows.length === 0 ? (
         <p className="text-sm text-muted">No sessions with numbers yet. The next one is {next.date}.</p>
@@ -89,8 +94,8 @@ export default async function Analytics({ params, searchParams }: { params: Prom
             <h2 className="text-lg font-bold">By session</h2>
             <div className="mt-2 overflow-x-auto rounded-lg border border-line">
               <table className="w-full text-sm">
-                <thead className="bg-panel text-left text-xs uppercase tracking-wide text-muted">
-                  <tr>{["Date", "Registered", "Joined", "Show-up", "Attended 15m+", "Live at pitch", "Clicks", "Replay", "Avg min", "Chat"].map((h) => <th key={h} className="px-3 py-2 font-bold">{h}</th>)}</tr>
+                <thead className="bg-panel">
+                  <tr>{["Date", "Registered", "Joined", "Show-up", "Attended 15m+", "Live at pitch", "Clicks", "Replay", "Avg min", "Chat"].map((h) => <th key={h} className={th}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {[...rows].reverse().map((r) => (
@@ -116,8 +121,8 @@ export default async function Analytics({ params, searchParams }: { params: Prom
             <h2 className="text-lg font-bold">By week</h2>
             <div className="mt-2 overflow-x-auto rounded-lg border border-line">
               <table className="w-full text-sm">
-                <thead className="bg-panel text-left text-xs uppercase tracking-wide text-muted">
-                  <tr>{["Week", "Sessions", "Registered", "Joined", "Show-up", "Live at pitch", "Clicks"].map((h) => <th key={h} className="px-3 py-2 font-bold">{h}</th>)}</tr>
+                <thead className="bg-panel">
+                  <tr>{["Week", "Sessions", "Registered", "Joined", "Show-up", "Live at pitch", "Clicks"].map((h) => <th key={h} className={th}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {[...weeks.entries()].reverse().map(([w, v]) => (
@@ -165,7 +170,7 @@ export default async function Analytics({ params, searchParams }: { params: Prom
               </form>
               <div className="mt-2 overflow-x-auto rounded-lg border border-line">
                 <table className="w-full text-sm">
-                  <thead className="bg-panel text-left text-xs uppercase tracking-wide text-muted"><tr><th className="px-3 py-2"></th><th className="px-3 py-2">{a.session_date}</th><th className="px-3 py-2">{b.session_date}</th></tr></thead>
+                  <thead className="bg-panel"><tr><th className="px-3 py-2"></th><th className="px-3 py-2">{a.session_date}</th><th className="px-3 py-2">{b.session_date}</th></tr></thead>
                   <tbody className="tabular-nums">
                     {([["Registered", "registered"], ["Joined", "joined"], ["Attended 15 min+", "attended"], ["Live at the pitch", "live_at_pitch"], ["Clicked the offer", "clicked_offer"], ["Saw it, no click", "saw_offer_no_click"], ["Stayed 40 min+", "stayed_40min"], ["Asked a question", "asked_question"], ["Watched the replay", "watched_replay"], ["Missed", "missed"]] as Array<[string, keyof Metrics]>).map(([label, k]) => (
                       <tr key={k} className="border-t border-line"><td className="px-3 py-2 text-muted">{label}</td><td className="px-3 py-2">{a[k]}</td><td className="px-3 py-2">{b[k]}</td></tr>

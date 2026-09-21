@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { btnQuiet, input } from "../../ui";
 
 /** "Send me a sample" for each of the three emails, to any team address. */
 export function EmailSamples({ slug, defaultTo, kinds }: { slug: string; defaultTo: string; kinds: Array<[string, string]> }) {
@@ -21,11 +22,11 @@ export function EmailSamples({ slug, defaultTo, kinds }: { slug: string; default
   }
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-line p-4">
-      <p className="text-sm font-bold">Send me a sample</p>
+      <p className="text-sm font-bold">Send me a sample of each email</p>
       <div className="flex flex-wrap items-center gap-2">
-        <input value={to} onChange={(e) => setTo(e.target.value)} className="min-w-64 rounded-md border border-line bg-room px-3 py-2 text-base" placeholder="you@..." />
+        <input value={to} onChange={(e) => setTo(e.target.value)} className={`${input} max-w-72`} placeholder="you@..." />
         {kinds.map(([k, label]) => (
-          <button key={k} type="button" disabled={Boolean(busy)} onClick={() => send(k)} className="rounded-md border border-line px-3 py-2 text-sm font-bold disabled:opacity-50">
+          <button key={k} type="button" disabled={Boolean(busy)} onClick={() => send(k)} className={btnQuiet}>
             {busy === k ? "Sending…" : label}
           </button>
         ))}

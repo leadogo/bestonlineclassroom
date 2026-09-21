@@ -1,17 +1,18 @@
 "use client";
 import { useActionState } from "react";
 import type { ActionState } from "./actions";
+import { btn, input } from "../../ui";
 
 type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
 
-/** A plain form bound to a server action, with its result shown under the button. */
+/** A form bound to a server action; the result reads next to the button, in the same words the button used. */
 export function ActionForm({ action, submit, children, className = "" }: { action: Action; submit: string; children: React.ReactNode; className?: string }) {
   const [state, run, pending] = useActionState(action, null);
   return (
-    <form action={run} className={`flex flex-col gap-3 ${className}`}>
+    <form action={run} className={`flex flex-col gap-4 ${className}`}>
       {children}
-      <div className="flex items-center gap-3">
-        <button type="submit" disabled={pending} className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" disabled={pending} className={btn}>
           {pending ? "Saving…" : submit}
         </button>
         {state?.ok && <span className="text-sm text-emerald-400">{state.ok}</span>}
@@ -21,13 +22,12 @@ export function ActionForm({ action, submit, children, className = "" }: { actio
   );
 }
 
-export function Field({ label, name, value, hint, type = "text", rows }: { label: string; name: string; value?: string; hint?: string; type?: string; rows?: number }) {
-  const cls = "w-full rounded-md border border-line bg-room px-3 py-2 text-base focus:border-brand focus:outline-none";
+export function Field({ label, name, value, hint, type = "text", rows, placeholder }: { label: string; name: string; value?: string; hint?: string; type?: string; rows?: number; placeholder?: string }) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
+    <label className="flex flex-col gap-1.5 text-sm">
       <span className="font-bold">{label}</span>
-      {rows ? <textarea name={name} defaultValue={value} rows={rows} className={cls} /> : <input name={name} type={type} defaultValue={value} className={cls} />}
-      {hint && <span className="text-xs text-muted">{hint}</span>}
+      {rows ? <textarea name={name} defaultValue={value} rows={rows} placeholder={placeholder} className={`${input} py-2 leading-relaxed`} /> : <input name={name} type={type} defaultValue={value} placeholder={placeholder} className={input} />}
+      {hint && <span className="text-xs leading-relaxed text-muted">{hint}</span>}
     </label>
   );
 }

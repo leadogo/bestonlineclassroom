@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { btnQuiet, input, PageHeader, Stat, td, th } from "../../../../ui";
 import { notFound } from "next/navigation";
 import { canModerate, getTeamMember } from "@/lib/auth";
 import { setBlocked } from "./actions";
@@ -40,37 +41,36 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
   const next = new Date(session.start.getTime() + 86_400_000).toISOString().slice(0, 10);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <p className="text-sm text-muted">
-          <Link href="/admin" className="underline">
-            Events
-          </Link>{" "}
-          /{" "}
-          <Link href={`/admin/events/${slug}`} className="underline">
-            {event.slug}
-          </Link>{" "}
-          / {session.date}
-        </p>
-        <div className="mt-1 flex flex-wrap items-baseline gap-4">
-          <h1 className="text-2xl font-bold">Session {session.date}</h1>
-          <Link href={`/admin/events/${slug}/sessions/${prev}`} className="text-sm text-brand underline">
-            ← {prev}
-          </Link>
-          <Link href={`/admin/events/${slug}/sessions/${next}`} className="text-sm text-brand underline">
-            {next} →
-          </Link>
-        </div>
-        <p className="mt-2 text-base">
-          <span className="font-bold tabular-nums">{real.length}</span> registered · <span className="font-bold tabular-nums">{joined}</span> joined live · <span className="font-bold tabular-nums">{replayed}</span> watched the replay · <span className="font-bold tabular-nums">{clicked}</span> clicked the CTA
-          {rows.length !== real.length && <span className="text-muted"> · {rows.length - real.length} test</span>}
-        </p>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        crumbs={[["Webinars", "/admin"], [event.title, readOnly ? `/admin/events/${slug}/analytics` : `/admin/events/${slug}`], [session.date, `/admin/events/${slug}/sessions/${session.date}`]]}
+        title={`Session of ${new Intl.DateTimeFormat("en-US", { timeZone: event.timezone, weekday: "long", month: "long", day: "numeric" }).format(session.start)}`}
+        subtitle={`${event.title}, ${new Intl.DateTimeFormat("en-US", { timeZone: event.timezone, hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(session.start)}${rows.length !== real.length ? `. ${rows.length - real.length} test registrant${rows.length - real.length === 1 ? "" : "s"} hidden from the numbers.` : "."}`}
+        action={
+          <>
+            <Link href={`/admin/events/${slug}/sessions/${prev}`} className={btnQuiet}>
+              Previous day
+            </Link>
+            <Link href={`/admin/events/${slug}/sessions/${next}`} className={btnQuiet}>
+              Next day
+            </Link>
+            <a href={`/admin/events/${slug}/analytics/export?kind=chat&date=${session.date}`} className={btnQuiet}>
+              Chat CSV
+            </a>
+          </>
+        }
+      />
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+        <Stat label="registered" value={real.length} />
+        <Stat label="joined live" value={joined} sub={real.length ? `${Math.round((joined / real.length) * 100)}% show-up` : undefined} />
+        <Stat label="watched the replay" value={replayed} />
+        <Stat label="clicked the offer" value={clicked} tone={clicked ? "cta" : undefined} />
       </div>
 
       <SessionMetrics m={metrics} offsets={offsets} videoSeconds={event.video_seconds ?? 0} ctaAt={event.cta_at_seconds} />
 
-      <section className="flex flex-col gap-2">
-        <p className="text-sm font-bold text-muted">Link clicks for this session</p>
+      <section className="flex flex-col gap-2 border-t border-line pt-6">
+        <h2 className="text-lg font-bold">Link clicks</h2>
         <p className="text-base">
           <span className="font-bold tabular-nums">{clicks.length}</span> opens · <span className="tabular-nums">{count("live")}</span> into the live room · <span className="tabular-nums">{count("countdown")}</span> to the countdown · <span className="tabular-nums">{count("replay")}</span> to the replay · <span className="tabular-nums">{count("prompt")}</span> asked for a name ·{" "}
           <span className={`font-bold tabular-nums ${problems.length ? "text-live" : ""}`}>{count("ended") + count("replay_expired") + count("invalid")}</span> could not watch
@@ -92,25 +92,29 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
         )}
       </section>
 
-      <form className="flex gap-2">
-        <input name="q" defaultValue={q} placeholder="Search name or email" className="w-full max-w-sm rounded-md border border-line bg-panel px-3 py-2 text-base focus:border-brand focus:outline-none" />
-        <button type="submit" className="rounded-md border border-line px-4 py-2 text-sm font-bold">
-          Search
-        </button>
-      </form>
+      <section className="flex flex-col gap-3 border-t border-line pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">Registrants</h2>
+          <form className="flex gap-2">
+            <input name="q" defaultValue={q} placeholder="Search name or email" className={`${input} w-64`} />
+            <button type="submit" className={btnQuiet}>
+              Search
+            </button>
+          </form>
+        </div>
 
       <div className="overflow-x-auto rounded-xl border border-line">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-panel text-left text-xs uppercase tracking-wide text-muted">
+          <thead className="bg-panel">
             <tr>
-              <th className="px-3 py-2">Name</th>
-              <th className="px-3 py-2">Email</th>
-              <th className="px-3 py-2">Source</th>
-              <th className="px-3 py-2">Live</th>
-              <th className="px-3 py-2">Replay</th>
-              <th className="px-3 py-2">CTA</th>
-              <th className="px-3 py-2">Links</th>
-              <th className="px-3 py-2"></th>
+              <th className={th}>Name</th>
+              <th className={th}>Email</th>
+              <th className={th}>Source</th>
+              <th className={th}>Live</th>
+              <th className={th}>Replay</th>
+              <th className={th}>Offer</th>
+              <th className={th}>Links</th>
+              <th className={th}></th>
             </tr>
           </thead>
           <tbody>
@@ -126,10 +130,10 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
                   </td>
                   <td className="px-3 py-2 text-muted">{r.email ?? "—"}</td>
                   <td className="px-3 py-2 text-muted">{r.source}</td>
-                  <td className="px-3 py-2 tabular-nums">{live ? `${Math.round(live.seconds_watched / 60)} min, to ${Math.round(live.max_offset / 60)}m` : "—"}</td>
-                  <td className="px-3 py-2 tabular-nums">{rep ? `${Math.round(rep.seconds_watched / 60)} min` : "—"}</td>
-                  <td className="px-3 py-2">{cta ? "clicked" : "—"}</td>
-                  <td className="px-3 py-2">
+                  <td className={`${td} tabular-nums`}>{live ? `${Math.round(live.seconds_watched / 60)} min, to ${Math.round(live.max_offset / 60)}m` : "—"}</td>
+                  <td className={`${td} tabular-nums`}>{rep ? `${Math.round(rep.seconds_watched / 60)} min` : "—"}</td>
+                  <td className={td}>{cta ? "clicked" : "—"}</td>
+                  <td className={td}>
                     <a href={joinUrl(r.token)} className="text-brand underline" target="_blank" rel="noopener">
                       join
                     </a>{" "}
@@ -137,7 +141,7 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
                       replay
                     </a>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className={td}>
                     {readOnly ? (
                       <span className="text-xs text-muted">{r.blocked_at ? "blocked" : ""}</span>
                     ) : (
@@ -165,6 +169,7 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
           </tbody>
         </table>
       </div>
+      </section>
     </div>
   );
 }

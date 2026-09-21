@@ -2,161 +2,151 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { importSimulated, removeSimulatedName, saveConfirmation, saveCopy, saveNames, saveReminders, saveSettings, saveTags } from "./actions";
 import { EmailSamples } from "./email-tools";
-import { getTeamMember } from "@/lib/auth";
-import { CONFIRMATION_BODY, CONFIRMATION_SUBJECT } from "@/lib/email-templates";
 import { ActionForm, Field } from "./forms";
 import { VideoUpload } from "./video-upload";
+import { btnQuiet, PageHeader, Section } from "../../ui";
 import { chaptersText, secondsText } from "@/lib/admin";
+import { getTeamMember } from "@/lib/auth";
 import { currentOrNextSession, scheduleOf } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
+import { CONFIRMATION_BODY, CONFIRMATION_SUBJECT } from "@/lib/email-templates";
 import { getEvent } from "@/lib/events";
 import { REPLAY_COPY, replayCopy } from "@/lib/replay-content";
 
+const SECTIONS: Array<[string, string]> = [["video", "Video"], ["schedule", "Schedule and offer"], ["chat", "Simulated chat"], ["emails", "Emails"], ["tags", "ActiveCampaign tags"], ["replay", "Replay page"]];
+
 export default async function EventAdmin({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  if ((await getTeamMember())?.role !== "admin") redirect("/admin");
+  const me = await getTeamMember();
+  if (me?.role !== "admin") redirect("/admin");
   const event = await getEvent(slug);
   if (!event) notFound();
   const next = currentOrNextSession(scheduleOf(event));
   const { count } = await db().from("simulated_messages").select("id", { count: "exact", head: true }).eq("event_id", event.id);
   const copy = replayCopy(event.replay_copy);
-  const bindSettings = saveSettings.bind(null, slug);
-  const bindCopy = saveCopy.bind(null, slug);
-  const bindImport = importSimulated.bind(null, slug);
-  const bindNames = saveNames.bind(null, slug);
-  const bindRemove = removeSimulatedName.bind(null, slug);
-  const bindReminders = saveReminders.bind(null, slug);
-  const bindTags = saveTags.bind(null, slug);
-  const bindConfirmation = saveConfirmation.bind(null, slug);
-  const me = await getTeamMember();
+  const bind = <T extends (slug: string, ...rest: never[]) => unknown>(fn: T) => fn.bind(null, slug) as unknown as (prev: import("./actions").ActionState, fd: FormData) => Promise<import("./actions").ActionState>;
   const rules = event.reminder_rules ?? [];
   const rule = (k: string) => rules.find((r) => r.key === k);
-  const TAGS: Array<[string, string]> = [["registered", "Registered (sent by the site on opt-in)"], ["attended", "Attended"], ["missed", "Missed"], ["watched_replay", "Watched replay"], ["left_early", "Left early (before the pitch)"], ["stayed_40min", "Stayed at least 40 minutes"], ["asked_question", "Asked a question"], ["clicked_offer", "Clicked offer"], ["saw_offer_no_click", "Saw offer but didn't click"]];
+  const TAGS: Array<[string, string]> = [["registered", "Registered (sent on opt-in)"], ["attended", "Attended (15 min or more live)"], ["missed", "Missed (under 15 min)"], ["watched_replay", "Watched the replay"], ["left_early", "Left before the pitch"], ["stayed_40min", "Stayed 40 minutes"], ["asked_question", "Asked a question"], ["clicked_offer", "Clicked the offer"], ["saw_offer_no_click", "Saw the offer, didn't click"]];
 
   return (
-    <div className="flex flex-col gap-10">
-      <div>
-        <p className="text-sm text-muted">
-          <Link href="/admin" className="underline">
-            Events
-          </Link>{" "}
-          / {event.slug}
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">{event.title}</h1>
-        <p className="mt-1 text-sm text-muted">
-          Next session {next.date}.{" "}
-          <Link href={`/admin/events/${slug}/sessions/${next.date}`} className="text-brand underline">
-            Registrants
-          </Link>{" "}
-          ·{" "}
-          <Link href={`/w/${slug}?at=4490&key=preview`} className="text-brand underline">
-            Preview the room at 1:14:50
-          </Link>{" "}
-          (works while signed in)
-        </p>
-      </div>
+    <div className="flex flex-col">
+      <PageHeader
+        crumbs={[["Webinars", "/admin"], [event.title, `/admin/events/${slug}`]]}
+        title={event.title}
+        subtitle={<>Next session {next.date}. The open link is /w/{slug}; a landing page or Zap registers people with <code className="rounded bg-panel px-1.5 py-0.5 text-[13px]">event: {slug}</code>.</>}
+        action={
+          <>
+            <Link href={`/admin/events/${slug}/sessions/${next.date}`} className={btnQuiet}>
+              Registrants
+            </Link>
+            <Link href={`/admin/events/${slug}/analytics`} className={btnQuiet}>
+              Analytics
+            </Link>
+            <a href={`/w/${slug}?at=${Math.max(0, (event.cta_at_seconds ?? 10) - 10)}`} className={btnQuiet} target="_blank" rel="noopener">
+              Preview at the pitch
+            </a>
+          </>
+        }
+      >
+        <nav className="-mb-5 flex gap-1 overflow-x-auto pt-1 text-sm" aria-label="Sections">
+          {SECTIONS.map(([id, label]) => (
+            <a key={id} href={`#${id}`} className="shrink-0 rounded-full px-3 py-1.5 text-muted hover:bg-line/60 hover:text-ink">
+              {label}
+            </a>
+          ))}
+        </nav>
+      </PageHeader>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Video</h2>
+      <Section id="video" title="Video" description="The recording the room plays as if live. Export it web-optimized so people can join mid-video.">
         <VideoUpload slug={slug} current={{ url: event.video_url, seconds: event.video_seconds }} />
-      </section>
+      </Section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Settings</h2>
-        <ActionForm action={bindSettings} submit="Save settings">
+      <Section id="schedule" title="Schedule and offer" description="When it runs, what the call to action says and when it appears, and where people go afterwards.">
+        <ActionForm action={bind(saveSettings)} submit="Save schedule and offer">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Title" name="title" value={event.title} />
-            <Field label="Host name" name="host_name" value={event.host_name} />
+            <Field label="Host name" name="host_name" value={event.host_name} hint="Shown at the top of the people list." />
             <Field label="Start time (24 h)" name="start_time" value={event.start_time.slice(0, 5)} hint="On the days ticked below, at this time." />
             <Field label="Timezone" name="timezone" value={event.timezone} hint="IANA name, e.g. America/Edmonton" />
-            <Field label="CTA button label" name="cta_label" value={event.cta_label ?? ""} />
-            <Field label="CTA link" name="cta_href" value={event.cta_href ?? ""} hint="The booking page. The person's name, email and phone are added for iClosed." />
-            <Field label="CTA appears at" name="cta_at" value={secondsText(event.cta_at_seconds)} hint="h:mm:ss into the video" />
-            <Field label="CTA hides at" name="cta_hide" value={secondsText(event.cta_hide_seconds)} hint="h:mm:ss, blank = end" />
-            <Field label="After the session ends, send people to" name="end_url" value={event.end_url} />
-            <Field label="Replay access window (hours)" name="replay_hours" type="number" value={String(event.replay_hours)} hint="0 = no limit" />
           </div>
-          <fieldset className="flex flex-wrap gap-3 text-sm">
-            <legend className="mb-1 w-full font-bold">Days it runs</legend>
+          <fieldset className="flex flex-wrap gap-2 text-sm">
+            <legend className="mb-1.5 w-full font-bold">Days it runs</legend>
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
-              <label key={d} className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-2">
+              <label key={d} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line px-3 has-[:checked]:border-brand has-[:checked]:bg-brand/10">
                 <input type="checkbox" name={`day_${i}`} defaultChecked={(event.days ?? [0, 1, 2, 3, 4, 5, 6]).includes(i)} className="h-4 w-4 accent-brand" />
                 {d}
               </label>
             ))}
           </fieldset>
-          <Field label="Replay chapters" name="chapters" rows={8} value={chaptersText(event.chapters ?? [])} hint="One per line: time then label, e.g. 1:15:00 Offer and next steps" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Call to action button" name="cta_label" value={event.cta_label ?? ""} />
+            <Field label="Call to action link" name="cta_href" value={event.cta_href ?? ""} hint="The booking page. The person's name, email and phone are added for iClosed." />
+            <Field label="Appears at" name="cta_at" value={secondsText(event.cta_at_seconds)} hint="h:mm:ss into the video" />
+            <Field label="Hides at" name="cta_hide" value={secondsText(event.cta_hide_seconds)} hint="h:mm:ss, blank keeps it to the end" />
+            <Field label="After the session ends, send people to" name="end_url" value={event.end_url} />
+            <Field label="Replay window (hours)" name="replay_hours" type="number" value={String(event.replay_hours)} hint="Counted from the first time a person opens their replay link. 0 = no limit." />
+          </div>
+          <Field label="Replay chapters" name="chapters" rows={7} value={chaptersText(event.chapters ?? [])} hint="One per line: time then label, e.g. 1:15:00 Offer and next steps" />
         </ActionForm>
-      </section>
+      </Section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Simulated chat</h2>
-        <p className="text-sm text-muted">{count ?? 0} messages, {(event.simulated_names ?? []).length} names in the people list.</p>
-        <ActionForm action={bindImport} submit="Import CSV (replaces all messages)">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-bold">CSV file</span>
-            <input type="file" name="csv" accept=".csv,text/csv" className="text-sm" />
-            <span className="text-xs text-muted">Columns: HH:MM:SS, Name, Role, Message (EasyWebinar&apos;s export works as is).</span>
-          </label>
-          <Field label="Names for the people list (optional; blank = everyone in the CSV)" name="names" rows={3} hint="One per line or comma-separated." />
-        </ActionForm>
-        <ActionForm action={bindNames} submit="Save names">
-          <Field label="People list" name="names" rows={6} value={(event.simulated_names ?? []).join("\n")} hint="Edit the list shown in the room. Removing a name here does not remove their messages; use the box below for that." />
-        </ActionForm>
-        <ActionForm action={bindRemove} submit="Remove this person">
-          <Field label="Remove a name and every message by them" name="name" hint="Exact name as it appears." />
-        </ActionForm>
-      </section>
+      <Section id="chat" title="Simulated chat" description={<>{count ?? 0} messages and {(event.simulated_names ?? []).length} names in the people list. Attendees never see the difference; moderators do.</>}>
+        <div className="flex flex-col gap-8">
+          <ActionForm action={bind(importSimulated)} submit="Import CSV">
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-bold">CSV file (replaces every simulated message)</span>
+              <input type="file" name="csv" accept=".csv,text/csv" className="text-sm file:mr-3 file:rounded-lg file:border file:border-line file:bg-room file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink" />
+              <span className="text-xs text-muted">Columns: HH:MM:SS, Name, Role, Message. EasyWebinar&apos;s export works as is.</span>
+            </label>
+            <Field label="Names for the people list (optional)" name="names" rows={2} hint="One per line or comma-separated. Blank uses everyone in the CSV." />
+          </ActionForm>
+          <ActionForm action={bind(saveNames)} submit="Save people list">
+            <Field label="People list" name="names" rows={6} value={(event.simulated_names ?? []).join("\n")} hint="Removing a name here keeps their messages. Use the box below to remove a person entirely." />
+          </ActionForm>
+          <ActionForm action={bind(removeSimulatedName)} submit="Remove this person">
+            <Field label="Remove a name and every message by them" name="name" placeholder="Exact name as it appears" />
+          </ActionForm>
+        </div>
+      </Section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Confirmation email</h2>
-        <p className="text-sm text-muted">Sent the moment someone registers, with the calendar invite attached. Placeholders: {"#FIRST_NAME# #WEBINAR_DATE# #WEBINAR_TIME# #EVENT_LINK# #REPLAY_LINK# #SKOOL_LINK#"} (or {"{{first_name}}"} style). Blank = the default.</p>
-        <ActionForm action={bindConfirmation} submit="Save confirmation">
-          <Field label="Subject" name="subject" value={event.confirmation?.subject ?? ""} hint={`Default: ${CONFIRMATION_SUBJECT}`} />
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-bold">Message</span>
-            <textarea name="body" defaultValue={event.confirmation?.body ?? ""} placeholder={CONFIRMATION_BODY} rows={14} className="w-full rounded-md border border-line bg-room px-3 py-2 text-base placeholder:text-muted/60 focus:border-brand focus:outline-none" />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="footer" defaultChecked={event.confirmation?.footer !== false} className="h-4 w-4 accent-brand" />
-            Add the short &ldquo;why you got this&rdquo; footer
-          </label>
-        </ActionForm>
-        <EmailSamples slug={slug} defaultTo={me?.email ?? ""} kinds={[["confirmation", "Confirmation"], ["before30", "30 minutes before"], ["before15", "15 minutes before"]]} />
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Reminder emails</h2>
-        <p className="text-sm text-muted">Sent from our domain through Postmark once it is connected. Placeholders: {"{{first_name}} {{title}} {{host_name}} {{join_url}} {{replay_url}} {{start_local}}"}. Leave a subject blank to disable that reminder.</p>
-        <ActionForm action={bindReminders} submit="Save reminders">
-          {(["before30", "before15", "before5"] as const).map((k) => (
-            <div key={k} className="grid gap-3 rounded-xl border border-line p-4 sm:grid-cols-[120px_1fr]">
-              <Field label="Minutes before" name={`${k}_minutes`} type="number" value={String(rule(k)?.minutes_before ?? (k === "before30" ? 30 : k === "before15" ? 15 : 5))} />
-              <div className="flex flex-col gap-3">
-                <Field label="Subject" name={`${k}_subject`} value={rule(k)?.subject ?? ""} />
-                <Field label="Message" name={`${k}_body`} rows={5} value={rule(k)?.body ?? ""} />
+      <Section id="emails" title="Emails" description={<>The confirmation goes out the moment someone registers, with the calendar invite attached. Reminders go 30 and 15 minutes before the start. Placeholders: {"#FIRST_NAME# #WEBINAR_DATE# #WEBINAR_TIME# #EVENT_LINK# #REPLAY_LINK# #SKOOL_LINK#"}, or {"{{first_name}} {{join_url}}"} style.</>}>
+        <div className="flex flex-col gap-8">
+          <ActionForm action={bind(saveConfirmation)} submit="Save confirmation">
+            <Field label="Confirmation subject" name="subject" value={event.confirmation?.subject ?? ""} placeholder={CONFIRMATION_SUBJECT} hint="Blank keeps the default shown." />
+            <Field label="Confirmation message" name="body" rows={12} value={event.confirmation?.body ?? ""} placeholder={CONFIRMATION_BODY} />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="footer" defaultChecked={event.confirmation?.footer !== false} className="h-4 w-4 accent-brand" />
+              Add the short &ldquo;why you got this&rdquo; footer
+            </label>
+          </ActionForm>
+          <ActionForm action={bind(saveReminders)} submit="Save reminders">
+            {(["before30", "before15", "before5"] as const).map((k) => (
+              <div key={k} className="grid gap-3 rounded-xl border border-line p-4 sm:grid-cols-[140px_minmax(0,1fr)]">
+                <Field label="Minutes before" name={`${k}_minutes`} type="number" value={String(rule(k)?.minutes_before ?? (k === "before30" ? 30 : k === "before15" ? 15 : 5))} />
+                <div className="flex flex-col gap-3">
+                  <Field label="Subject" name={`${k}_subject`} value={rule(k)?.subject ?? ""} placeholder="Blank turns this reminder off" />
+                  <Field label="Message" name={`${k}_body`} rows={4} value={rule(k)?.body ?? ""} />
+                </div>
               </div>
-            </div>
-          ))}
-        </ActionForm>
-      </section>
+            ))}
+          </ActionForm>
+          <EmailSamples slug={slug} defaultTo={me?.email ?? ""} kinds={[["confirmation", "Confirmation"], ["before30", "30 minutes before"], ["before15", "15 minutes before"]]} />
+        </div>
+      </Section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">ActiveCampaign tags</h2>
-        <p className="text-sm text-muted">Applied every hour from what people did (SPEC-analytics.md). Blank = that outcome sends no tag.</p>
-        <ActionForm action={bindTags} submit="Save tags">
-          <div className="grid gap-3 sm:grid-cols-3">
+      <Section id="tags" title="ActiveCampaign tags" description="Applied every hour from what people did. Blank means that outcome sends no tag.">
+        <ActionForm action={bind(saveTags)} submit="Save tags">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {TAGS.map(([k, label]) => (
               <Field key={k} label={label} name={`tag_${k}`} value={(event.tags ?? {})[k] ?? ""} />
             ))}
           </div>
         </ActionForm>
-      </section>
+      </Section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Replay page copy</h2>
-        <p className="text-sm text-muted">Blank fields keep the default shown as the placeholder.</p>
-        <ActionForm action={bindCopy} submit="Save copy">
+      <Section id="replay" title="Replay page" description={<>The words around the replay. Blank fields keep the default shown as the placeholder. Current headline: &ldquo;{copy.headline}&rdquo;</>}>
+        <ActionForm action={bind(saveCopy)} submit="Save replay page">
           <div className="grid gap-4 sm:grid-cols-2">
             {(Object.keys(REPLAY_COPY) as Array<keyof typeof REPLAY_COPY>).map((k) => {
               const def = REPLAY_COPY[k];
@@ -164,18 +154,16 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
               const isList = Array.isArray(def);
               const value = isList ? (Array.isArray(cur) ? (cur as unknown[]).map((x) => (Array.isArray(x) ? x.join(" | ") : String(x))).join("\n") : "") : typeof cur === "string" ? cur : "";
               const placeholder = isList ? (def as unknown[]).map((x) => (Array.isArray(x) ? x.join(" | ") : String(x))).join("\n") : String(def);
+              const wide = isList || String(def).length > 80;
               return (
-                <label key={k} className={`flex flex-col gap-1 text-sm ${isList || String(def).length > 80 ? "sm:col-span-2" : ""}`}>
-                  <span className="font-bold">{k}</span>
-                  <textarea name={k} defaultValue={value} placeholder={placeholder} rows={isList ? 4 : 2} className="w-full rounded-md border border-line bg-room px-3 py-2 text-base placeholder:text-muted/60 focus:border-brand focus:outline-none" />
-                  {isList && <span className="text-xs text-muted">{k === "faq" ? "One per line: question | answer" : "One per line"}</span>}
-                </label>
+                <div key={k} className={wide ? "sm:col-span-2" : ""}>
+                  <Field label={k.replace(/_/g, " ")} name={k} rows={isList ? 4 : 2} value={value} placeholder={placeholder} hint={isList ? (k === "faq" ? "One per line: question | answer" : "One per line") : undefined} />
+                </div>
               );
             })}
           </div>
-          <p className="text-xs text-muted">Current headline on the page: &ldquo;{copy.headline}&rdquo;</p>
         </ActionForm>
-      </section>
+      </Section>
     </div>
   );
 }

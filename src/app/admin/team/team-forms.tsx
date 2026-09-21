@@ -3,8 +3,7 @@ import { useActionState } from "react";
 import { invite, removeMember, resendInvite, resetPassword, revokeInvite, saveMember, type TeamState } from "./actions";
 
 export type EventOption = { id: string; slug: string; title: string };
-const input = "rounded-md border border-line bg-room px-3 py-2 text-base focus:border-brand focus:outline-none";
-const btn = "rounded-md px-3 py-2 text-sm font-bold";
+import { btn, btnDanger, btnQuiet, input, select } from "../ui";
 
 function Result({ s }: { s: TeamState }) {
   if (!s) return null;
@@ -17,7 +16,7 @@ function Result({ s }: { s: TeamState }) {
 
 function RolePick({ value }: { value: "admin" | "moderator" }) {
   return (
-    <select name="role" defaultValue={value} className={input}>
+    <select name="role" defaultValue={value} className={select}>
       <option value="admin">Admin: everything</option>
       <option value="moderator">Moderator: chat and numbers</option>
     </select>
@@ -29,7 +28,7 @@ function Assignments({ events, checked, name }: { events: EventOption[]; checked
     <fieldset className="flex flex-wrap gap-2 text-sm">
       <legend className="mb-1 w-full text-xs text-muted">Webinars (moderators only; admins have all)</legend>
       {events.map((e) => (
-        <label key={e.id} className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5">
+        <label key={e.id} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-line px-3 has-[:checked]:border-brand has-[:checked]:bg-brand/10">
           <input type="checkbox" name={name} value={e.id} defaultChecked={checked.includes(e.id)} className="h-4 w-4 accent-brand" />
           {e.title}
         </label>
@@ -41,16 +40,16 @@ function Assignments({ events, checked, name }: { events: EventOption[]; checked
 export function InviteForm({ events }: { events: EventOption[] }) {
   const [state, run, pending] = useActionState(invite, null);
   return (
-    <form action={run} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-4">
+    <form action={run} className="flex flex-col gap-4 rounded-xl border border-dashed border-line p-5">
       <h2 className="text-lg font-bold">Invite someone</h2>
       <div className="flex flex-wrap gap-3">
-        <input name="email" type="email" required placeholder="email" className={input} />
-        <input name="display_name" required placeholder='name in the chat, e.g. "Sam from William’s team"' className={`${input} min-w-72`} />
+        <input name="email" type="email" required placeholder="email" className={`${input} max-w-64`} />
+        <input name="display_name" required placeholder='name in the chat, e.g. "Sam from William’s team"' className={`${input} max-w-80`} />
         <RolePick value="moderator" />
       </div>
       <Assignments events={events} checked={events.map((e) => e.id)} name="event_id" />
       <div>
-        <button type="submit" disabled={pending} className={`${btn} bg-brand text-white disabled:opacity-50`}>
+        <button type="submit" disabled={pending} className={btn}>
           {pending ? "Sending…" : "Send invitation"}
         </button>
       </div>
@@ -65,14 +64,14 @@ export function MemberRow({ id, email, display_name, role, assigned, isMe, event
   const [rs, reset, p2] = useActionState(resetPassword, null);
   const [rm, remove, p3] = useActionState(removeMember, null);
   return (
-    <li className="flex flex-col gap-2 border-b border-line py-4">
+    <li className="flex flex-col gap-3 border-b border-line py-5">
       <form action={save} className="flex flex-col gap-2">
         <input type="hidden" name="id" value={id} />
         <div className="flex flex-wrap items-center gap-3">
           <span className="min-w-56 text-sm text-muted">{email}{isMe ? " (you)" : ""}</span>
-          <input name="display_name" defaultValue={display_name} className={`${input} w-64`} />
+          <input name="display_name" defaultValue={display_name} className={`${input} max-w-72`} />
           <RolePick value={role} />
-          <button type="submit" disabled={p1} className={`${btn} border border-line text-ink`}>
+          <button type="submit" disabled={p1} className={btnQuiet}>
             Save
           </button>
         </div>
@@ -91,7 +90,7 @@ export function MemberRow({ id, email, display_name, role, assigned, isMe, event
         {!isMe && (
           <form action={remove}>
             <input type="hidden" name="id" value={id} />
-            <button type="submit" disabled={p3} className="text-live underline" onClick={(e) => { if (!confirm(`Remove ${display_name}?`)) e.preventDefault(); }}>
+            <button type="submit" disabled={p3} className={`${btnDanger} min-h-0 px-1`} onClick={(e) => { if (!confirm(`Remove ${display_name}?`)) e.preventDefault(); }}>
               Remove
             </button>
           </form>

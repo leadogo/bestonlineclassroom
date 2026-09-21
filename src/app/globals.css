@@ -45,3 +45,15 @@ video::-webkit-media-controls-panel {
     opacity: 1;
   }
 }
+
+/* The one moving thing in the admin: a webinar that is live right now. */
+@media (prefers-reduced-motion: no-preference) {
+  .live-dot {
+    animation: live-dot 1.6s ease-in-out infinite;
+  }
+}
+@keyframes live-dot {
+  50% {
+    opacity: 0.35;
+  }
+}

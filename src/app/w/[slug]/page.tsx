@@ -9,6 +9,7 @@ import { emailHash, isTestIdentity, normalizeEmail } from "@/lib/registrants";
 import { logClick } from "@/lib/clicks";
 import { after } from "next/server";
 import { headers } from "next/headers";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * The open link (Skool, SMS and email sends, legacy calendar links, anyone): finds the person from `e` (email,
  * hashed here) or `eh` (email hash) or `rid` (the site's registration id) and sends them to their own link for
  * tonight. An unknown person with `e` and `fn` (first name) on the link is registered on the spot and walks
- * straight in; otherwise a one-field name prompt.
+ * straight in; otherwise a one-field name prompt. `ph` (phone) is kept for the iClosed prefill on the CTA.
  */
 export default async function OpenPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
@@ -35,12 +36,16 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
   const eh = (email ? emailHash(email) : one("eh")).toLowerCase();
   const fn = one("fn").trim().slice(0, 40);
   const rid = UUID_RE.test(one("rid")) ? one("rid").toLowerCase() : undefined;
+  const ph = one("ph").replace(/[^\d+() .-]/g, "").trim().slice(0, 32);
   const passthrough = { ...cleanParams(sp), ...(one("at") ? { at: one("at") } : {}), ...(one("key") ? { key: one("key") } : {}) };
 
   const known = await resolveForSession(event.id, sessionDate, { eh, rid, lk: one("lk").toLowerCase() }, src).catch(() => null);
-  if (known) redirect(`/j/${known.token}${toQuery(passthrough)}`);
+  if (known) {
+    if (ph && !known.phone) await db().from("registrants").update({ phone: ph }).eq("id", known.id).is("phone", null);
+    redirect(`/j/${known.token}${toQuery(passthrough)}`);
+  }
   if (email && fn) {
-    const made = await createGuest({ eventId: event.id, sessionDate, firstName: fn, source: isTestIdentity(email) ? ("test" as never) : src, email, emailHash: eh, siteRegistrationId: rid }).catch(() => null);
+    const made = await createGuest({ eventId: event.id, sessionDate, firstName: fn, source: isTestIdentity(email) ? ("test" as never) : src, email, emailHash: eh, phone: ph || null, siteRegistrationId: rid }).catch(() => null);
     if (made) redirect(`/j/${made.token}${toQuery(passthrough)}`);
   }
   const ua = (await headers()).get("user-agent");

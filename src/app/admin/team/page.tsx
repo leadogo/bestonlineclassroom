@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { InviteForm, InviteRow, MemberRow, type EventOption } from "./team-forms";
 import { getTeamMember, type Role } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { PageHeader } from "../ui";
 
 const APP = (process.env.NEXT_PUBLIC_APP_URL ?? "https://bestonlineclassroom.com").replace(/\/$/, "");
 
@@ -22,16 +23,15 @@ export default async function TeamAdmin() {
   };
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Team</h1>
-      <p className="text-sm text-muted">Admins run everything. Moderators open their link, moderate the chat and see the session numbers for their webinars. The display name is what attendees see on replies.</p>
-      <ul>
+      <PageHeader title="Team" subtitle="Admins run everything. Moderators open their link, moderate the chat and see the numbers for their webinars. The display name is what attendees see on replies." />
+      <ul className="flex flex-col">
         {(members.data ?? []).map((m) => (
           <MemberRow key={m.id} id={m.id} email={m.email} display_name={m.display_name} role={m.role as Role} assigned={assignedTo(m.id)} isMe={m.id === me.id} events={evs} modLink={modLink(m.role as Role, assignedTo(m.id))} />
         ))}
       </ul>
       {(invites.data ?? []).length > 0 && (
         <section>
-          <h2 className="text-lg font-bold">Waiting on</h2>
+          <h2 className="text-lg font-bold">Invited, not yet in</h2>
           <ul>
             {(invites.data ?? []).map((i) => (
               <InviteRow key={i.token} token={i.token} email={i.email} display_name={i.display_name} role={i.role} expires_at={i.expires_at} />

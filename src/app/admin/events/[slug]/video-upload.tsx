@@ -2,6 +2,7 @@
 import { upload } from "@vercel/blob/client";
 import { useState } from "react";
 import { setVideo } from "./actions";
+import { btn } from "../../ui";
 
 /** Picks an MP4, sends it straight to Blob with progress, then asks the server to check and store it. */
 export function VideoUpload({ slug, current }: { slug: string; current: { url: string | null; seconds: number | null } }) {
@@ -32,8 +33,8 @@ export function VideoUpload({ slug, current }: { slug: string; current: { url: s
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm text-muted">{current.url ? `Current video: ${Math.round((current.seconds ?? 0) / 60)} minutes.` : "No video yet."}</p>
-      <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-bold text-white">
+      <p className="text-[15px]">{current.url ? `Current video: ${Math.round((current.seconds ?? 0) / 60)} minutes. The session lasts exactly that long.` : "No video yet. The room shows a countdown until one is uploaded."}</p>
+      <label className={`${btn} w-fit cursor-pointer`}>
         {pct === null ? "Choose an MP4 to upload" : `Uploading ${pct}%`}
         <input type="file" accept="video/mp4" className="sr-only" onChange={onFile} disabled={pct !== null} />
       </label>
