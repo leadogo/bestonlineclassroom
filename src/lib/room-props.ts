@@ -37,7 +37,11 @@ export type RoomProps = {
   zones: Array<[string, string]>;
 };
 
-export type RoomOutcome = { kind: "room"; props: RoomProps } | { kind: "ended"; to: string };
+/** `rejoinDate` is set when an old link is used for a later session: the caller moves the registrant to that date. */
+export type RoomOutcome = { kind: "room"; props: RoomProps; rejoinDate?: string } | { kind: "ended"; to: string };
+
+/** A link is good for as long as the webinar runs: an old session's link joins the session running now, or waits for the next one. The end page only within a day of the person's own session. */
+const REJOIN_AFTER_MS = 24 * 3600_000;
 
 export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, string | string[] | undefined>, now = new Date(), opts: { team?: boolean } = {}): RoomOutcome {
   const params = cleanParams(sp);
@@ -46,7 +50,15 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
   const seconds = event.video_seconds ?? 0;
   const preview = /^\d+$/.test(one("at")) && ((Boolean(PREVIEW_KEY) && one("key") === PREVIEW_KEY) || Boolean(opts.team));
 
-  const rs = roomState(schedule, now, r.session_date);
+  let rs = roomState(schedule, now, r.session_date);
+  let rejoinDate: string | undefined;
+  if (rs.state === "ended" && !preview) {
+    const cur = roomState(schedule, now);
+    if (cur.state === "live" || now.getTime() >= rs.session.end.getTime() + REJOIN_AFTER_MS) {
+      rs = cur;
+      rejoinDate = cur.session.date;
+    }
+  }
   let state: "countdown" | "live";
   let startsAt: number;
   if (preview) {
@@ -64,6 +76,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       : null;
   return {
     kind: "room",
+    rejoinDate,
     props: {
       token: r.token,
       registrantId: r.id,
@@ -87,7 +100,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       endUrl: withParams(event.end_url, params),
       params,
       simulatedNames: event.simulated_names ?? [],
-      sessionDate: r.session_date,
+      sessionDate: rejoinDate ?? r.session_date,
       preview,
       zones: fourZones(rs.session),
     },

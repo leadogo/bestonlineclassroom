@@ -49,6 +49,11 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     after(() => logClick({ path: "j", outcome: "ended", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua }));
     redirect(outcome.to);
   }
+  // An old link used for a later session: the person now belongs to that session (chat, presence, numbers).
+  if (outcome.rejoinDate && !outcome.props.preview) {
+    await db().from("registrants").update({ session_date: outcome.rejoinDate }).eq("id", r.id);
+    r.session_date = outcome.rejoinDate;
+  }
   if (!outcome.props.preview) after(() => logClick({ path: "j", outcome: outcome.props.state, token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua }));
   const simulated = await getSimulatedRows(r.event.id).catch(() => []);
   // ponytail: the site's /join records room_join for leadogo, the ritual sheet and Slack; calling it once here keeps
