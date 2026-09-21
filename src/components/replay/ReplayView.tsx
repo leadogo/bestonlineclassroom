@@ -149,7 +149,7 @@ export function ReplayView({ token, firstName, title, logoUrl, videoUrl, seconds
       </section>
 
       <div className="relative overflow-hidden rounded-xl ring-1 ring-line">
-        <ReplayPlayer ref={player} src={videoUrl} seconds={seconds} chapters={chapters} onTime={onTime} />
+        <ReplayPlayer ref={player} src={videoUrl} seconds={seconds} chapters={chapters} logoUrl={logoUrl} onTime={onTime} />
         {resumeAt !== null && (
           <div className="absolute inset-x-0 top-0 flex flex-wrap items-center justify-between gap-2 bg-room/90 px-4 py-2 text-sm">
             <span>You were at {clock(resumeAt)}.</span>
