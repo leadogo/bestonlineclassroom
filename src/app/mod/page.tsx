@@ -37,6 +37,7 @@ export async function ModSeat({ slug, date }: { slug?: string; date?: string }) 
       event={{ slug: event.slug, title: event.title, iconUrl: event.icon_url, hostName: event.host_name }}
       session={{ date: session.date, startsAt: session.start.getTime(), endsAt: session.end.getTime() }}
       serverNow={new Date().getTime()}
+      backHref={member.role === "admin" ? `/admin/events/${event.slug}` : "/admin"}
     />
   );
 }

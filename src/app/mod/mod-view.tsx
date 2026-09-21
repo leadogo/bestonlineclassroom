@@ -13,7 +13,7 @@ type Wire = { id: number; registrant_id: string | null; author_name: string; rol
 type Person = { first_name: string; last_seen_at: string; source: string; registrant_id: string; ghosted: boolean; has_ip: boolean; ip_blocked: boolean };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean };
 
-export function ModView({ member, event, session, serverNow }: { member: { id: string; display_name: string; email: string }; event: { slug: string; title: string; iconUrl: string | null; hostName: string }; session: { date: string; startsAt: number; endsAt: number }; serverNow: number }) {
+export function ModView({ member, event, session, serverNow, backHref }: { member: { id: string; display_name: string; email: string }; event: { slug: string; title: string; iconUrl: string | null; hostName: string }; session: { date: string; startsAt: number; endsAt: number }; serverNow: number; backHref: string }) {
   const skew = useRef(0);
   const router = useRouter();
   const [list, setList] = useState<Item[]>([]);
@@ -125,6 +125,12 @@ export function ModView({ member, event, session, serverNow }: { member: { id: s
   return (
     <div className="flex h-dvh flex-col bg-room text-ink">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-4 py-2" style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}>
+        <a href={backHref} className="flex min-h-9 items-center gap-1 rounded-md px-2 text-sm text-muted hover:bg-panel hover:text-ink" aria-label="Back to the admin">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M15 6l-6 6 6 6" />
+          </svg>
+          Admin
+        </a>
         {event.iconUrl && <img src={event.iconUrl} alt="" className="h-7 w-7" />}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold">{event.title}</h1>

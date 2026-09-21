@@ -23,6 +23,11 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
   if (!event) notFound();
   const next = currentOrNextSession(scheduleOf(event));
   const { count } = await db().from("simulated_messages").select("id", { count: "exact", head: true }).eq("event_id", event.id);
+  const [sample, last] = await Promise.all([
+    db().from("simulated_messages").select("offset_seconds, name, body").eq("event_id", event.id).order("offset_seconds").limit(5),
+    db().from("simulated_messages").select("offset_seconds").eq("event_id", event.id).order("offset_seconds", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const copy = replayCopy(event.replay_copy);
   const bind = <T extends (slug: string, ...rest: never[]) => unknown>(fn: T) => fn.bind(null, slug) as unknown as (prev: import("./actions").ActionState, fd: FormData) => Promise<import("./actions").ActionState>;
   const rules = event.reminder_rules ?? [];
@@ -91,11 +96,34 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
         </ActionForm>
       </Section>
 
-      <Section id="chat" title="Simulated chat" description={<>{count ?? 0} messages and {(event.simulated_names ?? []).length} names in the people list. Attendees never see the difference; moderators do.</>}>
+      <Section id="chat" title="Simulated chat" description="The crowd that plays on the video's clock. Attendees never see the difference; moderators do.">
         <div className="flex flex-col gap-8">
-          <ActionForm action={bind(importSimulated)} submit="Import CSV">
+          {count ? (
+            <div className="rounded-xl border border-line bg-panel p-4">
+              <p className="text-[15px] font-bold">
+                {count} messages loaded, from the start to {mmss(last.data?.offset_seconds ?? 0)}, {(event.simulated_names ?? []).length} names in the people list
+              </p>
+              <ul className="mt-3 flex flex-col gap-1.5 text-sm">
+                {(sample.data ?? []).map((m, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="w-12 shrink-0 text-muted tabular-nums">{mmss(m.offset_seconds as number)}</span>
+                    <span className="min-w-0 truncate">
+                      <span className="font-bold">{m.name as string}</span> {m.body as string}
+                    </span>
+                  </li>
+                ))}
+                {(count ?? 0) > 5 && <li className="text-xs text-muted">and {(count ?? 0) - 5} more</li>}
+              </ul>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-line p-4">
+              <p className="text-[15px] font-bold">No simulated chat yet</p>
+              <p className="mt-1 text-sm text-muted">The room will only show real people until a CSV is imported.</p>
+            </div>
+          )}
+          <ActionForm action={bind(importSimulated)} submit={count ? "Replace with this CSV" : "Import CSV"}>
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-bold">CSV file (replaces every simulated message)</span>
+              <span className="font-bold">{count ? "Replace every simulated message with another CSV" : "CSV file"}</span>
               <input type="file" name="csv" accept=".csv,text/csv" className="text-sm file:mr-3 file:rounded-lg file:border file:border-line file:bg-room file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink" />
               <span className="text-xs text-muted">Columns: HH:MM:SS, Name, Role, Message. EasyWebinar&apos;s export works as is.</span>
             </label>
