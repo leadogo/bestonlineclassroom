@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { importSimulated, removeSimulatedName, saveCopy, saveNames, saveSettings } from "./actions";
+import { importSimulated, removeSimulatedName, saveCopy, saveNames, saveReminders, saveSettings, saveTags } from "./actions";
 import { ActionForm, Field } from "./forms";
 import { VideoUpload } from "./video-upload";
 import { chaptersText, secondsText } from "@/lib/admin";
@@ -21,6 +21,11 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
   const bindImport = importSimulated.bind(null, slug);
   const bindNames = saveNames.bind(null, slug);
   const bindRemove = removeSimulatedName.bind(null, slug);
+  const bindReminders = saveReminders.bind(null, slug);
+  const bindTags = saveTags.bind(null, slug);
+  const rules = event.reminder_rules ?? [];
+  const rule = (k: string) => rules.find((r) => r.key === k);
+  const TAGS: Array<[string, string]> = [["registered", "Registered (sent by the site on opt-in)"], ["attended", "Attended"], ["missed", "Missed"], ["watched_replay", "Watched replay"], ["left_early", "Left early (before the pitch)"], ["stayed_40min", "Stayed at least 40 minutes"], ["asked_question", "Asked a question"], ["clicked_offer", "Clicked offer"], ["saw_offer_no_click", "Saw offer but didn't click"]];
 
   return (
     <div className="flex flex-col gap-10">
@@ -85,6 +90,34 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
         </ActionForm>
         <ActionForm action={bindRemove} submit="Remove this person">
           <Field label="Remove a name and every message by them" name="name" hint="Exact name as it appears." />
+        </ActionForm>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-bold">Reminder emails</h2>
+        <p className="text-sm text-muted">Sent from our domain through Postmark once it is connected. Placeholders: {"{{first_name}} {{title}} {{host_name}} {{join_url}} {{replay_url}} {{start_local}}"}. Leave a subject blank to disable that reminder.</p>
+        <ActionForm action={bindReminders} submit="Save reminders">
+          {(["before50", "before30", "before10"] as const).map((k) => (
+            <div key={k} className="grid gap-3 rounded-xl border border-line p-4 sm:grid-cols-[120px_1fr]">
+              <Field label="Minutes before" name={`${k}_minutes`} type="number" value={String(rule(k)?.minutes_before ?? (k === "before50" ? 50 : k === "before30" ? 30 : 10))} />
+              <div className="flex flex-col gap-3">
+                <Field label="Subject" name={`${k}_subject`} value={rule(k)?.subject ?? ""} />
+                <Field label="Message" name={`${k}_body`} rows={5} value={rule(k)?.body ?? ""} />
+              </div>
+            </div>
+          ))}
+        </ActionForm>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-bold">ActiveCampaign tags</h2>
+        <p className="text-sm text-muted">Applied every hour from what people did (SPEC-analytics.md). Blank = that outcome sends no tag.</p>
+        <ActionForm action={bindTags} submit="Save tags">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {TAGS.map(([k, label]) => (
+              <Field key={k} label={label} name={`tag_${k}`} value={(event.tags ?? {})[k] ?? ""} />
+            ))}
+          </div>
         </ActionForm>
       </section>
 

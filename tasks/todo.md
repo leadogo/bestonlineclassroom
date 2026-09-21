@@ -83,3 +83,13 @@
   - Acceptance: joiners land at the right minute all evening; no bounce; chat and moderation work; counts recorded.
   - Verify: the evening itself; notes into `docs/launch-2026-09-21.md`
   - Files: docs/launch-2026-09-21.md
+
+## Phase 2 and 3 (tasks/plan-phase2.md), 2026-09-20 evening
+- [x] A1–A5 admin: events, video upload, simulated chat, replay copy, team, registrants (`SPEC-admin.md`).
+- [x] N1 outcomes and session metrics views; N3 numbers and retention on the session page; `GET /api/metrics`.
+- [x] N4 ActiveCampaign tags (hourly cron, `outcome_tags`), tag names editable. Needs the ActiveCampaign API key.
+- [ ] N2 leadogo: Funnel Performance reads `/api/metrics` instead of EasyWebinar (change in leadogo-app).
+- [x] R1 reminders: rules, cron, Postmark sender, stop link (`SPEC-reminders.md`). Needs the Postmark token.
+- [ ] iClosed tags/events push (needs iClosed API details).
+- [ ] D1 design pass. [ ] M1 AI moderator.
+- [x] Review checklist: `docs/review-checklist.md`.

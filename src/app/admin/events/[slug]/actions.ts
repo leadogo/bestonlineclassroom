@@ -130,3 +130,33 @@ export async function setVideo(slug: string, url: string): Promise<ActionState> 
   done(slug);
   return { ok: `Video set: ${Math.round(info.durationSeconds / 60)} minutes.` };
 }
+
+export async function saveReminders(slug: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const event = await guard(slug);
+  const rules = [];
+  for (const key of ["before50", "before30", "before10"]) {
+    const minutes = Number(str(fd, `${key}_minutes`, 5));
+    const subject = str(fd, `${key}_subject`, 200);
+    const body = str(fd, `${key}_body`, 4000);
+    if (!subject || !body) continue;
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 7 * 24 * 60) return { error: `${key}: minutes must be between 1 and 10080.` };
+    rules.push({ key, minutes_before: Math.floor(minutes), subject, body });
+  }
+  const { error } = await db().from("events").update({ reminder_rules: rules }).eq("id", event.id);
+  if (error) return { error: "Could not save." };
+  done(slug);
+  return { ok: `${rules.length} reminder${rules.length === 1 ? "" : "s"} saved.` };
+}
+
+export async function saveTags(slug: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const event = await guard(slug);
+  const tags: Record<string, string> = {};
+  for (const k of ["registered", "attended", "missed", "watched_replay", "left_early", "stayed_40min", "asked_question", "clicked_offer", "saw_offer_no_click"]) {
+    const v = str(fd, `tag_${k}`, 80);
+    if (v) tags[k] = v;
+  }
+  const { error } = await db().from("events").update({ tags }).eq("id", event.id);
+  if (error) return { error: "Could not save." };
+  done(slug);
+  return { ok: "Tags saved." };
+}
