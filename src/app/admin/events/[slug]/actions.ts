@@ -46,6 +46,8 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     replay_hours: Number.isFinite(replay_hours) && replay_hours >= 0 ? Math.floor(replay_hours) : 72,
     chapters: parseChapters(str(fd, "chapters", 4000)),
     days: [0, 1, 2, 3, 4, 5, 6].filter((d) => fd.get(`day_${d}`) === "on"),
+    host_tagline: str(fd, "host_tagline", 120) || null,
+    host_avatar_url: str(fd, "host_avatar_url", 500) || null,
     cta_title: str(fd, "cta_title", 80) || null,
     cta_subtitle: str(fd, "cta_subtitle", 140) || null,
   };

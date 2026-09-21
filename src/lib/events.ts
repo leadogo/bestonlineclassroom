@@ -7,6 +7,8 @@ export type EventRow = {
   slug: string;
   title: string;
   host_name: string;
+  host_avatar_url: string | null;
+  host_tagline: string | null;
   timezone: string;
   start_time: string;
   video_url: string | null;

@@ -16,6 +16,7 @@ export type RoomProps = {
   eventSlug: string;
   title: string;
   hostName: string;
+  host: { avatarUrl: string | null; tagline: string | null };
   logoUrl: string | null;
   iconUrl: string | null;
   state: "countdown" | "live";
@@ -67,6 +68,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       eventSlug: event.slug,
       title: event.title,
       hostName: event.host_name,
+      host: { avatarUrl: event.host_avatar_url ?? null, tagline: event.host_tagline ?? null },
       logoUrl: event.logo_url,
       iconUrl: event.icon_url,
       state,

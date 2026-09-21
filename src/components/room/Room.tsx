@@ -96,9 +96,9 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
     <div ref={root} className={`flex h-dvh flex-col bg-room text-ink ${ownFull ? "fixed inset-0 z-50" : ""}`}>
       {!ownFull && <TopBar title={p.title} iconUrl={p.iconUrl} live={live} offset={offset} watching={watching} preview={p.preview} />}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row landscape-phone:flex-row">
-        <div className={`relative flex w-full shrink-0 flex-col bg-black lg:min-h-0 lg:flex-1 landscape-phone:h-full landscape-phone:flex-1 ${ownFull ? "h-full flex-1" : ""}`}>
+        <div className={`relative flex w-full shrink-0 flex-col bg-black lg:min-h-0 lg:flex-1 landscape-phone:h-full landscape-phone:flex-1 ${ownFull || !live ? "min-h-0 flex-1" : ""}`}>
           <div className={`relative w-full lg:aspect-auto lg:min-h-0 lg:flex-1 landscape-phone:aspect-auto landscape-phone:flex-1 ${ownFull || !live ? "min-h-0 flex-1" : "aspect-video"}`}>
-            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} />}
+            {live ? <VideoStage token={p.token} available={p.video.available} expected={expected} videoRef={video} /> : <Countdown startsAt={p.startsAt} now={now} logoUrl={p.logoUrl} zones={p.zones} hostName={p.hostName} host={p.host} />}
             {live && (
               <button type="button" onClick={toggleFull} className="absolute bottom-2 right-2 z-10 grid h-10 w-10 place-items-center rounded-lg bg-black/55 text-white/90 hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70" aria-label={full ? "Leave full screen" : "Full screen"}>
                 {full ? (
@@ -145,13 +145,21 @@ function localStart(startsAt: number, now: number): string {
   return sameDay ? `Today at ${time}, your local time` : `${d.toLocaleDateString([], { weekday: "long" })} at ${time}, your local time`;
 }
 
-function Countdown({ startsAt, now, logoUrl, zones }: { startsAt: number; now: number; logoUrl: string | null; zones: Array<[string, string]> }) {
+function Countdown({ startsAt, now, logoUrl, zones, hostName, host }: { startsAt: number; now: number; logoUrl: string | null; zones: Array<[string, string]>; hostName: string; host: { avatarUrl: string | null; tagline: string | null } }) {
   const local = useClientValue(() => localStart(startsAt, now), "");
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
-      {logoUrl && <img src={logoUrl} alt="" className="mb-2 h-8 w-auto opacity-90 sm:h-10" />}
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8 text-center">
+      {logoUrl && <img src={logoUrl} alt="" className="mb-1 h-8 w-auto opacity-90 sm:h-10" />}
       <p className="text-4xl font-bold tabular-nums sm:text-5xl">{countdownText(startsAt - now)}</p>
       <p className="text-base text-muted">{local || " "}</p>
+      <div className="mt-2 flex items-center gap-3 rounded-2xl border border-line bg-panel/80 px-4 py-3 text-left">
+        {host.avatarUrl ? <img src={host.avatarUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-brand text-lg font-bold text-white">{hostName.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>}
+        <div className="min-w-0">
+          <p className="text-xs text-muted">Your host</p>
+          <p className="text-base font-bold leading-tight">{hostName}</p>
+          {host.tagline && <p className="text-sm text-muted">{host.tagline}</p>}
+        </div>
+      </div>
       <p className="max-w-xs text-sm text-muted">Keep this page open. The video and the chat start on their own.</p>
       <p className="text-xs text-muted/70">{zones.map(([z, t]) => `${t} ${z}`).join("  ·  ")}</p>
     </div>
