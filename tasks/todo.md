@@ -103,3 +103,7 @@
 - [x] analytics-ui: `/admin/events/<slug>/analytics` trend, by session, by week, retention small multiples, compare two sessions, CSV exports; `/api/metrics` `limit` and `peak_live`.
 - [ ] End-of-night test: `npm run test:event -- --at HH:MM` (copies ailg-r, registers William), walk the flow, then `npm run test:event -- --teardown`.
 - [ ] `VERCEL_TOKEN` in Doppler for edge IP blocks (William creates it at vercel.com/account/tokens, scope team leadogo).
+
+## Fixes from the 22:45 test (tasks/plan-fixes-2026-09-20.md)
+- [ ] A1–A11 tonight, then CP-A: second test run 10 minutes after done.
+- [ ] B1–B3 tomorrow daytime if safe. C1–C2 after launch.
