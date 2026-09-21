@@ -1,8 +1,10 @@
 // Team sign-in (SPEC-moderator.md): Supabase Auth email + password, the session in cookies through @supabase/ssr,
-// and one check every moderator page and route makes: is this signed-in user in team_members?
+// then a 6-digit emailed code the first time a device is seen (twofactor.ts). One check every moderator and admin
+// page and route makes: signed in, on the team, on a trusted device.
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { db } from "./db.ts";
+import { deviceTrusted } from "./twofactor.ts";
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -25,8 +27,8 @@ export async function supabaseServer() {
   });
 }
 
-/** The signed-in team member, or null. */
-export async function getTeamMember(): Promise<TeamMember | null> {
+/** The signed-in team member with the password step done, trusted device or not. */
+export async function getSignedIn(): Promise<TeamMember | null> {
   if (!URL || !ANON) return null;
   const sb = await supabaseServer();
   const {
@@ -35,4 +37,11 @@ export async function getTeamMember(): Promise<TeamMember | null> {
   if (!user) return null;
   const { data } = await db().from("team_members").select("id, email, display_name").eq("id", user.id).maybeSingle();
   return (data as TeamMember | null) ?? null;
+}
+
+/** The team member allowed in: signed in and on a device that has passed the emailed code. */
+export async function getTeamMember(): Promise<TeamMember | null> {
+  const m = await getSignedIn();
+  if (!m) return null;
+  return (await deviceTrusted(m.id)) ? m : null;
 }

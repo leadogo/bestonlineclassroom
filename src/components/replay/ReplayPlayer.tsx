@@ -25,6 +25,8 @@ export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { src: string; second
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(seconds);
   const [scrubbing, setScrubbing] = useState<number | null>(null);
+  // The file URL is attached after mount, so it never appears in the page source. Right-click is off.
+  const [attached, setAttached] = useState(false);
   const canFullscreen = useClientValue(() => Boolean(document.fullscreenEnabled), false);
 
   useImperativeHandle(ref, () => ({
@@ -43,6 +45,7 @@ export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { src: string; second
   useEffect(() => {
     const v = video.current;
     if (!v) return;
+    v.src = src;
     const onT = () => {
       setCurrent(v.currentTime);
       onTime?.(v.currentTime);
@@ -61,7 +64,9 @@ export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { src: string; second
     v.addEventListener("pause", onPa);
     v.addEventListener("ended", onPa);
     v.addEventListener("volumechange", onVol);
+    const t = setTimeout(() => setAttached(true), 0);
     return () => {
+      clearTimeout(t);
       v.removeEventListener("timeupdate", onT);
       v.removeEventListener("durationchange", onD);
       v.removeEventListener("play", onP);
@@ -115,9 +120,9 @@ export const ReplayPlayer = forwardRef<ReplayPlayerHandle, { src: string; second
   const chapterNow = [...chapters].reverse().find((c) => c.at <= shown);
 
   return (
-    <div ref={box} tabIndex={0} onKeyDown={onKey} className="relative aspect-video w-full bg-black outline-none focus-visible:ring-2 focus-visible:ring-brand">
-      <video ref={video} src={src} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline preload="metadata" tabIndex={-1} disablePictureInPicture disableRemotePlayback />
-      {!started && (
+    <div ref={box} tabIndex={0} onKeyDown={onKey} onContextMenu={(e) => e.preventDefault()} className="relative aspect-video w-full bg-black outline-none select-none focus-visible:ring-2 focus-visible:ring-brand">
+      <video ref={video} className="pointer-events-none absolute inset-0 h-full w-full object-contain" playsInline preload="metadata" tabIndex={-1} disablePictureInPicture disableRemotePlayback controlsList="nodownload noremoteplayback" />
+      {(!started || !attached) && (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-panel to-room">
           {logoUrl && <img src={logoUrl} alt="" className="absolute top-5 h-7 w-auto opacity-80 sm:h-8" />}
         </div>

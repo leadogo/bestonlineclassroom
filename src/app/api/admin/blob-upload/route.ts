@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        if (!/^videos\/[a-z0-9-]+\.mp4$/.test(pathname)) throw new Error("Only videos/<event>.mp4");
+        if (!/^videos\/[a-z0-9-]+\.mp4$/.test(pathname)) throw new Error("Only videos/<event>-<random>.mp4");
         return { allowedContentTypes: ["video/mp4"], maximumSizeInBytes: 4 * 1024 * 1024 * 1024, addRandomSuffix: false, allowOverwrite: true };
       },
       onUploadCompleted: async () => {

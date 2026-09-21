@@ -14,7 +14,8 @@ export function VideoUpload({ slug, current }: { slug: string; current: { url: s
     setMsg("");
     setPct(0);
     try {
-      const blob = await upload(`videos/${slug}.mp4`, file, {
+      const rand = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
+      const blob = await upload(`videos/${slug}-${rand}.mp4`, file, {
         access: "public",
         handleUploadUrl: "/api/admin/blob-upload",
         multipart: true,

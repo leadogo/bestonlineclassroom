@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 import { signIn } from "./actions";
-import { getTeamMember } from "@/lib/auth";
+import { getSignedIn } from "@/lib/auth";
+import { deviceTrusted } from "@/lib/twofactor";
 import { getEvent } from "@/lib/events";
 
 export const dynamic = "force-dynamic";
 
 /** Team sign-in. No sign-up, no reset: accounts come from `npm run team:add`. */
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  if (await getTeamMember().catch(() => null)) redirect("/mod");
+  const signedIn = await getSignedIn().catch(() => null);
+  if (signedIn) redirect((await deviceTrusted(signedIn.id)) ? "/mod" : "/login/verify");
   const { error } = await searchParams;
   const event = await getEvent("ailg-r").catch(() => null);
   return (
@@ -24,7 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           Password
         </label>
         <input id="password" name="password" type="password" autoComplete="current-password" required className="mt-2 min-h-12 w-full rounded-xl border border-line bg-panel px-4 text-base focus:border-brand focus:outline-none" />
-        {error && <p className="mt-3 text-base text-live">{error === "bad" ? "That email and password don't match." : "Enter your email and password."}</p>}
+        {error && <p className="mt-3 text-base text-live">{error === "bad" ? "That email and password don't match." : error === "team" ? "That account is not on the team." : "Enter your email and password."}</p>}
         <button type="submit" className="mt-5 min-h-12 w-full rounded-xl bg-brand text-lg font-bold text-white focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50">
           Sign in
         </button>

@@ -26,6 +26,7 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
     const v = videoRef.current;
     if (!v || !src) return;
     v.muted = true;
+    v.src = src;
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
     const seek = () => {
       const t = expected();
@@ -91,7 +92,6 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
     <>
       <video
         ref={attach}
-        src={src}
         className="pointer-events-none absolute inset-0 h-full w-full object-contain"
         playsInline
         autoPlay

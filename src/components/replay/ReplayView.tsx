@@ -124,7 +124,7 @@ export function ReplayView({ token, firstName, title, logoUrl, videoUrl, seconds
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-4 pb-28 sm:px-6 sm:pb-12" style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}>
+    <main onContextMenu={(e) => e.preventDefault()} className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-4 pb-28 sm:px-6 sm:pb-12" style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}>
       <header className="flex items-center justify-between gap-4">
         {logoUrl ? <img src={logoUrl} alt="BestOnlineClassroom" className="h-7 w-auto sm:h-8" /> : <span className="font-bold">BestOnlineClassroom</span>}
         {firstName && <span className="text-sm text-muted">Hi {firstName}</span>}
