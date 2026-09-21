@@ -7,7 +7,10 @@ A teammate signs in, sees the live room's real messages, and replies under a con
 William's team"), deletes, blocks or reacts. Attendees see the result within one poll.
 
 ## Sign-in
-Supabase Auth email + password. Accounts come from `scripts/team-add.ts`; `/login` posts the credentials to a
+Supabase Auth email + password, then, on a device we have not seen, a 6-digit code emailed through Postmark
+(`src/lib/twofactor.ts`, 2026-09-20 late): 10 minutes to use it, five tries, one send a minute; a correct code
+sets a signed `bc_device` cookie that marks the device trusted for 90 days (`trusted_devices`). Every team
+check (`getTeamMember`) requires both the session and the trusted device. Accounts come from `scripts/team-add.ts`; `/login` posts the credentials to a
 server action that calls `signInWithPassword` through `@supabase/ssr` and sets the session cookie. Every `/mod`
 and `/api/mod` request checks the session user's email is in `team_members`; anyone else gets `/login`.
 Sessions last a week. No sign-up page, no password reset tonight (an admin re-runs `team-add` to rotate).

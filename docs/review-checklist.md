@@ -50,6 +50,14 @@ What to look at, in the order it matters. Tick as you go; anything wrong becomes
 - [x] ActiveCampaign contacts: 11,146 of 11,152 carried EasyWebinar links in WebinarJoinLink / ReplayLink (and joinURL / replayURL). William confirmed no automation fires on those fields; `npm run ac:links -- --list 4740` was run 2026-09-20 late (own room link for the people we know, the open link with email hash for the rest). Re-run any time; it only touches contacts still holding an easywebinar link.
 - [ ] Email avatar: `bestonlineclassroom.com` has no mailboxes (registrar forwarding), so there is no Google profile photo to show. BIMI is the route: `default._bimi.bestonlineclassroom.com` TXT `v=BIMI1; l=https://bestonlineclassroom.com/bimi.svg;` (logo published), DMARC moved to `p=quarantine`, and for Gmail a Verified Mark Certificate (paid, needs a registered trademark). Without the VMC, Gmail keeps showing initials; Yahoo and Apple Mail show the logo.
 
+## Security (2026-09-20 late)
+- [x] Edge rate limits (Vercel Firewall, per IP per minute): guest registrations 20, registration webhook 30, chat 300, heartbeats 60, sign-in 15. `vercel firewall rules list` shows them; raise the chat one if an office behind one IP ever hits it.
+- [x] Security headers on every response: HSTS, nosniff, frame-ancestors none, referrer policy, permissions policy.
+- [x] Email two-factor for the team: a 6-digit code on a new device, trusted for 90 days. Your first sign-in after this asks for it.
+- [x] Video URL attached after the page loads (not in the HTML source), right-click off on the room and replay, new uploads get a random file name. An educated person can still find the file in the browser's network tools; only encrypted HLS (Mux / Cloudflare Stream) raises that bar further.
+- [ ] Supabase dashboard → Authentication: turn on "Leaked password protection".
+- [ ] Supabase plan: confirm daily backups (Pro) or add point-in-time recovery.
+
 ## Housekeeping
 - [ ] Bare domain as primary in Vercel (then I switch the site's `CLASSROOM_URL` back), after the session.
 - [ ] Blob transfer cost on the first invoice.
