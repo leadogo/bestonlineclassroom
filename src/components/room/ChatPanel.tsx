@@ -256,7 +256,7 @@ function Message({ m, mine, onReact, onReactLocal, onReply }: { m: Item; mine: S
           {m.role === "moderator" && <span className="rounded bg-brand/15 px-1.5 py-px text-[11px] font-bold text-brand">Moderator</span>}
           <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{time}</span>
         </div>
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink landscape-phone:text-base landscape-phone:leading-normal">
+        <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink landscape-phone:leading-normal">
           {splitMentions(m.body).map((part, i) => (part.mention ? <span key={i} className="font-bold text-brand">{part.text}</span> : <span key={i}>{part.text}</span>))}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1">

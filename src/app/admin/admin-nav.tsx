@@ -16,7 +16,7 @@ export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut }: { webina
     <>
       <div className="flex items-center gap-3 px-3 py-2 lg:px-2 lg:py-3">
         <Link href="/admin" className="flex items-center gap-2 font-bold" aria-label="BestOnlineClassroom admin">
-          {logoUrl ? <img src={logoUrl} alt="" className="h-7 w-auto" /> : "BestOnlineClassroom"}
+          {logoUrl ? <img src={logoUrl} alt="" className="h-9 w-auto" /> : "BestOnlineClassroom"}
         </Link>
       </div>
       <nav className="flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-1 lg:flex-col lg:overflow-visible lg:px-2 lg:pb-0" aria-label="Admin">
@@ -49,6 +49,9 @@ export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut }: { webina
             )}
           </div>
         ))}
+        <Link href="/admin/blocked" className={item(path.startsWith("/admin/blocked"))}>
+          Blocked
+        </Link>
         {isAdmin && (
           <Link href="/admin/team" className={item(path.startsWith("/admin/team"))}>
             Team

@@ -24,7 +24,7 @@ export function CtaBar({ label, href, title, subtitle, iconUrl, token, overlay =
           <p className="truncate text-[15px] font-bold leading-tight">{title}</p>
           <p className="truncate text-[13px] leading-tight opacity-85">{subtitle}</p>
         </div>
-        <a href={href} target="_blank" rel="noopener" onClick={clicked} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-cta-ink px-3.5 text-[15px] font-bold text-cta focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+        <a href={href} target="_blank" rel="noopener" onClick={clicked} className="cta-glow inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-cta-ink px-3.5 text-[15px] font-bold text-cta focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
           {label}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M5 12h14M13 6l6 6-6 6" />

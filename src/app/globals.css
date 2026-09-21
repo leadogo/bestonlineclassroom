@@ -57,3 +57,14 @@ video::-webkit-media-controls-panel {
     opacity: 0.35;
   }
 }
+
+/* The offer button draws the eye three times when the banner appears, then rests. */
+@media (prefers-reduced-motion: no-preference) {
+  .cta-glow {
+    animation: cta-glow 2.4s ease-in-out 0.6s 3;
+  }
+}
+@keyframes cta-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(21, 26, 33, 0); transform: scale(1); }
+  50% { box-shadow: 0 0 0 6px rgba(21, 26, 33, 0.25); transform: scale(1.03); }
+}

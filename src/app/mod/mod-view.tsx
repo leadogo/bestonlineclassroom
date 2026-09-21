@@ -150,13 +150,16 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
           </svg>
           Admin
         </a>
-        {event.iconUrl && <img src={event.iconUrl} alt="" className="h-7 w-7" />}
+        {event.iconUrl && <img src={event.iconUrl} alt="" className="h-9 w-9" />}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold">{event.title}</h1>
           <p className="text-sm text-muted">
             {session.date}, {live ? `live, ${Math.floor(Math.max(0, offsetNow) / 60)} min in` : now < session.startsAt ? "not started" : "ended"}. Replying as <span className="text-ink">{member.display_name}</span>
           </p>
         </div>
+        <a href={`/admin/blocked?event=${event.slug}`} className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-ink">
+          Blocked
+        </a>
         <button type="button" onClick={() => setShowSim((s) => !s)} className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-ink">
           {showSim ? "Hide simulated chat" : "Show simulated chat"}
         </button>
