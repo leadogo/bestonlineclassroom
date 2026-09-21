@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { setBlocked } from "./actions";
+import { SessionMetrics, type Metrics } from "./metrics";
 import { currentOrNextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
@@ -20,6 +21,9 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
   if (q.trim()) query = query.or(`first_name.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%`);
   const { data } = await query;
   const rows = (data ?? []) as unknown as Row[];
+  const metrics = (await db().from("session_metrics").select("*").eq("event_id", event.id).eq("session_date", session.date).maybeSingle()).data as Metrics | null;
+  const offsetsRes = await db().from("attendance").select("max_offset, registrant:registrants!inner(source)").eq("session_date", session.date).eq("kind", "live").eq("registrant.event_id", event.id);
+  const offsets = (offsetsRes.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test").map((a) => a.max_offset as number);
   const real = rows.filter((r) => r.source !== "test");
   const joined = real.filter((r) => r.attendance.some((a) => a.kind === "live")).length;
   const replayed = real.filter((r) => r.attendance.some((a) => a.kind === "replay")).length;
@@ -54,6 +58,8 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
           {rows.length !== real.length && <span className="text-muted"> · {rows.length - real.length} test</span>}
         </p>
       </div>
+
+      <SessionMetrics m={metrics} offsets={offsets} videoSeconds={event.video_seconds ?? 0} ctaAt={event.cta_at_seconds} />
 
       <form className="flex gap-2">
         <input name="q" defaultValue={q} placeholder="Search name or email" className="w-full max-w-sm rounded-md border border-line bg-panel px-3 py-2 text-base focus:border-brand focus:outline-none" />
