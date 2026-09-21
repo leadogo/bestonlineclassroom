@@ -26,7 +26,7 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
   const rid = UUID_RE.test(one("rid")) ? one("rid").toLowerCase() : undefined;
   const passthrough = { ...cleanParams(sp), ...(one("at") ? { at: one("at") } : {}), ...(one("key") ? { key: one("key") } : {}) };
 
-  const known = await resolveForSession(event.id, sessionDate, { eh: one("eh").toLowerCase(), rid }, src).catch(() => null);
+  const known = await resolveForSession(event.id, sessionDate, { eh: one("eh").toLowerCase(), rid, lk: one("lk").toLowerCase() }, src).catch(() => null);
   if (known) redirect(`/j/${known.token}${toQuery(passthrough)}`);
 
   return (

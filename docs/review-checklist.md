@@ -33,8 +33,8 @@ What to look at, in the order it matters. Tick as you go; anything wrong becomes
 - [ ] iClosed: how you want events pushed (their API or a webhook), and which events. Not built yet.
 
 ## Emails (confirmation + 30 and 15 minute reminders)
-- [ ] `SKOOL_URL` in Doppler prd: the Skool invite link for the confirmation email ("Join here"). Not set yet; the email shows a blank there until it is.
-- [ ] Decide whether ActiveCampaign's own confirmation and reminder emails stay on now that ours send.
+- [x] `SKOOL_URL` and `SKOOL_INVITE_WEBHOOK` in Doppler prd (2026-09-20 late); every new registrant is invited to the Skool group automatically.
+- [x] ActiveCampaign's own reminders stay on (5 minutes before and at start), ours at 30 and 15 (William, 2026-09-20).
 - [ ] Samples of all three arrived at william@leadogo.com on 2026-09-20 evening; check the invite opens in Calendar with the link inside.
 
 ## Reminders

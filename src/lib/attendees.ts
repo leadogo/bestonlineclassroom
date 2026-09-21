@@ -21,9 +21,11 @@ export type Registrant = {
   replay_opened_at: string | null;
   confirmation_sent_at: string | null;
   room_join_reported_at: string | null;
+  legacy_key: string | null;
+  skool_invited_at: string | null;
 };
 
-const COLS = "id, event_id, session_date, token, first_name, email, email_hash, phone, source, site_registration_id, blocked_at, replay_opened_at, confirmation_sent_at, room_join_reported_at";
+const COLS = "id, event_id, session_date, token, first_name, email, email_hash, phone, source, site_registration_id, blocked_at, replay_opened_at, confirmation_sent_at, room_join_reported_at, legacy_key, skool_invited_at";
 
 export async function registrantByToken(token: string): Promise<(Registrant & { event: EventRow }) | null> {
   const { data, error } = await db().from("registrants").select(`${COLS}, event:events(*)`).eq("token", token).maybeSingle();
@@ -32,7 +34,7 @@ export async function registrantByToken(token: string): Promise<(Registrant & { 
 }
 
 /** The most recent registrant for this identity on this event, any session. */
-async function latestBy(eventId: string, column: "email_hash" | "site_registration_id", value: string): Promise<Registrant | null> {
+async function latestBy(eventId: string, column: "email_hash" | "site_registration_id" | "legacy_key", value: string): Promise<Registrant | null> {
   const { data, error } = await db().from("registrants").select(COLS).eq("event_id", eventId).eq(column, value).order("session_date", { ascending: false }).limit(1).maybeSingle();
   if (error) throw error;
   return (data as Registrant | null) ?? null;
@@ -40,7 +42,7 @@ async function latestBy(eventId: string, column: "email_hash" | "site_registrati
 
 export type GuestSource = "skool" | "legacy" | "guest";
 
-export async function createGuest(input: { eventId: string; sessionDate: string; firstName: string; source: GuestSource; email?: string | null; emailHash?: string; phone?: string | null; siteRegistrationId?: string | null }): Promise<Registrant> {
+export async function createGuest(input: { eventId: string; sessionDate: string; firstName: string; source: GuestSource | "legacy-import"; email?: string | null; emailHash?: string; phone?: string | null; siteRegistrationId?: string | null; legacyKey?: string | null }): Promise<Registrant> {
   const { data, error } = await db()
     .from("registrants")
     .insert({
@@ -53,6 +55,7 @@ export async function createGuest(input: { eventId: string; sessionDate: string;
       phone: input.phone ?? null,
       source: input.source,
       site_registration_id: input.siteRegistrationId ?? null,
+      legacy_key: input.legacyKey ?? null,
     })
     .select(COLS)
     .single();
@@ -64,12 +67,15 @@ export async function createGuest(input: { eventId: string; sessionDate: string;
  * For the open link: the registrant to use tonight for an identity the link carries, or null when nobody is
  * known (the page then asks for a first name). A match on another date becomes a new row for tonight.
  */
-export async function resolveForSession(eventId: string, sessionDate: string, ids: { eh?: string; rid?: string }, source: GuestSource): Promise<Registrant | null> {
-  const known = (ids.eh && /^[0-9a-f]{64}$/.test(ids.eh) ? await latestBy(eventId, "email_hash", ids.eh) : null) ?? (ids.rid ? await latestBy(eventId, "site_registration_id", ids.rid) : null);
+export async function resolveForSession(eventId: string, sessionDate: string, ids: { eh?: string; rid?: string; lk?: string }, source: GuestSource): Promise<Registrant | null> {
+  const known =
+    (ids.eh && /^[0-9a-f]{64}$/.test(ids.eh) ? await latestBy(eventId, "email_hash", ids.eh) : null) ??
+    (ids.rid ? await latestBy(eventId, "site_registration_id", ids.rid) : null) ??
+    (ids.lk && /^[0-9a-f]{32}$/.test(ids.lk) ? await latestBy(eventId, "legacy_key", ids.lk) : null);
   if (!known) return null;
   if (known.session_date === sessionDate) return known;
   try {
-    return await createGuest({ eventId, sessionDate, firstName: known.first_name, source, email: known.email, emailHash: known.email_hash, phone: known.phone, siteRegistrationId: known.site_registration_id });
+    return await createGuest({ eventId, sessionDate, firstName: known.first_name, source, email: known.email, emailHash: known.email_hash, phone: known.phone, siteRegistrationId: known.site_registration_id, legacyKey: known.legacy_key });
   } catch {
     // The unique (event, date, email) index says a row for tonight already exists (a race): use it.
     return known.email_hash ? latestBy(eventId, "email_hash", known.email_hash) : null;

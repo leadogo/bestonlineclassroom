@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { sendConfirmation } from "@/lib/mailer";
+import { inviteToSkool } from "@/lib/skool";
 import { tagNow } from "@/lib/tagging";
 import { getEvent } from "@/lib/events";
 import { nextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
@@ -80,6 +81,7 @@ export async function POST(request: Request) {
         after(async () => {
           await sendConfirmation(person, event, session);
           await tagNow(id, "registered");
+          await inviteToSkool(id, input.email);
         });
       }
     }

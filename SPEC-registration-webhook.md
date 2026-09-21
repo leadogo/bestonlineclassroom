@@ -31,6 +31,19 @@ Response `200`:
   copied from the site's `email-hash.ts`); `src/lib/events.ts` (`getEvent(slug)`, cached for 60 s in module
   scope).
 
+## After a new registration (2026-09-20 evening additions, all in `after()`, none blocks the response)
+- The confirmation email with the calendar invite (`SPEC-reminders.md`).
+- The `registered` tag in ActiveCampaign (`SPEC-analytics.md`).
+- A Skool invite through the group's custom webhook (`SKOOL_INVITE_WEBHOOK?email=`), once per registrant
+  (`skool_invited_at`), never for a Test Sample.
+
+## Registrants from before the cutover (`scripts/import-legacy.ts`)
+EasyWebinar's registrant list joined with leadogo's opt-in events (the site's registration id by email hash),
+upserted as `source = legacy` for their session, no email, tag or invite sent. With the site's registration id on
+the row, the links sent before the cutover (`/join?k=<EasyWebinar hash>&rid=…&sd=…`) open the person's own room
+without a name prompt. EasyWebinar's own `req.easywebinar.com` links (in ActiveCampaign emails until the Zap was
+re-pointed) still go to EasyWebinar and cannot be redirected from here.
+
 ## Testing
 - `src/lib/registrants.test.ts`: token alphabet and length; email normalisation; attribution allowlist and caps;
   test identity detection.
