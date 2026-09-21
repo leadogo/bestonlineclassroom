@@ -3,15 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "doppler run -- next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "node --no-warnings --test src/lib/*.test.ts",
-    "seed": "node --env-file=.env.local scripts/seed-event.ts",
-    "import:chat": "node --env-file=.env.local scripts/import-chat.ts",
-    "upload:video": "node --env-file=.env.local scripts/upload-video.ts",
-    "team:add": "node --env-file=.env.local scripts/team-add.ts"
+    "seed": "doppler run -- node scripts/seed-event.ts",
+    "import:chat": "doppler run -- node scripts/import-chat.ts",
+    "upload:video": "doppler run -- node scripts/upload-video.ts",
+    "team:add": "doppler run -- node scripts/team-add.ts",
+    "db:migrate": "doppler run -- node scripts/migrate.ts",
+    "env:push": "doppler run --config prd -- node scripts/env-push.ts"
   },
   "dependencies": {
     "next": "16.3.5",
