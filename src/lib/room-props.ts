@@ -74,7 +74,8 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       host: { avatarUrl: event.host_avatar_url ?? null, tagline: event.host_tagline ?? null },
       artworkUrl: event.artwork_url ?? event.icon_url ?? null,
       posterUrl: event.poster_url ?? null,
-      captions: Boolean(event.captions_url),
+      // Captions are off for now (2026-09-21, William: the transcript timing is too far off to show live).
+      captions: false,
       logoUrl: event.logo_url,
       iconUrl: event.icon_url,
       state,
