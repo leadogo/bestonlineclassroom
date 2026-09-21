@@ -26,7 +26,7 @@ export function parseVtt(text: string): Cue[] {
     const [a, b] = lines[i].split("-->");
     const body = lines.slice(i + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
     if (!body) continue;
-    out.push({ start: toSec(a), end: toSec(b.split(" ")[0]), text: body });
+    out.push({ start: toSec(a), end: toSec(b.trim().split(" ")[0]), text: body });
   }
   return out;
 }
