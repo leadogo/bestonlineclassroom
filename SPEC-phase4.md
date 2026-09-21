@@ -1,9 +1,16 @@
 # Capability Map, phase 4: operate many webinars
 
-Status: **approved by William 2026-09-20 late, with `analytics-ui` added at his request; build starts after the 2026-09-21 session.** Decisions taken in the spec chat: moderators moderate
-and see the numbers, not settings; webinars recur on chosen weekdays at one time; IPs are kept 30 days for
-blocking, applied at the edge; reactions and @mentions are for everyone. Nothing here is built before the
-2026-09-21 session runs.
+Status: **approved by William 2026-09-20 late, with `analytics-ui` added at his request. Built the same night
+(William: "lets continue as of now"), all six modules deployed; the leadogo side is PR #35 in leadogo-app,
+migration 249 applied.** Decisions taken in the spec chat: moderators moderate and see the numbers, not
+settings; webinars recur on chosen weekdays at one time; IPs are kept 30 days for blocking, applied at the edge;
+reactions and @mentions are for everyone.
+
+Built as: migrations 015 (days), 016 (roles, assignments, invites), 017 (ghost, IP, reactions, mentions).
+Edge IP blocking needs `VERCEL_TOKEN` in Doppler (a Vercel account token); until then blocks apply on our side
+only and the moderator button says so. Peak live for leadogo is computed from attendance intervals
+(`peakConcurrent`). "New webinar" copies settings and the simulated chat; the video and brand are uploaded on the
+new webinar's settings page.
 
 | Module id | Responsibility | Depends on | Phase |
 |---|---|---|---|

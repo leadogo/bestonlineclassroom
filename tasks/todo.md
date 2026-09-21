@@ -88,8 +88,18 @@
 - [x] A1–A5 admin: events, video upload, simulated chat, replay copy, team, registrants (`SPEC-admin.md`).
 - [x] N1 outcomes and session metrics views; N3 numbers and retention on the session page; `GET /api/metrics`.
 - [x] N4 ActiveCampaign tags (hourly cron, `outcome_tags`), tag names editable. Needs the ActiveCampaign API key.
-- [ ] N2 leadogo: Funnel Performance reads `/api/metrics` instead of EasyWebinar (change in leadogo-app).
+- [x] N2 leadogo: Funnel Performance reads `/api/metrics` (leadogo-app PR #35, migration 249 applied, `CLASSROOM_METRICS_SECRET` in leadogo Doppler). Merge after review.
 - [x] R1 reminders: rules, cron, Postmark sender, stop link (`SPEC-reminders.md`). Needs the Postmark token.
 - [ ] iClosed tags/events push (needs iClosed API details).
 - [ ] D1 design pass. [ ] M1 AI moderator.
 - [x] Review checklist: `docs/review-checklist.md`.
+
+## Phase 4 (SPEC-phase4.md), built 2026-09-20 late
+- [x] schedules: `events.days`, rule skips off days (tests), admin checkboxes.
+- [x] roles-team: admin/moderator, email invites with set-password link (`/invite/<token>`), assignments, `/mod/<slug>`, moderators read-only on numbers.
+- [x] dashboard: live state and room count, next-session registrants, last session numbers, moderators, previews, New webinar by copy, delete (typed slug).
+- [x] chat-moderation: ghost, IP capture (30-day retention in the hourly cron), IP block here + at the edge (needs `VERCEL_TOKEN`), chat CSV marks real/simulated with a recorded header.
+- [x] chat-social: reactions for everyone (one per emoji per person), @mentions with autocomplete, tinted rows, moderator "Mentions of me" filter.
+- [x] analytics-ui: `/admin/events/<slug>/analytics` trend, by session, by week, retention small multiples, compare two sessions, CSV exports; `/api/metrics` `limit` and `peak_live`.
+- [ ] End-of-night test: `npm run test:event -- --at HH:MM` (copies ailg-r, registers William), walk the flow, then `npm run test:event -- --teardown`.
+- [ ] `VERCEL_TOKEN` in Doppler for edge IP blocks (William creates it at vercel.com/account/tokens, scope team leadogo).

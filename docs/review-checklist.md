@@ -58,6 +58,16 @@ What to look at, in the order it matters. Tick as you go; anything wrong becomes
 - [ ] Supabase dashboard → Authentication: turn on "Leaked password protection".
 - [ ] Supabase plan: confirm daily backups (Pro) or add point-in-time recovery.
 
+## Phase 4 (2026-09-20 late): many webinars, team, chat tools
+- [ ] `/admin` is the dashboard: each webinar with its next session, registrants, last session's numbers, who moderates, Preview room / Preview at the CTA.
+- [ ] Settings: tick the days a webinar runs (a registrant on an off day is booked for the next run).
+- [ ] Team: invite someone as a moderator; they get an email, choose a password, land on `/mod/<slug>` with the device trusted. Their moderator link is shown on the Team page. Moderators see the numbers but not settings.
+- [ ] In the room, tap **+** under a real message to react (tap again to remove); type `@` to mention someone in the room; mentioned people see the row tinted.
+- [ ] In `/mod/<slug>`: Ghost (they keep typing, nobody sees it, badge "ghost"), Block, Block their IP too (edge needs `VERCEL_TOKEN`; our side always), "Mentions of me" filter.
+- [ ] Analytics on a webinar: trend, by session, by week, retention per session, compare two sessions, CSV exports.
+- [ ] leadogo Funnel Performance: merge leadogo-app PR #35, then run the sync with `?dry_run=1&force=1` and check the `classroom` line; Sep 21 on, Peak live and Pitch live fill themselves (manual still wins).
+- [ ] New webinar: create one from the dashboard (copies settings and simulated chat), upload its video, point a landing page or Zap at `event: <slug>`.
+
 ## Housekeeping
 - [ ] Bare domain as primary in Vercel (then I switch the site's `CLASSROOM_URL` back), after the session.
 - [ ] Blob transfer cost on the first invoice.
