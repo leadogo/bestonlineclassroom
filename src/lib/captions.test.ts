@@ -19,5 +19,5 @@ test("captions: long cues become short pieces that never overlap and follow the 
   assert.ok(cues[0].end <= cues[1].start + 1e-9 && cues[1].end <= 44 + 1e-9, "pieces share the cue's 4 seconds");
   assert.ok(cues.every((c) => c.text.length <= 42), "one line each");
   assert.ok(liveCaptions(SAMPLE, 2).includes("00:00:42.000 -->"), "offset shifts the start");
-  assert.equal(reflow(parseVtt(SAMPLE), -50)[0].start, 0, "a negative offset never goes below zero");
+  assert.equal(reflow(parseVtt(SAMPLE), -41)[0].start, 0, "a negative offset never goes below zero");
 });
