@@ -28,7 +28,9 @@ export async function GET(request: Request) {
     const real = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test");
     const offsets = real.map((a) => a.max_offset as number);
     const peak_live = peakConcurrent(real.map((a) => ({ from: new Date(a.joined_at as string).getTime(), to: new Date(a.last_seen_at as string).getTime() })));
-    sessions.push({ ...row, peak_live, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
+    // Opt-ins: people who registered themselves for this session (site or Zap), not imports, Skool links or guests.
+    const opt = await db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", row.session_date).in("source", ["site", "zapier"]);
+    sessions.push({ ...row, optins: opt.count ?? 0, peak_live, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
   }
   return Response.json({ event: event.slug, sessions }, { headers: { "cache-control": "no-store" } });
 }
