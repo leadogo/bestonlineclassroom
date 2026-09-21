@@ -108,5 +108,6 @@ const ZONES: Array<[string, string]> = [
 
 /** [["Pacific", "4 PM"], ["Mountain", "5 PM"], …] computed from the session start, for the countdown page. */
 export function fourZones(session: Session): Array<[string, string]> {
-  return ZONES.map(([label, tz]) => [label, new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric" }).format(session.start)]);
+  const onTheHour = session.start.getUTCMinutes() === 0;
+  return ZONES.map(([label, tz]) => [label, new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", ...(onTheHour ? {} : { minute: "2-digit" }) }).format(session.start)]);
 }

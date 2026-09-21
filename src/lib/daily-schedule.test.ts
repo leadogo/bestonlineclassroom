@@ -90,4 +90,5 @@ test("scheduleOf reads an events row; fourZones is computed from the start", () 
     ["Central", "6 PM"],
     ["Eastern", "7 PM"],
   ]);
+  assert.deepEqual(fourZones(nextSession({ ...S, startMinute: 45 }, mt(2026, 9, 21, 12)))[1], ["Mountain", "5:45 PM"], "minutes show when the start is not on the hour");
 });
