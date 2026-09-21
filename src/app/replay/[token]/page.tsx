@@ -9,6 +9,8 @@ import { replayCopy } from "@/lib/replay-content";
 import { tagNow } from "@/lib/tagging";
 import { logClick } from "@/lib/clicks";
 import { headers } from "next/headers";
+import { getTeamMember } from "@/lib/auth";
+import { fourZones, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,27 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   const e = r.event;
   const p = cleanParams(sp);
   const now = new Date();
+
+  // Not before their live session has ended: the replay is for afterwards, and the 72-hour clock must not start early.
+  const session = sessionFor(scheduleOf(e), r.session_date);
+  if (session && now.getTime() < session.end.getTime() && !(await getTeamMember().catch(() => null))) {
+    after(() => logClick({ path: "replay", outcome: "countdown", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
+    const zones = fourZones(session);
+    const day = new Intl.DateTimeFormat("en-US", { timeZone: e.timezone, weekday: "long", month: "long", day: "numeric" }).format(session.start);
+    const live = now.getTime() >= session.start.getTime();
+    return (
+      <main className="flex min-h-screen items-center justify-center p-6 text-center">
+        <div className="max-w-md">
+          {e.logo_url && <img src={e.logo_url} alt={e.title} className="mx-auto mb-8 h-10 w-auto" />}
+          <h1 className="text-2xl font-bold text-balance">{live ? "Your session is live right now" : `Your session is ${day}`}</h1>
+          <p className="mt-3 text-base text-muted">{zones.map(([z, t]) => `${t} ${z}`).join(" · ")}. The full replay is available here right after it ends.</p>
+          <a href={`/j/${r.token}`} className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-6 text-lg font-bold text-white focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50">
+            {live ? "Join the live session" : "Open the room"}
+          </a>
+        </div>
+      </main>
+    );
+  }
   const cta = e.cta_href ? { label: e.cta_label ?? "Book your call", href: ctaHref(e.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, p), at: e.cta_at_seconds ?? 0 } : null;
 
   // The clock starts now if it has not started; a race between two first opens keeps the earliest.
