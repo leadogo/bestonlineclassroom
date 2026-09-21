@@ -68,6 +68,12 @@
   - Verify: `npm test` in the site; production Test Sample opt-in → thank-you page calendar link → our room; `/live` → room; legacy `/join?k=<32 hex>` → name prompt
   - Files: src/lib/classroom.ts (+ test), src/app/api/register/route.ts, src/lib/join-link.ts (+ test), src/app/join/route.ts, src/app/live/route.ts, src/lib/optin.ts, src/lib/calendar-links.ts
 
+## T10b Replay (SPEC-replay.md, pulled into phase 1 on 2026-09-20 evening)
+- [x] Task: `/replay/[token]` with native controls, resume point, in-player nudge at the pitch, chapters from `events.chapters`, recap and FAQ, CTA above, below and pinned on phones; `replay` attendance and CTA rows; `replay_url` from the webhook; `classroom_replay_link` in the site's payload.
+  - Acceptance: SPEC-replay.md page and data sections.
+  - Verify: page 200 for a Test Sample token; heartbeat kind replay 204; webhook returns replay_url
+  - Files: src/app/replay/[token]/page.tsx, src/components/replay/ReplayView.tsx, supabase/migrations/003_chapters.sql, site src/lib/optin.ts
+
 ## CP4 checkpoint: production Test Sample path works end to end — go / no-go for 5:00 PM MT
 - 2026-09-20 evening: William approved the merge; site `main` at 84f8f25 (fast-forward from feat/classroom-cutover). Test Sample check follows the deploy.
 - CP4 passed 2026-09-20 ~20:10 MT after one fix (the site must call the www host; a cross-host redirect drops the bearer). Test Sample opt-in on the live site: our link in the response, the thank-you page and the calendar entry; `/join`, `/live` (hashed email) and a legacy EasyWebinar hash with rid all land in the registrant's own room; the room shows tomorrow's countdown. EasyWebinar still registers in parallel. **Go for 2026-09-21.**
