@@ -1,8 +1,8 @@
 "use client";
-// The replay page, shaped by Jeremy's brief (KB topic frea-replay-page-sep2026): one line saying what this is, the
-// call to action above and below the video and pinned to the bottom on phones, an in-player nudge when the pitch
-// starts, chapters on the player and as big buttons, three agents' own words, a short recap and FAQ, an honest
-// countdown of the 72-hour window, nothing that leads off the page. Watching is recorded as `replay` attendance.
+// The replay page (SPEC-replay.md, reshaped 2026-09-21 after Jeremy's review): the video first, one headline and
+// one line under it, the chapters as a row of names, a short strategy-call card with the real availability, three
+// one-line proofs, two answers, a note. The offer is in two places: pinned to the bottom on phones (top right on a
+// wide screen) and inside the player when the pitch starts. Watching is recorded as `replay` attendance.
 import { useEffect, useRef, useState } from "react";
 import { ReplayPlayer, type Chapter, type ReplayPlayerHandle } from "./ReplayPlayer";
 import { TESTIMONIALS, type ReplayCopy } from "@/lib/replay-content";
@@ -16,10 +16,13 @@ function clock(s: number): string {
   return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m} min`;
 }
 
+/** "2 days 3 h", "5h 12m", "40 min". */
 function remaining(expiresAt: number, now: number): string {
   const s = Math.max(0, Math.floor((expiresAt - now) / 1000));
-  const h = Math.floor(s / 3600);
+  const d = Math.floor(s / 86_400);
+  const h = Math.floor((s % 86_400) / 3600);
   const m = Math.floor((s % 3600) / 60);
+  if (d >= 1) return `${d} day${d > 1 ? "s" : ""} ${h} h`;
   return h >= 1 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m} min`;
 }
 
@@ -40,7 +43,7 @@ function CtaButton({ cta, size = "lg", onClick }: { cta: Cta; size?: "lg" | "sm"
       target="_blank"
       rel="noopener"
       onClick={onClick}
-      className={`flex w-full items-center justify-center gap-2 rounded-xl bg-cta font-bold text-cta-ink shadow-[0_6px_24px_rgba(245,179,36,0.35)] hover:brightness-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/60 ${size === "lg" ? "min-h-13 px-6 text-lg" : "min-h-11 px-4 text-base"}`}
+      className={`flex items-center justify-center gap-2 rounded-xl bg-cta font-bold text-cta-ink shadow-[0_6px_24px_rgba(245,179,36,0.35)] hover:brightness-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/60 ${size === "lg" ? "min-h-13 w-full px-6 text-lg" : "min-h-11 px-4 text-base"}`}
     >
       {cta.label}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -50,8 +53,9 @@ function CtaButton({ cta, size = "lg", onClick }: { cta: Cta; size?: "lg" | "sm"
   );
 }
 
-export function ReplayView({ token, firstName, title, logoUrl, seconds, cta, chapters, params, expiresAt, serverNow, copy }: { token: string; firstName: string; title: string; logoUrl: string | null; seconds: number; cta: Cta | null; chapters: Chapter[]; params: Record<string, string>; expiresAt: number | null; serverNow: number; copy: ReplayCopy }) {
+export function ReplayView({ token, firstName, title, logoUrl, seconds, cta: ctaIn, chapters, params, expiresAt, serverNow, copy }: { token: string; firstName: string; title: string; logoUrl: string | null; seconds: number; cta: Cta | null; chapters: Chapter[]; params: Record<string, string>; expiresAt: number | null; serverNow: number; copy: ReplayCopy }) {
   const REPLAY_COPY = copy;
+  const cta = ctaIn ? { ...ctaIn, label: REPLAY_COPY.ctaLabel || ctaIn.label } : null;
   const player = useRef<ReplayPlayerHandle>(null);
   const last = useRef(0);
   const skew = useRef(0);
@@ -124,32 +128,20 @@ export function ReplayView({ token, firstName, title, logoUrl, seconds, cta, cha
   }
 
   return (
-    <main onContextMenu={(e) => e.preventDefault()} className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-4 pb-28 sm:px-6 sm:pb-12" style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}>
+    <main onContextMenu={(e) => e.preventDefault()} className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-28 sm:px-6 sm:pb-12" style={{ paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))" }}>
       <header className="flex items-center justify-between gap-4">
         {logoUrl ? <img src={logoUrl} alt="BestOnlineClassroom" className="h-7 w-auto sm:h-8" /> : <span className="font-bold">BestOnlineClassroom</span>}
-        {firstName && <span className="text-sm text-muted">Hi {firstName}</span>}
+        <div className="flex items-center gap-3">
+          {firstName && <span className="text-sm text-muted">Hi {firstName}</span>}
+          {cta && (
+            <div className="hidden sm:block">
+              <CtaButton cta={cta} size="sm" onClick={clicked} />
+            </div>
+          )}
+        </div>
       </header>
 
-      <section className="flex flex-col gap-3">
-        <p className="text-sm font-bold text-brand">{REPLAY_COPY.kicker}</p>
-        <h1 className="text-2xl font-bold leading-tight text-balance sm:text-3xl">{REPLAY_COPY.headline}</h1>
-        <p className="text-base text-muted">
-          {REPLAY_COPY.sub} {seconds > 0 && <span className="tabular-nums">The training is {clock(seconds)} long.</span>}
-        </p>
-        {expiresAt !== null && (
-          <p className="inline-flex w-fit items-center gap-2 rounded-md bg-panel px-3 py-1.5 text-sm">
-            <span className="h-2 w-2 rounded-full bg-cta" aria-hidden />
-            {REPLAY_COPY.expiresLead} <span className="font-bold tabular-nums">{remaining(expiresAt, now)}</span>
-          </p>
-        )}
-        {cta && (
-          <div className="mt-1 hidden sm:block">
-            <CtaButton cta={cta} onClick={clicked} />
-          </div>
-        )}
-      </section>
-
-      <div className="relative overflow-hidden rounded-xl ring-1 ring-line">
+      <div className="relative -mx-4 overflow-hidden sm:mx-0 sm:rounded-xl sm:ring-1 sm:ring-line">
         <ReplayPlayer ref={player} token={token} seconds={seconds} chapters={chapters} logoUrl={logoUrl} onTime={onTime} />
         {resumeAt !== null && (
           <div className="absolute inset-x-0 top-0 flex flex-wrap items-center justify-between gap-2 bg-room/90 px-4 py-2 text-sm">
@@ -179,66 +171,64 @@ export function ReplayView({ token, firstName, title, logoUrl, seconds, cta, cha
         )}
       </div>
 
+      <section className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-bold leading-tight text-balance sm:text-3xl">{REPLAY_COPY.headline}</h1>
+        <p className="text-base text-muted">
+          {firstName ? `Your replay, ${firstName}. ` : "Your replay. "}
+          {REPLAY_COPY.sub}
+        </p>
+      </section>
+
       {chapters.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <p className="text-sm font-bold text-muted">Jump to</p>
-          <div className="flex flex-wrap gap-2">
-            {chapters.map((c) => (
-              <button key={`${c.at}-${c.label}`} type="button" onClick={() => seek(c.at)} className="min-h-11 rounded-full border border-line bg-panel px-4 text-base hover:border-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
-                {c.label} <span className="ml-1 text-sm text-muted tabular-nums">{clock(c.at)}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+        <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" aria-label="Chapters">
+          {chapters.map((c) => (
+            <button key={`${c.at}-${c.label}`} type="button" onClick={() => seek(c.at)} className="min-h-10 shrink-0 rounded-full border border-line bg-panel px-4 text-[15px] hover:border-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+              {c.label}
+            </button>
+          ))}
+        </nav>
       )}
 
-      {cta && (
-        <section className={`rounded-xl border p-5 transition-colors ${hot ? "border-cta/60 bg-cta/10" : "border-line bg-panel"}`}>
-          <p className="text-lg font-bold">{hot ? REPLAY_COPY.ctaLeadHot : REPLAY_COPY.ctaLead}</p>
-          <p className="mt-3 text-sm font-bold text-muted">{REPLAY_COPY.recapTitle}</p>
-          <ul className="mt-1 flex flex-col gap-1.5 text-base">
-            {REPLAY_COPY.recap.map((r) => (
-              <li key={r} className="flex gap-2">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden />
-                <span>{r}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4">
-            <CtaButton cta={cta} onClick={clicked} />
-          </div>
-        </section>
-      )}
+      <section className={`rounded-xl border p-5 transition-colors ${hot ? "border-cta/60 bg-cta/10" : "border-line bg-panel"}`}>
+        <p className="text-lg font-bold">{REPLAY_COPY.recapTitle}</p>
+        <ul className="mt-2 flex flex-col gap-1.5 text-base">
+          {REPLAY_COPY.recap.map((r) => (
+            <li key={r} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden />
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-sm text-muted">
+          {expiresAt !== null && (
+            <>
+              {REPLAY_COPY.expiresLead} <span className="font-bold text-ink tabular-nums">{remaining(expiresAt, now)}</span>.{" "}
+            </>
+          )}
+          {REPLAY_COPY.reserved}
+        </p>
+      </section>
 
       <section>
         <p className="text-sm font-bold text-muted">{REPLAY_COPY.proofTitle}</p>
-        <ul className="mt-2 grid gap-3 sm:grid-cols-3">
+        <ul className="mt-2 flex flex-col gap-2">
           {TESTIMONIALS.map((t) => (
-            <li key={t.name} className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-4">
-              <div className="flex items-center gap-3">
-                <img src={t.photo} alt="" className="h-11 w-11 rounded-full object-cover" loading="lazy" />
-                <div className="min-w-0">
-                  <p className="truncate font-bold">{t.name}</p>
-                  <p className="truncate text-xs text-muted">{t.brokerage}</p>
-                </div>
-              </div>
-              <p className="text-sm font-bold text-brand">{t.title}</p>
-              <p className="text-sm text-ink/90">&ldquo;{t.quote}&rdquo;</p>
+            <li key={t.name} className="flex items-center gap-3 text-[15px]">
+              <img src={t.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" loading="lazy" />
+              <span className="min-w-0">
+                <span className="font-bold">{t.title}.</span> <span className="text-muted">{t.name}, {t.brokerage}</span>
+              </span>
             </li>
           ))}
         </ul>
       </section>
 
-      <section>
-        <p className="text-sm font-bold text-muted">{REPLAY_COPY.faqTitle}</p>
-        <dl className="mt-2 flex flex-col gap-3">
-          {REPLAY_COPY.faq.map(([q, a]) => (
-            <div key={q}>
-              <dt className="font-bold">{q}</dt>
-              <dd className="text-base text-muted">{a}</dd>
-            </div>
-          ))}
-        </dl>
+      <section className="flex flex-col gap-2 text-[15px]">
+        {REPLAY_COPY.faq.map(([q, a]) => (
+          <p key={q}>
+            <span className="font-bold">{q}</span> <span className="text-muted">{a}</span>
+          </p>
+        ))}
       </section>
 
       <p className="text-sm text-muted">{REPLAY_COPY.after}</p>
@@ -246,15 +236,16 @@ export function ReplayView({ token, firstName, title, logoUrl, seconds, cta, cha
 
       {cta && (
         <div className="fixed inset-x-0 bottom-0 border-t border-line bg-room/95 px-4 py-3 backdrop-blur sm:hidden" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
-          <CtaButton cta={cta} size="sm" onClick={clicked} />
+          <CtaButton cta={cta} onClick={clicked} />
         </div>
       )}
     </main>
   );
 }
 
-export function ReplayExpired({ logoUrl, cta, onClickHref, copy }: { logoUrl: string | null; cta: Cta | null; onClickHref: string; copy: ReplayCopy }) {
+export function ReplayExpired({ logoUrl, cta: ctaIn, onClickHref, copy }: { logoUrl: string | null; cta: Cta | null; onClickHref: string; copy: ReplayCopy }) {
   const REPLAY_COPY = copy;
+  const cta = ctaIn ? { ...ctaIn, label: REPLAY_COPY.ctaLabel || ctaIn.label } : null;
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-5 px-6 py-10">
       {logoUrl && <img src={logoUrl} alt="BestOnlineClassroom" className="h-8 w-auto self-start" />}

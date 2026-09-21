@@ -16,22 +16,20 @@ export function replayCopy(overrides: Record<string, unknown> | null | undefined
 }
 
 export const REPLAY_COPY = {
-  kicker: "Your replay of the AI For Agents Masterclass",
-  headline: "How agents book appointments with an AI setter instead of cold calling",
-  sub: "Watch the full training now, then lock in your strategy call. Pause and come back any time.",
-  ctaLead: "Ready to see it working for you?",
-  ctaLeadHot: "This is the part where people book their call.",
+  headline: "How to book appointments without cold calling",
+  sub: "Watch, then book your strategy call. Your spot is saved if you leave.",
+  ctaLabel: "Book My Strategy Call",
+  ctaLeadHot: "This is where people book their call.",
   recapTitle: "On your strategy call",
   recap: ["See whether the AI appointment setter fits your market and your leads.", "Walk through exactly how it books appointments on your calendar.", "Get every question answered. No pressure, no jargon."],
+  reserved: "Bonuses reserved for 72 hours.",
   proofTitle: "Agents who did this",
-  faqTitle: "Quick answers",
   faq: [
     ["Do I have to watch all of it before booking?", "No. Book whenever you're ready; the call covers what you missed."],
-    ["Can I watch on my phone?", "Yes. Turn it sideways for a bigger picture. Your spot is saved if you leave."],
     ["Who is the call with?", "A real person from William's team, not a sales robot."],
   ] as Array<[string, string]>,
   after: "Questions? Reply to the email your link came in and a real person answers.",
-  expiresLead: "Your replay access ends in",
+  expiresLead: "Available for",
   expiredHeadline: "Your replay access has ended",
   expiredSub: "The recording was available for 72 hours after you first opened it. You can still book your call, or register for the next live session.",
 };
