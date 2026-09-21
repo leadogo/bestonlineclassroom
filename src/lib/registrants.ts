@@ -98,3 +98,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bestonlineclassroom.
 export function joinUrl(token: string, base = APP_URL): string {
   return `${base.replace(/\/+$/, "")}/j/${token}`;
 }
+
+/** The replay: the same recording, any time, with controls. */
+export function replayUrl(token: string, base = APP_URL): string {
+  return `${base.replace(/\/+$/, "")}/replay/${token}`;
+}

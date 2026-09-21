@@ -19,6 +19,7 @@ export type EventRow = {
   simulated_names: string[];
   logo_url: string | null;
   icon_url: string | null;
+  chapters: Array<{ at: number; label: string }>;
 };
 
 const TTL_MS = 60_000;

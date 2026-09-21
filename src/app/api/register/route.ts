@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
 import { nextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
-import { emailHash, isTestIdentity, joinUrl, newToken, parseRegisterBody } from "@/lib/registrants";
+import { emailHash, isTestIdentity, joinUrl, newToken, parseRegisterBody, replayUrl } from "@/lib/registrants";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     registrant_id: id,
     token,
     join_url: joinUrl(token),
-    replay_url: "",
+    replay_url: replayUrl(token),
     session_date: session.date,
     session_start_iso: session.start.toISOString(),
     session_end_iso: session.end.toISOString(),

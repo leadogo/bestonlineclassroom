@@ -15,6 +15,11 @@ const EVENTS: Record<string, Record<string, unknown>> = {
     cta_label: "Book your call",
     cta_href: "https://aiforagentsmasterclass.com/join-community",
     end_url: "https://aiforagentsmasterclass.com/join-community-expired",
+    // Replay chapters (Jeremy, 2026-09-20: 5 to 7 big jumps with plain labels). Only the two we can place tonight.
+    chapters: [
+      { at: 0, label: "Start" },
+      { at: 4500, label: "Offer and next steps" },
+    ],
   },
 };
 
