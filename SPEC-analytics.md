@@ -20,6 +20,11 @@ feed leadogo's Funnel Performance can read in place of EasyWebinar's API.
 - **Retention curve**: of joiners, the share whose furthest offset reaches each 10-minute mark.
 - `session_metrics`: the counts per event and session date, plus average live seconds.
 
+## Link clicks (`link_clicks`, migration 012)
+Every open of `/j`, `/w` and `/replay` with the outcome the person got: `live`, `countdown`, `ended`, `replay`,
+`replay_expired`, `invalid`, `prompt`. The admin session page counts them and lists in red anyone who clicked
+and could not watch.
+
 ## Surfaces
 - `/admin/events/<slug>/sessions/<date>`: eleven tiles and the retention curve with the pitch marked.
 - `GET /api/metrics?event=&date=` (Bearer `REGISTER_SECRET`): the same per session, with `retention` and

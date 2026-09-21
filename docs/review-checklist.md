@@ -44,6 +44,12 @@ What to look at, in the order it matters. Tick as you go; anything wrong becomes
 - [ ] `GET /api/cron/reminders?dry=1` at 16:12 MT lists tomorrow's 50-minute sends; a Test Sample receives both emails once Postmark is on.
 - [ ] Decide whether ActiveCampaign's reminders stay on alongside ours.
 
+## Links you send (Roezan, ActiveCampaign)
+- [ ] Roezan link: `https://bestonlineclassroom.com/w/ailg-r?src=sms&e=%EMAIL%&fn=%FIRST_NAME%` (Roezan's merge tags). Known people go straight to their room; unknown ones are registered from the link and go straight in; email only → name prompt with an "I prefer to stay anonymous" option.
+- [ ] Link clicks per session on the admin page: opens, into the room, countdown, replay, name prompts, and a red list of anyone who clicked and could not watch (after the end, replay window over, invalid link).
+- [ ] ActiveCampaign contacts: 11,146 of 11,152 in the masterclass list carry EasyWebinar links in WebinarJoinLink / ReplayLink (and the older joinURL / replayURL). `npm run ac:links -- --dry` scans; without `--dry` it rewrites them (own room link for the 35 we know, the open link with email hash for the rest). Run only after confirming no ActiveCampaign automation fires on those field changes.
+- [ ] Email avatar: `bestonlineclassroom.com` has no mailboxes (registrar forwarding), so there is no Google profile photo to show. BIMI is the route: `default._bimi.bestonlineclassroom.com` TXT `v=BIMI1; l=https://bestonlineclassroom.com/bimi.svg;` (logo published), DMARC moved to `p=quarantine`, and for Gmail a Verified Mark Certificate (paid, needs a registered trademark). Without the VMC, Gmail keeps showing initials; Yahoo and Apple Mail show the logo.
+
 ## Housekeeping
 - [ ] Bare domain as primary in Vercel (then I switch the site's `CLASSROOM_URL` back), after the session.
 - [ ] Blob transfer cost on the first invoice.

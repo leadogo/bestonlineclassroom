@@ -24,6 +24,10 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
   const metrics = (await db().from("session_metrics").select("*").eq("event_id", event.id).eq("session_date", session.date).maybeSingle()).data as Metrics | null;
   const offsetsRes = await db().from("attendance").select("max_offset, registrant:registrants!inner(source)").eq("session_date", session.date).eq("kind", "live").eq("registrant.event_id", event.id);
   const offsets = (offsetsRes.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test").map((a) => a.max_offset as number);
+  const clicksRes = await db().from("link_clicks").select("outcome, path, src, at, registrant:registrants(first_name, email, source)").eq("event_id", event.id).eq("session_date", session.date).order("id", { ascending: false }).limit(2000);
+  const clicks = (clicksRes.data ?? []).filter((c) => (c.registrant as unknown as { source?: string } | null)?.source !== "test");
+  const count = (o: string) => clicks.filter((c) => c.outcome === o).length;
+  const problems = clicks.filter((c) => ["ended", "replay_expired", "invalid"].includes(c.outcome)).slice(0, 50);
   const real = rows.filter((r) => r.source !== "test");
   const joined = real.filter((r) => r.attendance.some((a) => a.kind === "live")).length;
   const replayed = real.filter((r) => r.attendance.some((a) => a.kind === "replay")).length;
@@ -60,6 +64,29 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
       </div>
 
       <SessionMetrics m={metrics} offsets={offsets} videoSeconds={event.video_seconds ?? 0} ctaAt={event.cta_at_seconds} />
+
+      <section className="flex flex-col gap-2">
+        <p className="text-sm font-bold text-muted">Link clicks for this session</p>
+        <p className="text-base">
+          <span className="font-bold tabular-nums">{clicks.length}</span> opens · <span className="tabular-nums">{count("live")}</span> into the live room · <span className="tabular-nums">{count("countdown")}</span> to the countdown · <span className="tabular-nums">{count("replay")}</span> to the replay · <span className="tabular-nums">{count("prompt")}</span> asked for a name ·{" "}
+          <span className={`font-bold tabular-nums ${problems.length ? "text-live" : ""}`}>{count("ended") + count("replay_expired") + count("invalid")}</span> could not watch
+        </p>
+        {problems.length > 0 && (
+          <ul className="rounded-lg border border-live/40 bg-live/5 p-3 text-sm">
+            {problems.map((c, i) => {
+              const r = c.registrant as unknown as { first_name?: string; email?: string | null } | null;
+              return (
+                <li key={i} className="flex flex-wrap gap-x-3">
+                  <span className="tabular-nums text-muted">{new Date(c.at).toLocaleString("en-US", { timeZone: event.timezone, hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}</span>
+                  <span className="font-bold">{c.outcome === "ended" ? "clicked after the session ended" : c.outcome === "replay_expired" ? "replay window over" : "invalid link"}</span>
+                  <span>{r?.first_name ?? "unknown"}{r?.email ? ` · ${r.email}` : ""}</span>
+                  <span className="text-muted">{c.path}{c.src ? ` · ${c.src}` : ""}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <form className="flex gap-2">
         <input name="q" defaultValue={q} placeholder="Search name or email" className="w-full max-w-sm rounded-md border border-line bg-panel px-3 py-2 text-base focus:border-brand focus:outline-none" />
