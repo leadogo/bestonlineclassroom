@@ -57,7 +57,14 @@ if (existing.data) {
   eventId = existing.data.id as string;
   const { error } = await db().from("events").update({ start_time: values.at, title: "Test run" }).eq("id", eventId);
   if (error) throw new Error(error.message);
-  console.log(`updated ${slug} to start at ${values.at}`);
+  const rids = ((await db().from("registrants").select("id").eq("event_id", eventId)).data ?? []).map((r) => r.id as string);
+  if (rids.length) {
+    await db().from("attendance").delete().in("registrant_id", rids);
+    await db().from("registrants").update({ blocked_at: null, ghosted_at: null, replay_opened_at: null }).in("id", rids);
+  }
+  await db().from("chat_messages").delete().eq("event_id", eventId);
+  await db().from("link_clicks").delete().eq("event_id", eventId);
+  console.log(`updated ${slug} to start at ${values.at}; previous round's chat, attendance and clicks wiped`);
 } else {
   const ins = await db().from("events").insert(row).select("id").single();
   if (ins.error) throw new Error(ins.error.message);

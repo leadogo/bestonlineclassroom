@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   if (!(await canModerate(member, s.event.id))) return Response.json({ error: "Not your webinar" }, { status: 403 });
   const after_ = Number(q.get("after") ?? 0) || 0;
   const since = q.get("since") ?? "";
-  const base = () => db().from("chat_messages").select(SELECT).eq("event_id", s.event.id).eq("session_date", s.session.date);
+  const base = () => db().from("chat_messages").select(SELECT).eq("event_id", s.event.id).eq("session_date", s.session.date).gte("created_at", s.session.start.toISOString());
   const fresh = after_ === 0 ? await base().order("id", { ascending: false }).limit(400) : await base().gt("id", after_).order("id").limit(400);
   const news = after_ === 0 ? (fresh.data ?? []).reverse() : (fresh.data ?? []);
   let updated: Array<{ id: number; reactions: Record<string, number>; deleted: boolean }> = [];

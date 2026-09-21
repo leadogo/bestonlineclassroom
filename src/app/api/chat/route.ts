@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { mine } from "@/lib/reactions";
 import { TOKEN_RE } from "@/lib/registrants";
+import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { postToChatChannel } from "@/lib/slack";
 import { tagNow } from "@/lib/tagging";
 
@@ -15,8 +16,11 @@ const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offs
 
 async function registrant(token: string) {
   if (!TOKEN_RE.test(token)) return null;
-  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source").eq("token", token).maybeSingle();
-  return data;
+  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days)").eq("token", token).maybeSingle();
+  if (!data) return null;
+  const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[] } | null;
+  const start = ev ? sessionFor(scheduleOf(ev), data.session_date as string)?.start ?? null : null;
+  return { ...data, sessionStart: start ? start.toISOString() : null };
 }
 
 /** GET ?token=&after=<id>&since=<iso>: new real messages after `after`, and deletes/reactions since `since`. */
@@ -27,7 +31,10 @@ export async function GET(request: Request) {
   const after_ = Number(q.get("after") ?? 0) || 0;
   const since = q.get("since") ?? "";
   // Ghosted people see their own rows; nobody else does.
-  const scope = () => db().from("chat_messages").select(SELECT).eq("event_id", r.event_id).eq("session_date", r.session_date).or(`visibility.eq.all,registrant_id.eq.${r.id}`);
+  const scope = () => {
+    const q = db().from("chat_messages").select(SELECT).eq("event_id", r.event_id).eq("session_date", r.session_date).or(`visibility.eq.all,registrant_id.eq.${r.id}`);
+    return r.sessionStart ? q.gte("created_at", r.sessionStart) : q;
+  };
 
   const fresh = after_ === 0
     ? await scope().is("deleted_at", null).order("id", { ascending: false }).limit(HISTORY)
