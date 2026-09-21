@@ -33,10 +33,15 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
       stallTimer = null;
       setStalled(false);
     };
+    const onTime = () => {
+      if (!v.paused) onPlaying();
+    };
     v.addEventListener("loadedmetadata", onMeta);
+    v.addEventListener("canplay", () => v.play().catch(() => {}));
     v.addEventListener("waiting", onWaiting);
     v.addEventListener("stalled", onWaiting);
     v.addEventListener("playing", onPlaying);
+    v.addEventListener("timeupdate", onTime);
     if (v.readyState >= 1) onMeta();
     const drift = setInterval(() => {
       if (v.paused && !v.ended) v.play().catch(() => {});
@@ -49,6 +54,7 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
       v.removeEventListener("waiting", onWaiting);
       v.removeEventListener("stalled", onWaiting);
       v.removeEventListener("playing", onPlaying);
+      v.removeEventListener("timeupdate", onTime);
     };
     // expected is stable for the life of the room
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,7 +76,11 @@ export function VideoStage({ src, expected, videoRef }: { src: string | null; ex
   return (
     <>
       <video
-        ref={videoRef}
+        ref={(el) => {
+          // React does not write the muted attribute; the browser must see muted before it decides on autoplay.
+          if (el) el.muted = true;
+          videoRef.current = el;
+        }}
         src={src}
         className="absolute inset-0 h-full w-full object-contain"
         playsInline
