@@ -20,6 +20,7 @@ export type EventRow = {
   logo_url: string | null;
   icon_url: string | null;
   chapters: Array<{ at: number; label: string }>;
+  replay_hours: number;
 };
 
 const TTL_MS = 60_000;
