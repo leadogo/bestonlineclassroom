@@ -79,10 +79,10 @@ export function roomState(s: Schedule, now: Date = new Date(), date?: string | n
 }
 
 /** The Schedule for an `events` row (`start_time` is Postgres `time`: "17:00:00" or "17:00"). */
-export function scheduleOf(event: { timezone: string; start_time: string; video_seconds: number }): Schedule {
+export function scheduleOf(event: { timezone: string; start_time: string; video_seconds: number | null }): Schedule {
   const m = /^(\d{1,2}):(\d{2})/.exec(event.start_time);
   if (!m) throw new Error(`Bad start_time: ${event.start_time}`);
-  return { timezone: event.timezone, startHour: Number(m[1]), startMinute: Number(m[2]), seconds: event.video_seconds };
+  return { timezone: event.timezone, startHour: Number(m[1]), startMinute: Number(m[2]), seconds: event.video_seconds ?? 0 };
 }
 
 const ZONES: Array<[string, string]> = [
