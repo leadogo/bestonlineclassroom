@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { importSimulated, removeSimulatedName, saveCopy, saveNames, saveReminders, saveSettings, saveTags } from "./actions";
+import { importSimulated, removeSimulatedName, saveConfirmation, saveCopy, saveNames, saveReminders, saveSettings, saveTags } from "./actions";
+import { EmailSamples } from "./email-tools";
+import { getTeamMember } from "@/lib/auth";
+import { CONFIRMATION_BODY, CONFIRMATION_SUBJECT } from "@/lib/email-templates";
 import { ActionForm, Field } from "./forms";
 import { VideoUpload } from "./video-upload";
 import { chaptersText, secondsText } from "@/lib/admin";
@@ -23,6 +26,8 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
   const bindRemove = removeSimulatedName.bind(null, slug);
   const bindReminders = saveReminders.bind(null, slug);
   const bindTags = saveTags.bind(null, slug);
+  const bindConfirmation = saveConfirmation.bind(null, slug);
+  const me = await getTeamMember();
   const rules = event.reminder_rules ?? [];
   const rule = (k: string) => rules.find((r) => r.key === k);
   const TAGS: Array<[string, string]> = [["registered", "Registered (sent by the site on opt-in)"], ["attended", "Attended"], ["missed", "Missed"], ["watched_replay", "Watched replay"], ["left_early", "Left early (before the pitch)"], ["stayed_40min", "Stayed at least 40 minutes"], ["asked_question", "Asked a question"], ["clicked_offer", "Clicked offer"], ["saw_offer_no_click", "Saw offer but didn't click"]];
@@ -94,12 +99,29 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
       </section>
 
       <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-bold">Confirmation email</h2>
+        <p className="text-sm text-muted">Sent the moment someone registers, with the calendar invite attached. Placeholders: {"#FIRST_NAME# #WEBINAR_DATE# #WEBINAR_TIME# #EVENT_LINK# #REPLAY_LINK# #SKOOL_LINK#"} (or {"{{first_name}}"} style). Blank = the default.</p>
+        <ActionForm action={bindConfirmation} submit="Save confirmation">
+          <Field label="Subject" name="subject" value={event.confirmation?.subject ?? ""} hint={`Default: ${CONFIRMATION_SUBJECT}`} />
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-bold">Message</span>
+            <textarea name="body" defaultValue={event.confirmation?.body ?? ""} placeholder={CONFIRMATION_BODY} rows={14} className="w-full rounded-md border border-line bg-room px-3 py-2 text-base placeholder:text-muted/60 focus:border-brand focus:outline-none" />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="footer" defaultChecked={event.confirmation?.footer !== false} className="h-4 w-4 accent-brand" />
+            Add the short &ldquo;why you got this&rdquo; footer
+          </label>
+        </ActionForm>
+        <EmailSamples slug={slug} defaultTo={me?.email ?? ""} kinds={[["confirmation", "Confirmation"], ["before30", "30 minutes before"], ["before15", "15 minutes before"]]} />
+      </section>
+
+      <section className="flex flex-col gap-4">
         <h2 className="text-lg font-bold">Reminder emails</h2>
         <p className="text-sm text-muted">Sent from our domain through Postmark once it is connected. Placeholders: {"{{first_name}} {{title}} {{host_name}} {{join_url}} {{replay_url}} {{start_local}}"}. Leave a subject blank to disable that reminder.</p>
         <ActionForm action={bindReminders} submit="Save reminders">
-          {(["before50", "before30", "before10"] as const).map((k) => (
+          {(["before30", "before15", "before5"] as const).map((k) => (
             <div key={k} className="grid gap-3 rounded-xl border border-line p-4 sm:grid-cols-[120px_1fr]">
-              <Field label="Minutes before" name={`${k}_minutes`} type="number" value={String(rule(k)?.minutes_before ?? (k === "before50" ? 50 : k === "before30" ? 30 : 10))} />
+              <Field label="Minutes before" name={`${k}_minutes`} type="number" value={String(rule(k)?.minutes_before ?? (k === "before30" ? 30 : k === "before15" ? 15 : 5))} />
               <div className="flex flex-col gap-3">
                 <Field label="Subject" name={`${k}_subject`} value={rule(k)?.subject ?? ""} />
                 <Field label="Message" name={`${k}_body`} rows={5} value={rule(k)?.body ?? ""} />

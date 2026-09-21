@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { db } from "@/lib/db";
 import { Room } from "@/components/room/Room";
 import { registrantByToken } from "@/lib/attendees";
 import { getTeamMember } from "@/lib/auth";
@@ -35,5 +37,14 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const outcome = buildRoom(r.event, r, sp, new Date(), { team });
   if (outcome.kind === "ended") redirect(outcome.to);
   const simulated = await getSimulatedRows(r.event.id).catch(() => []);
+  // ponytail: the site's /join records room_join for leadogo, the ritual sheet and Slack; calling it once here keeps
+  // all three without a new contract. Replace with a direct leadogo event when analytics N2 lands.
+  if (outcome.props.state === "live" && !outcome.props.preview && r.site_registration_id && !r.room_join_reported_at) {
+    after(async () => {
+      const q = new URLSearchParams({ k: r.token, rid: r.site_registration_id as string, sd: r.session_date, ...(r.source === "test" ? { t: "1" } : {}) });
+      await fetch(`https://thefuturerealestateagent.com/join?${q}`, { redirect: "manual", signal: AbortSignal.timeout(5000) }).catch(() => {});
+      await db().from("registrants").update({ room_join_reported_at: new Date().toISOString() }).eq("id", r.id);
+    });
+  }
   return <Room {...outcome.props} simulated={simulated} />;
 }

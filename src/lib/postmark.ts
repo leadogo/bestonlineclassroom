@@ -1,19 +1,36 @@
-// One transactional email through Postmark (SPEC-reminders.md). Nothing here throws; the cron logs and moves on.
+// One transactional email through Postmark (SPEC-reminders.md). Nothing here throws; callers log and move on.
+// Opens are tracked and links in the HTML part are tracked; the text part keeps raw links so the calendar file
+// and copied links stay clean. Reply-To is always the team inbox.
 const TOKEN = process.env.POSTMARK_SERVER_TOKEN ?? "";
 const FROM = process.env.REMINDER_FROM ?? "";
+const REPLY_TO = process.env.REPLY_TO ?? "";
 
 export function postmarkConfigured(): boolean {
   return Boolean(TOKEN && FROM);
 }
 
-export async function sendEmail(input: { to: string; subject: string; text: string; html: string; tag?: string }): Promise<{ ok: boolean; error?: string }> {
+export type Attachment = { name: string; content: string; contentType: string };
+
+export async function sendEmail(input: { to: string; subject: string; text: string; html: string; tag?: string; attachments?: Attachment[] }): Promise<{ ok: boolean; error?: string }> {
   if (!postmarkConfigured()) return { ok: false, error: "not_configured" };
   try {
     const res = await fetch("https://api.postmarkapp.com/email", {
       method: "POST",
       headers: { "X-Postmark-Server-Token": TOKEN, accept: "application/json", "content-type": "application/json" },
-      body: JSON.stringify({ From: FROM, To: input.to, Subject: input.subject, TextBody: input.text, HtmlBody: input.html, MessageStream: "outbound", Tag: input.tag ?? "reminder" }),
-      signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({
+        From: FROM,
+        To: input.to,
+        ...(REPLY_TO ? { ReplyTo: REPLY_TO } : {}),
+        Subject: input.subject,
+        TextBody: input.text,
+        HtmlBody: input.html,
+        MessageStream: "outbound",
+        Tag: input.tag ?? "reminder",
+        TrackOpens: true,
+        TrackLinks: "HtmlOnly",
+        Attachments: (input.attachments ?? []).map((a) => ({ Name: a.name, Content: a.content, ContentType: a.contentType })),
+      }),
+      signal: AbortSignal.timeout(15_000),
     });
     const j = (await res.json().catch(() => ({}))) as { ErrorCode?: number; Message?: string };
     if (!res.ok || (j.ErrorCode ?? 0) !== 0) return { ok: false, error: j.Message ?? `HTTP ${res.status}` };

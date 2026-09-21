@@ -4,7 +4,9 @@ import { ctaHref } from "@/lib/cta";
 import { db } from "@/lib/db";
 import { cleanParams } from "@/lib/params";
 import { TOKEN_RE } from "@/lib/registrants";
+import { after } from "next/server";
 import { replayCopy } from "@/lib/replay-content";
+import { tagNow } from "@/lib/tagging";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,7 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
     await db().from("registrants").update({ replay_opened_at: now.toISOString() }).eq("id", r.id).is("replay_opened_at", null);
     const again = await db().from("registrants").select("replay_opened_at").eq("id", r.id).maybeSingle();
     openedAt = again.data?.replay_opened_at ? new Date(again.data.replay_opened_at) : now;
+    after(() => tagNow(r.id, "watched_replay"));
   }
   const expiresAt = openedAt && e.replay_hours > 0 ? openedAt.getTime() + e.replay_hours * 3_600_000 : null;
   if (expiresAt !== null && now.getTime() >= expiresAt) {

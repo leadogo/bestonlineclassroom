@@ -24,6 +24,7 @@ export type EventRow = {
   replay_copy: Record<string, unknown>;
   tags: Record<string, string>;
   reminder_rules: Array<{ key: string; minutes_before: number; subject: string; body: string }>;
+  confirmation: { subject?: string; body?: string; footer?: boolean };
 };
 
 const TTL_MS = 60_000;

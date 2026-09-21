@@ -134,7 +134,7 @@ export async function setVideo(slug: string, url: string): Promise<ActionState> 
 export async function saveReminders(slug: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
   const event = await guard(slug);
   const rules = [];
-  for (const key of ["before50", "before30", "before10"]) {
+  for (const key of ["before30", "before15", "before5"]) {
     const minutes = Number(str(fd, `${key}_minutes`, 5));
     const subject = str(fd, `${key}_subject`, 200);
     const body = str(fd, `${key}_body`, 4000);
@@ -146,6 +146,15 @@ export async function saveReminders(slug: string, _prev: ActionState, fd: FormDa
   if (error) return { error: "Could not save." };
   done(slug);
   return { ok: `${rules.length} reminder${rules.length === 1 ? "" : "s"} saved.` };
+}
+
+export async function saveConfirmation(slug: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const event = await guard(slug);
+  const confirmation = { subject: str(fd, "subject", 200), body: str(fd, "body", 12000), footer: fd.get("footer") === "on" };
+  const { error } = await db().from("events").update({ confirmation }).eq("id", event.id);
+  if (error) return { error: "Could not save." };
+  done(slug);
+  return { ok: "Confirmation saved." };
 }
 
 export async function saveTags(slug: string, _prev: ActionState, fd: FormData): Promise<ActionState> {

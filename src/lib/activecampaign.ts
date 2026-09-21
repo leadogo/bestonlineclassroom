@@ -32,6 +32,12 @@ export async function tagId(name: string): Promise<string | null> {
   return id;
 }
 
+/** Creates or updates the contact so a tag can land even before the Zap has made it. */
+export async function ensureContact(email: string, firstName: string, phone: string | null): Promise<string | null> {
+  const r = await api<{ contact: { id: string } }>("/contact/sync", { method: "POST", body: JSON.stringify({ contact: { email, firstName, ...(phone ? { phone } : {}) } }) });
+  return r?.contact.id ?? null;
+}
+
 export async function contactId(email: string): Promise<string | null> {
   const r = await api<{ contacts: Array<{ id: string }> }>(`/contacts?email=${encodeURIComponent(email)}`);
   return r?.contacts[0]?.id ?? null;

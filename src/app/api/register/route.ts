@@ -1,4 +1,7 @@
+import { after } from "next/server";
 import { db } from "@/lib/db";
+import { sendConfirmation } from "@/lib/mailer";
+import { tagNow } from "@/lib/tagging";
 import { getEvent } from "@/lib/events";
 import { nextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { emailHash, isTestIdentity, joinUrl, newToken, parseRegisterBody, replayUrl } from "@/lib/registrants";
@@ -72,6 +75,13 @@ export async function POST(request: Request) {
       ({ id, token } = again.data);
     } else {
       ({ id, token } = inserted.data);
+      if (!isTestIdentity(input.email)) {
+        const person = { id, first_name: input.first_name, email: input.email, token };
+        after(async () => {
+          await sendConfirmation(person, event, session);
+          await tagNow(id, "registered");
+        });
+      }
     }
   }
 

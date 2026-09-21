@@ -3,6 +3,7 @@ import { MAX_BODY, POST_GAP_MS, slackLine } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { TOKEN_RE } from "@/lib/registrants";
 import { postToChatChannel } from "@/lib/slack";
+import { tagNow } from "@/lib/tagging";
 
 export const dynamic = "force-dynamic";
 
@@ -67,5 +68,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Please try again." }, { status: 500 });
   }
   if (r.source !== "test") after(() => postToChatChannel(slackLine(r.first_name, r.email, body)));
+  after(() => tagNow(r.id, "asked_question"));
   return Response.json({ message: ins.data });
 }
