@@ -4,7 +4,7 @@
   "crons": [
     {
       "path": "/api/cron/outcomes",
-      "schedule": "15 * * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/reminders",
