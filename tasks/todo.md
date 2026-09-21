@@ -13,7 +13,7 @@
   - Files: src/lib/tz.ts, src/lib/daily-schedule.ts, src/lib/daily-schedule.test.ts
 
 ## T3 Migration (SPEC-data-model.md)
-- [ ] Task: Write `supabase/migrations/001_init.sql` with the six tables, indexes, the partial unique on registrants, RLS enabled with no policies; apply it through the Supabase MCP; add `src/lib/db.ts` (service-role client, env read once).
+- [x] Task: Write `supabase/migrations/001_init.sql` with the six tables, indexes, the partial unique on registrants, RLS enabled with no policies; apply it through the Supabase MCP; add `src/lib/db.ts` (service-role client, env read once).
   - Acceptance: `list_tables` shows the six tables; RLS on for each.
   - Verify: MCP `list_tables`; `select relrowsecurity from pg_class where relname in (...)`
   - Files: supabase/migrations/001_init.sql, src/lib/db.ts
@@ -25,9 +25,10 @@
   - Files: scripts/seed-event.ts, scripts/upload-video.ts, scripts/import-chat.ts, scripts/team-add.ts, src/lib/csv.ts (+ test), src/lib/mp4.ts (+ test)
 
 ## CP1 checkpoint: data in place (counts above) — William confirms
+- 2026-09-20 evening: migration applied via the Management API (`_migrations` table records it), event seeded, 754 messages / 109 names imported, team member william@leadogo.com created. Video upload in progress. The Blob store is `bestonlineclassroom-video` (public, `store_23HoRUChFzhQuDRX`); the private store William created first cannot serve `<video>` and can be deleted.
 
 ## T5 Registration webhook (SPEC-registration-webhook.md)
-- [ ] Task: `POST /api/register` with bearer auth, validation, `nextSession` default, idempotent upsert, token generation, test-identity flag; `src/lib/registrants.ts` + tests; `src/lib/events.ts` with a 60 s cache.
+- [x] Task: `POST /api/register` with bearer auth, validation, `nextSession` default, idempotent upsert, token generation, test-identity flag; `src/lib/registrants.ts` + tests; `src/lib/events.ts` with a 60 s cache.
   - Acceptance: the contract in the spec, including 401/404/422; a repeat call returns the same token.
   - Verify: `npm test`; two `curl` calls with the Test Sample identity → same `join_url`; wrong bearer → 401
   - Files: src/app/api/register/route.ts, src/lib/registrants.ts, src/lib/registrants.test.ts, src/lib/events.ts
