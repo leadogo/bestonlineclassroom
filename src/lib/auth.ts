@@ -9,7 +9,8 @@ import { deviceTrusted } from "./twofactor.ts";
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-export type TeamMember = { id: string; email: string; display_name: string };
+export type Role = "admin" | "moderator";
+export type TeamMember = { id: string; email: string; display_name: string; role: Role };
 
 export async function supabaseServer() {
   const store = await cookies();
@@ -35,7 +36,7 @@ export async function getSignedIn(): Promise<TeamMember | null> {
     data: { user },
   } = await sb.auth.getUser();
   if (!user) return null;
-  const { data } = await db().from("team_members").select("id, email, display_name").eq("id", user.id).maybeSingle();
+  const { data } = await db().from("team_members").select("id, email, display_name, role").eq("id", user.id).maybeSingle();
   return (data as TeamMember | null) ?? null;
 }
 
@@ -44,4 +45,18 @@ export async function getTeamMember(): Promise<TeamMember | null> {
   const m = await getSignedIn();
   if (!m) return null;
   return (await deviceTrusted(m.id)) ? m : null;
+}
+
+/** Admins moderate everything; moderators only the webinars they are assigned to. */
+export async function canModerate(m: TeamMember, eventId: string): Promise<boolean> {
+  if (m.role === "admin") return true;
+  const { data } = await db().from("team_assignments").select("event_id").eq("member_id", m.id).eq("event_id", eventId).maybeSingle();
+  return Boolean(data);
+}
+
+/** Event ids a member may moderate; null means all (admin). */
+export async function assignedEventIds(m: TeamMember): Promise<string[] | null> {
+  if (m.role === "admin") return null;
+  const { data } = await db().from("team_assignments").select("event_id").eq("member_id", m.id);
+  return (data ?? []).map((r) => r.event_id as string);
 }

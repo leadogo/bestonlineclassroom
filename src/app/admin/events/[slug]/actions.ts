@@ -9,7 +9,7 @@ import { mp4Info } from "@/lib/mp4";
 import { REPLAY_COPY } from "@/lib/replay-content";
 
 async function guard(slug: string) {
-  if (!(await getTeamMember().catch(() => null))) throw new Error("Sign in");
+  if ((await getTeamMember().catch(() => null))?.role !== "admin") throw new Error("Admins only");
   const event = await getEvent(slug);
   if (!event) throw new Error("Unknown event");
   return event;

@@ -1,7 +1,8 @@
 "use client";
 import { useActionState } from "react";
-import { addMember, removeMember, renameMember, resetPassword, type TeamState } from "./actions";
+import { invite, removeMember, resendInvite, resetPassword, revokeInvite, saveMember, type TeamState } from "./actions";
 
+export type EventOption = { id: string; slug: string; title: string };
 const input = "rounded-md border border-line bg-room px-3 py-2 text-base focus:border-brand focus:outline-none";
 const btn = "rounded-md px-3 py-2 text-sm font-bold";
 
@@ -10,60 +11,118 @@ function Result({ s }: { s: TeamState }) {
   return (
     <p className="text-sm">
       {s.ok && <span className="text-emerald-400">{s.ok}</span>} {s.error && <span className="text-live">{s.error}</span>}
-      {s.password && <code className="ml-2 rounded bg-room px-2 py-1 font-mono text-base text-cta">{s.password}</code>}
     </p>
   );
 }
 
-export function AddMember() {
-  const [state, run, pending] = useActionState(addMember, null);
+function RolePick({ value }: { value: "admin" | "moderator" }) {
+  return (
+    <select name="role" defaultValue={value} className={input}>
+      <option value="admin">Admin: everything</option>
+      <option value="moderator">Moderator: chat and numbers</option>
+    </select>
+  );
+}
+
+function Assignments({ events, checked, name }: { events: EventOption[]; checked: string[]; name: string }) {
+  return (
+    <fieldset className="flex flex-wrap gap-2 text-sm">
+      <legend className="mb-1 w-full text-xs text-muted">Webinars (moderators only; admins have all)</legend>
+      {events.map((e) => (
+        <label key={e.id} className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5">
+          <input type="checkbox" name={name} value={e.id} defaultChecked={checked.includes(e.id)} className="h-4 w-4 accent-brand" />
+          {e.title}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+export function InviteForm({ events }: { events: EventOption[] }) {
+  const [state, run, pending] = useActionState(invite, null);
   return (
     <form action={run} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-4">
-      <h2 className="text-lg font-bold">Add a team member</h2>
+      <h2 className="text-lg font-bold">Invite someone</h2>
       <div className="flex flex-wrap gap-3">
         <input name="email" type="email" required placeholder="email" className={input} />
-        <input name="display_name" required placeholder='display name, e.g. "Sam from William’s team"' className={`${input} min-w-72`} />
+        <input name="display_name" required placeholder='name in the chat, e.g. "Sam from William’s team"' className={`${input} min-w-72`} />
+        <RolePick value="moderator" />
+      </div>
+      <Assignments events={events} checked={events.map((e) => e.id)} name="event_id" />
+      <div>
         <button type="submit" disabled={pending} className={`${btn} bg-brand text-white disabled:opacity-50`}>
-          {pending ? "Adding…" : "Add"}
+          {pending ? "Sending…" : "Send invitation"}
         </button>
       </div>
-      <p className="text-xs text-muted">A password is generated and shown once. Send it to them; they sign in at /login.</p>
+      <p className="text-xs text-muted">They get an email with a link to choose their password. The link works once, for 7 days.</p>
       <Result s={state} />
     </form>
   );
 }
 
-export function MemberRow({ id, email, display_name, isMe }: { id: string; email: string; display_name: string; isMe: boolean }) {
-  const [rn, rename, p1] = useActionState(renameMember, null);
+export function MemberRow({ id, email, display_name, role, assigned, isMe, events, modLink }: { id: string; email: string; display_name: string; role: "admin" | "moderator"; assigned: string[]; isMe: boolean; events: EventOption[]; modLink: string }) {
+  const [sv, save, p1] = useActionState(saveMember, null);
   const [rs, reset, p2] = useActionState(resetPassword, null);
   const [rm, remove, p3] = useActionState(removeMember, null);
   return (
-    <li className="flex flex-col gap-2 border-b border-line py-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="min-w-56 text-sm text-muted">{email}</span>
-        <form action={rename} className="flex items-center gap-2">
-          <input type="hidden" name="id" value={id} />
+    <li className="flex flex-col gap-2 border-b border-line py-4">
+      <form action={save} className="flex flex-col gap-2">
+        <input type="hidden" name="id" value={id} />
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="min-w-56 text-sm text-muted">{email}{isMe ? " (you)" : ""}</span>
           <input name="display_name" defaultValue={display_name} className={`${input} w-64`} />
+          <RolePick value={role} />
           <button type="submit" disabled={p1} className={`${btn} border border-line text-ink`}>
-            Rename
+            Save
           </button>
-        </form>
+        </div>
+        {role === "moderator" && <Assignments events={events} checked={assigned} name="event_id" />}
+      </form>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+        <span>
+          Moderator link: <code className="rounded bg-room px-1.5 py-0.5 font-mono text-ink">{modLink}</code>
+        </span>
         <form action={reset}>
           <input type="hidden" name="id" value={id} />
-          <button type="submit" disabled={p2} className={`${btn} border border-line text-ink`}>
-            Reset password
+          <button type="submit" disabled={p2} className="underline hover:text-ink">
+            Email a password reset link
           </button>
         </form>
         {!isMe && (
           <form action={remove}>
             <input type="hidden" name="id" value={id} />
-            <button type="submit" disabled={p3} className={`${btn} text-live`} onClick={(e) => { if (!confirm(`Remove ${display_name}?`)) e.preventDefault(); }}>
+            <button type="submit" disabled={p3} className="text-live underline" onClick={(e) => { if (!confirm(`Remove ${display_name}?`)) e.preventDefault(); }}>
               Remove
             </button>
           </form>
         )}
       </div>
-      <Result s={rn ?? rs ?? rm} />
+      <Result s={sv ?? rs ?? rm} />
+    </li>
+  );
+}
+
+export function InviteRow({ token, email, display_name, role, expires_at }: { token: string; email: string; display_name: string; role: string; expires_at: string }) {
+  const [rs, resend, p1] = useActionState(resendInvite, null);
+  const [rv, revoke, p2] = useActionState(revokeInvite, null);
+  return (
+    <li className="flex flex-wrap items-center gap-3 border-b border-line py-3 text-sm">
+      <span className="min-w-56 text-muted">{email}</span>
+      <span>{display_name}</span>
+      <span className="text-muted">{role}, expires {new Date(expires_at).toLocaleDateString()}</span>
+      <form action={resend}>
+        <input type="hidden" name="token" value={token} />
+        <button type="submit" disabled={p1} className="text-xs underline hover:text-ink">
+          Resend
+        </button>
+      </form>
+      <form action={revoke}>
+        <input type="hidden" name="token" value={token} />
+        <button type="submit" disabled={p2} className="text-xs text-live underline">
+          Revoke
+        </button>
+      </form>
+      <Result s={rs ?? rv} />
     </li>
   );
 }

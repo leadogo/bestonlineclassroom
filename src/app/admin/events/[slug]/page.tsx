@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { importSimulated, removeSimulatedName, saveConfirmation, saveCopy, saveNames, saveReminders, saveSettings, saveTags } from "./actions";
 import { EmailSamples } from "./email-tools";
 import { getTeamMember } from "@/lib/auth";
@@ -14,6 +14,7 @@ import { REPLAY_COPY, replayCopy } from "@/lib/replay-content";
 
 export default async function EventAdmin({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if ((await getTeamMember())?.role !== "admin") redirect("/admin");
   const event = await getEvent(slug);
   if (!event) notFound();
   const next = currentOrNextSession(scheduleOf(event));

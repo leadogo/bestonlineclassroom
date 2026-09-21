@@ -1,4 +1,4 @@
-import { getTeamMember } from "@/lib/auth";
+import { canModerate, getTeamMember } from "@/lib/auth";
 import { currentOrNextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
@@ -18,10 +18,12 @@ async function scope(sp: { event?: string | null; date?: string | null }) {
 
 /** GET ?event=&date=&after=&since=: every real message (deleted ones flagged), changes, and who is in the room. */
 export async function GET(request: Request) {
-  if (!(await getTeamMember().catch(() => null))) return Response.json({ error: "Sign in" }, { status: 401 });
+  const member = await getTeamMember().catch(() => null);
+  if (!member) return Response.json({ error: "Sign in" }, { status: 401 });
   const q = new URL(request.url).searchParams;
   const s = await scope({ event: q.get("event"), date: q.get("date") });
   if (!s) return Response.json({ error: "Unknown event" }, { status: 404 });
+  if (!(await canModerate(member, s.event.id))) return Response.json({ error: "Not your webinar" }, { status: 403 });
   const after_ = Number(q.get("after") ?? 0) || 0;
   const since = q.get("since") ?? "";
   const base = () => db().from("chat_messages").select(SELECT).eq("event_id", s.event.id).eq("session_date", s.session.date);
@@ -60,6 +62,7 @@ export async function POST(request: Request) {
   }
   const s = await scope({ event: String(b.event ?? ""), date: typeof b.date === "string" ? b.date : null });
   if (!s) return Response.json({ error: "Unknown event" }, { status: 404 });
+  if (!(await canModerate(member, s.event.id))) return Response.json({ error: "Not your webinar" }, { status: 403 });
   const now = new Date().toISOString();
 
   switch (b.action) {

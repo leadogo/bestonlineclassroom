@@ -58,8 +58,13 @@ export async function verifyCode(userId: string, code: string, userAgent: string
     return { ok: false, error: "That code doesn't match." };
   }
   await db().from("login_codes").delete().eq("user_id", userId);
+  await trustDevice(userId, userAgent);
+  return { ok: true };
+}
+
+/** Marks this browser trusted for 90 days: a row plus the signed cookie. */
+export async function trustDevice(userId: string, userAgent: string | null): Promise<void> {
   const id = randomBytes(16).toString("hex");
   await db().from("trusted_devices").insert({ user_id: userId, device_id: id, user_agent: userAgent?.slice(0, 300) ?? null });
   (await cookies()).set(DEVICE_COOKIE, `${id}.${sign(id)}`, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: DAYS * 86_400 });
-  return { ok: true };
 }

@@ -4,7 +4,7 @@ import { getTeamMember } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export async function setBlocked(fd: FormData) {
-  if (!(await getTeamMember().catch(() => null))) throw new Error("Sign in");
+  if ((await getTeamMember().catch(() => null))?.role !== "admin") throw new Error("Admins only");
   const id = String(fd.get("id") ?? "");
   const block = fd.get("block") === "1";
   if (!/^[0-9a-f-]{36}$/i.test(id)) return;

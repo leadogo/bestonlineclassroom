@@ -19,14 +19,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/admin" className="text-muted hover:text-ink">
             Events
           </Link>
-          <Link href="/admin/team" className="text-muted hover:text-ink">
-            Team
-          </Link>
+          {member.role === "admin" && (
+            <Link href="/admin/team" className="text-muted hover:text-ink">
+              Team
+            </Link>
+          )}
           <Link href="/mod" className="text-muted hover:text-ink">
             Moderate
           </Link>
           <span className="flex-1" />
-          <span className="text-muted">{member.display_name}</span>
+          <span className="text-muted">{member.display_name}{member.role === "moderator" ? " · moderator" : ""}</span>
           <form action={signOut}>
             <button type="submit" className="rounded-md border border-line px-2.5 py-1 text-muted hover:text-ink">
               Sign out

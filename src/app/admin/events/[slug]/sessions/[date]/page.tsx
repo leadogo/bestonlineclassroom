@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canModerate, getTeamMember } from "@/lib/auth";
 import { setBlocked } from "./actions";
 import { SessionMetrics, type Metrics } from "./metrics";
 import { currentOrNextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
@@ -15,6 +16,9 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
   const { q = "" } = await searchParams;
   const event = await getEvent(slug);
   if (!event) notFound();
+  const me = (await getTeamMember())!;
+  if (!(await canModerate(me, event.id))) notFound();
+  const readOnly = me.role !== "admin";
   const schedule = scheduleOf(event);
   const session = sessionFor(schedule, date) ?? currentOrNextSession(schedule);
   let query = db().from("registrants").select("id, first_name, email, source, token, created_at, blocked_at, attendance(kind, joined_at, seconds_watched, max_offset, cta_clicked_at)").eq("event_id", event.id).eq("session_date", session.date).order("created_at", { ascending: false }).limit(500);
@@ -134,6 +138,9 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
                     </a>
                   </td>
                   <td className="px-3 py-2">
+                    {readOnly ? (
+                      <span className="text-xs text-muted">{r.blocked_at ? "blocked" : ""}</span>
+                    ) : (
                     <form action={setBlocked}>
                       <input type="hidden" name="id" value={r.id} />
                       <input type="hidden" name="slug" value={slug} />
@@ -143,6 +150,7 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
                         {r.blocked_at ? "Unblock" : "Block"}
                       </button>
                     </form>
+                    )}
                   </td>
                 </tr>
               );

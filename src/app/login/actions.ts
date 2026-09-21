@@ -13,7 +13,7 @@ export async function signIn(formData: FormData) {
   if (error) redirect("/login?error=bad");
   const m = await getSignedIn();
   if (!m) redirect("/login?error=team");
-  if (await deviceTrusted(m.id)) redirect("/mod");
+  if (await deviceTrusted(m.id)) redirect(m.role === "admin" ? "/admin" : "/mod");
   const sent = await sendCode(m.id, m.email);
   redirect(sent.ok ? "/login/verify" : `/login/verify?error=${encodeURIComponent(sent.error ?? "send")}`);
 }
@@ -25,7 +25,7 @@ export async function verify(_prev: VerifyState, formData: FormData): Promise<Ve
   if (!m) redirect("/login");
   const res = await verifyCode(m.id, String(formData.get("code") ?? ""), (await headers()).get("user-agent"));
   if (!res.ok) return { error: res.error };
-  redirect("/mod");
+  redirect(m.role === "admin" ? "/admin" : "/mod");
 }
 
 export async function resend(_prev: VerifyState): Promise<VerifyState> {
