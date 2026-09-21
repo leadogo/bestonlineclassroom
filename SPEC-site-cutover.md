@@ -49,6 +49,10 @@ opens the room. The old-style link `/join?k=<32 hex>&rid=…` lands in the room'
    when ready. Until then the thank-you page, the calendar entry and `/live` are the paths into our room, and
    email clicks still land in EasyWebinar.
 2. EasyWebinar's own reminder emails stay on during the parallel run.
+3. Found at CP4 (2026-09-20 evening): `CLASSROOM_URL` must be the host that answers without a redirect. The bare
+   domain 308-redirected to `www`, and a redirect across hosts drops the `Authorization` header, so the webhook
+   saw no bearer (401) and the site fell back to EasyWebinar. The site now calls `https://www.bestonlineclassroom.com`;
+   once the bare domain is primary in Vercel either host works (`joinKey` accepts both).
 
 ## Success criteria
 A Test Sample opt-in at 16:50 MT tomorrow lands in our room at 17:00 through the calendar link, and a Skool
