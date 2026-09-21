@@ -32,6 +32,11 @@ What to look at, in the order it matters. Tick as you go; anything wrong becomes
 - [ ] After the first session: `GET /api/cron/outcomes?dry=1` (Bearer `CRON_SECRET`) lists who gets what; then check a real contact in ActiveCampaign.
 - [ ] iClosed: how you want events pushed (their API or a webhook), and which events. Not built yet.
 
+## Emails (confirmation + 30 and 15 minute reminders)
+- [ ] `SKOOL_URL` in Doppler prd: the Skool invite link for the confirmation email ("Join here"). Not set yet; the email shows a blank there until it is.
+- [ ] Decide whether ActiveCampaign's own confirmation and reminder emails stay on now that ours send.
+- [ ] Samples of all three arrived at william@leadogo.com on 2026-09-20 evening; check the invite opens in Calendar with the link inside.
+
 ## Reminders
 - [x] Postmark server token and `REMINDER_FROM` (`William Kabrall <william@bestonlineclassroom.com>`) in Doppler prd.
 - [ ] Postmark: verify the domain. Postmark → Sender Signatures → Add Domain → `bestonlineclassroom.com`; add the DKIM TXT record and the Return-Path CNAME it shows in Cloudflare (DNS only); click Verify on both. Until then every send is refused with "not a Sender Signature".

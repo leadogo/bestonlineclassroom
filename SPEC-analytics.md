@@ -25,7 +25,9 @@ feed leadogo's Funnel Performance can read in place of EasyWebinar's API.
 - `GET /api/metrics?event=&date=` (Bearer `REGISTER_SECRET`): the same per session, with `retention` and
   `show_up_rate`, for leadogo. **Follow-up in leadogo-app**: Funnel Performance's `fetchWebinarDailyCounts`
   reads this instead of EasyWebinar; the room-count cron keeps reading `room_join` from the site's `/join`.
-- **Tags** (`/api/cron/outcomes`, hourly, `CRON_SECRET`): for sessions in the last 8 days, every registrant with
+- **Tags, instant** (`tagNow`): registered (contact created or updated first), asked a question, clicked the
+  offer and opened the replay are tagged the moment they happen, from the routes themselves.
+- **Tags, hourly** (`/api/cron/outcomes`, `CRON_SECRET`): for sessions in the last 8 days, every registrant with
   an email gets the ActiveCampaign tags their outcomes earn (`events.tags`, default `ailgr_*`). Attended, missed,
   left early, stayed 40 min and saw-offer-no-click wait until 30 minutes after the recording ends; watched replay,
   asked a question and clicked offer go within the hour. `outcome_tags` logs what was sent, so nothing repeats.
