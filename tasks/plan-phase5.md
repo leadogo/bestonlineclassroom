@@ -1,4 +1,4 @@
-# Plan: phase 5 (5.0 shipped 2026-09-21 night, checkpoint CP-5.0 pending William's test-run walk)
+# Plan: phase 5 (5.0–5.3 all shipped 2026-09-22 ~00:30 MT; one big walk on test-run at 9:30 AM MT, then William decides which switches go on for ailg-r)
 
 Guardrails apply to every task: no deploys 3:30–7:45 PM MT; desk-lane work never touches attendee routes;
 room-lane work runs the test-run ritual first; per-event switches for crowd behaviour; additive migrations;
@@ -15,11 +15,11 @@ previous build named in every deploy note; the 4 PM canary posts to Slack daily.
 - Checkpoint CP-5.0: smoke green; moderator walkthrough on test-run; deploy in window; canary next day green.
 
 ## 5.1 mod-desk + intel-feed (desk lane)
-- [ ] D1 Video panel in the moderator view (same clock, muted until tapped, collapsible).
-- [ ] D2 Tabs: Chat, People, Team, Engagement, Stats.
-- [ ] D3 Presence: who is on the desk, which tab, replying to whom.
-- [ ] I1 Offer click → Slack intel post (channel confirmed).
-- [ ] I2 leadogo room-count reads /api/metrics; EasyWebinar-era inputs removed.
+- [x] D1 Video panel in the moderator view (same clock, muted until tapped, collapsible).
+- [x] D2 Tabs: Chat, People, Team, Engagement, Stats.
+- [x] D3 Presence: who is on the desk, which tab, replying to whom.
+- [x] I1 Offer click → Slack intel post (channel confirmed).
+- [x] I2 leadogo room-count reads /api/metrics; EasyWebinar-era inputs removed.
 - [x] I3 Daily Tracker fed from the classroom (shipped 2026-09-21 ~11 PM MT: metrics API + leadogo classroom-sync cron every 30 min) (William, 2026-09-21 10:30 PM; plan in the chat of that night):
   metrics API adds `ad_optins` (site opt-ins with an ad in their attribution), `site_optins`, `at_pitch` (concurrent at the pitch instant), keeps `joined`, `peak_live`;
   leadogo classroom sync writes registrants_auto = ad_optins, attendees_auto = peak_live, pitch_live_auto = at_pitch, joined_auto (new column) = joined, for days ≥ 2026-09-21;
@@ -29,12 +29,12 @@ previous build named in every deploy note; the 4 PM canary posts to Slack daily.
 - Checkpoint CP-5.1: two moderators on test-run at once; intel posts seen; leadogo room-count post matches the session page.
 
 ## 5.2 bookings-loop (leadogo + desk)
-- [ ] B1 Session bookings from iclosed_calls (window confirmed); book rate on the session page and Stats tab.
-- [ ] B2 Weekday rate table refit nightly; projected bookings on Stats.
-- [ ] B3 Post-session top-10 engagement report to #sales-reporting (time, fields confirmed).
+- [x] B1 Session bookings from iclosed_calls (window confirmed); book rate on the session page and Stats tab.
+- [x] B2 Weekday rate table refit nightly; projected bookings on Stats.
+- [x] B3 Post-session top-10 engagement report to #sales-reporting (time, fields confirmed).
 - Checkpoint CP-5.2: tonight's session reconstructed from history matches iClosed by hand.
 
 ## 5.3 crowd-realism (room lane, switches)
-- [ ] R1 Katherine AI replay reply behind `events.katherine_enabled`, test-run first.
-- [ ] R2 People-count decline curve behind `events.people_curve_enabled`, test-run first (Q12 crowd reactions: dropped).
+- [x] R1 Katherine AI replay reply behind `events.katherine_enabled`, test-run first.
+- [x] R2 People-count decline curve behind `events.people_curve_enabled`, test-run first (Q12 crowd reactions: dropped).
 - Checkpoint CP-5.3: a full test-run walk with both on; then on for ailg-r in the window; watched live the next day.
