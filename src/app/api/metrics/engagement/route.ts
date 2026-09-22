@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
+import { rankEngagement } from "@/lib/engagement";
 
 export const dynamic = "force-dynamic";
 
@@ -34,19 +35,16 @@ export async function GET(request: Request) {
   const bk = await db().from("bookings").select("registrant_id, email, phone").eq("event_id", event.id).eq("session_date", date);
   const bookedEmails = new Set((bk.data ?? []).map((b) => (b.email ?? "").toLowerCase()).filter(Boolean));
   for (const b of bk.data ?? []) if (b.registrant_id) booked.add(b.registrant_id as string);
-  const people = rows.map((a) => {
+  const rows0 = rows.map((a) => {
     const r = a.registrant as unknown as { first_name: string; email: string | null; phone: string | null; source: string };
     const minutes = Math.round(((a.seconds_watched as number) ?? 0) / 60);
     const at_pitch = pitchAt !== null && new Date(a.joined_at as string).getTime() <= pitchAt && new Date(a.last_seen_at as string).getTime() >= pitchAt;
     const messages = msgs.get(a.registrant_id as string) ?? 0;
     const clicked = Boolean(a.cta_clicked_at);
     const isBooked = booked.has(a.registrant_id as string) || (r.email ? bookedEmails.has(r.email.toLowerCase()) : false);
-    const score = 0.4 * Math.min(1, minutes / pitchMin) + 0.25 * (at_pitch ? 1 : 0) + 0.2 * Math.min(1, messages / 5) + 0.15 * (clicked ? 1 : 0);
-    return { registrant_id: a.registrant_id, name: r.first_name, email: r.email, phone: r.phone, source: r.source, minutes, messages, at_pitch, clicked_offer: clicked, booked: isBooked, score: Math.round(score * 100) / 100 };
+    return { registrant_id: a.registrant_id, name: r.first_name, email: r.email, phone: r.phone, source: r.source, minutes, messages, at_pitch, clicked_offer: clicked, booked: isBooked, atPitch: at_pitch, clicked };
   });
-  // Clicked but not booked goes on top when they actually watched (a stray click by someone who never watched is not a lead).
-  const hot = (p: { clicked_offer: boolean; booked: boolean; minutes: number }) => Number(p.clicked_offer && !p.booked && p.minutes >= 5);
-  people.sort((a, b) => hot(b) - hot(a) || b.score - a.score || b.minutes - a.minutes);
+  const people = rankEngagement(rows0, pitchMin).map(({ atPitch: _a, clicked: _c, ...p }) => { void _a; void _c; return p; });
   const summary = { joined: people.length, chatters: people.filter((p) => p.messages > 0).length, avg_minutes: people.length ? Math.round(people.reduce((s, p) => s + p.minutes, 0) / people.length) : 0, stayed_15: people.filter((p) => p.minutes >= 15).length, at_pitch: people.filter((p) => p.at_pitch).length, clicked: people.filter((p) => p.clicked_offer).length, booked: people.filter((p) => p.booked).length };
   return Response.json({ event: event.slug, session_date: date, summary, people }, { headers: { "cache-control": "no-store" } });
 }

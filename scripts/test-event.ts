@@ -83,13 +83,19 @@ if (existing.data) {
   if (sim.data?.length) await db().from("simulated_messages").insert(sim.data.map((m) => ({ ...m, event_id: eventId })));
   console.log(`created ${slug} at ${values.at} ${copy.timezone}, video ${copy.video_seconds}s, ${sim.data?.length ?? 0} simulated messages`);
 }
+// Every moderator can sit at the test event's desk (admins see every event already).
+const mods = ((await db().from("team_members").select("id, email").eq("role", "moderator")).data ?? []) as Array<{ id: string; email: string }>;
+if (mods.length) await db().from("team_assignments").upsert(mods.map((m) => ({ member_id: m.id, event_id: eventId })), { onConflict: "member_id,event_id", ignoreDuplicates: true });
+console.log(`moderators assigned: ${mods.map((m) => m.email).join(", ") || "none"}`);
 console.log(`open link: ${APP}/w/${slug}    admin: ${APP}/admin/events/${slug}    moderate: ${APP}/mod/${slug}`);
 
 if (!values["no-register"]) {
   const res = await fetch(`${APP}/api/register`, {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.REGISTER_SECRET}`, "content-type": "application/json" },
-    body: JSON.stringify({ event: slug, first_name: values.first, email: values.email, source: "zapier" }),
+    // The session date is passed explicitly: production caches the event row for a minute, so right after a restart
+    // the webhook would otherwise register for the old start time's next session.
+    body: JSON.stringify({ event: slug, first_name: values.first, email: values.email, source: "zapier", session_date: new Intl.DateTimeFormat("en-CA", { timeZone: String(copy.timezone), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()) }),
   });
   const j = (await res.json()) as Record<string, unknown>;
   if (!res.ok) throw new Error(`register ${res.status}: ${JSON.stringify(j)}`);

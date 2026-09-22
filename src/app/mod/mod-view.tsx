@@ -9,6 +9,7 @@ import { signOut } from "../login/actions";
 import { mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
+import { rankEngagement } from "@/lib/engagement";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[] };
 type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null };
@@ -19,7 +20,8 @@ type Mentionable = { id: string; name: string; sub?: string };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
 
-const SIDE_TABS: Array<[Exclude<Tab, "chat">, string]> = [["people", "People"], ["team", "Team"], ["engagement", "Engagement"], ["stats", "Stats"]];
+const SIDE_TABS: Array<[Exclude<Tab, "chat">, string]> = [["people", "Attendees"], ["team", "Private Chat"], ["engagement", "Engagement"], ["stats", "Stats"]];
+const SHORT: Record<string, string> = { "Private Chat": "Private", Engagement: "Engage" };
 const clock = (iso: string | number) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const mmss = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}:${String(m).padStart(2, "0")}` : `${m} min`; };
 
@@ -179,12 +181,27 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   }
   const person = (rid?: string | null) => people.find((p) => p.registrant_id === rid);
 
+  // A sent message shows here at once; the poll would otherwise take up to three seconds to bring it back.
+  async function send(body: string, extra: object): Promise<boolean> {
+    const res = await fetch("/api/mod", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: event.slug, date: session.date, action: "reply", body, ...extra }) });
+    const j = (await res.json().catch(() => ({}))) as { error?: string; message?: Wire };
+    if (!res.ok || !j.message) {
+      setError(j.error ?? "That didn't work.");
+      return false;
+    }
+    setError("");
+    const m = j.message;
+    setList((l) => (l.some((x) => x.id === m.id) ? l : trimCrowd([...l, { key: `r${m.id}`, id: m.id, registrantId: null, name: m.author_name, role: "moderator" as const, body: m.body, at: Date.now(), reactions: {}, mentionNames: m.mention_names ?? [], team: m.visibility === "team" }], 300) as Item[]));
+    return true;
+  }
   async function reply(e: React.FormEvent) {
     e.preventDefault();
     const body = text.trim();
     if (!body) return;
     const mentions = picked.filter((p) => body.includes(`@${p.name}`)).map((p) => p.id);
-    if (await act({ action: "reply", body, mentions })) {
+    atBottomRef.current = true;
+    setAtBottom(true);
+    if (await send(body, { mentions })) {
       setText("");
       setPicked([]);
     }
@@ -193,7 +210,14 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
     e.preventDefault();
     const body = teamText.trim();
     if (!body) return;
-    if (await act({ action: "reply", body, team: true })) setTeamText("");
+    if (await send(body, { team: true })) setTeamText("");
+  }
+  // Showing or hiding the crowd, or the mentions filter, lands you at the newest messages, never the top.
+  function toBottomSoon() {
+    atBottomRef.current = true;
+    setAtBottom(true);
+    setPending(0);
+    requestAnimationFrame(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; });
   }
   async function saveName() {
     const n = nameDraft.trim().replace(/\s+/g, " ");
@@ -235,7 +259,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const panes = (which: Exclude<Tab, "chat">) =>
     which === "people" ? <PeoplePane people={people} msgCount={msgCount} confirmBlock={confirmBlock} setConfirmBlock={setConfirmBlock} act={act} edge={edge} />
     : which === "team" ? <TeamPane msgs={teamMsgs} me={name} text={teamText} setText={setTeamText} onSend={sendTeam} scroller={teamScroller} />
-    : which === "engagement" ? <EngagementPane people={people} msgCount={msgCount} />
+    : which === "engagement" ? <EngagementPane people={people} msgCount={msgCount} pitchMinutes={event.ctaAt !== null ? event.ctaAt / 60 : 75} />
     : <StatsPane stats={stats} chatters={msgCount.size} messages={messages} now={now} ctaAt={event.ctaAt} startsAt={session.startsAt} history={history} />;
 
   const tabButton = (key: Tab, label: string, active: boolean, onClick: () => void) => (
@@ -311,16 +335,16 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
 
           <div className="flex border-b border-line lg:hidden">
             {tabButton("chat", "Chat", tab === "chat", () => setTab("chat"))}
-            {SIDE_TABS.map(([k, l]) => tabButton(k, l === "Engagement" ? "Engage" : l, tab === k, () => setTab(k)))}
+            {SIDE_TABS.map(([k, l]) => tabButton(k, SHORT[l] ?? l, tab === k, () => setTab(k)))}
           </div>
 
           <div className={`min-h-0 flex-1 flex-col ${tab === "chat" ? "flex" : "hidden lg:flex"}`}>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-4 py-1.5 text-sm text-muted">
-              <button type="button" onClick={() => setShowSim((s) => !s)} className="rounded-md border border-line px-2.5 py-1 text-[13px] text-muted hover:text-ink">
+              <button type="button" onClick={() => { setShowSim((s) => !s); toBottomSoon(); }} className="rounded-md border border-line px-2.5 py-1 text-[13px] text-muted hover:text-ink">
                 {showSim ? "Hide simulated chat" : "Show simulated chat"}
               </button>
               <label className="flex items-center gap-2 text-[13px] text-muted">
-                <input type="checkbox" checked={onlyMentions} onChange={(e) => setOnlyMentions(e.target.checked)} className="h-4 w-4 accent-brand" />
+                <input type="checkbox" checked={onlyMentions} onChange={(e) => { setOnlyMentions(e.target.checked); toBottomSoon(); }} className="h-4 w-4 accent-brand" />
                 Mentions of me
               </label>
               <span className="ml-auto hidden text-[12px] sm:inline">green rows are real people</span>
@@ -540,20 +564,24 @@ function TeamPane({ msgs, me, text, setText, onSend, scroller }: { msgs: Item[];
   );
 }
 
-function EngagementPane({ people, msgCount }: { people: Person[]; msgCount: Map<string, number> }) {
-  const [sort, setSort] = useState<"minutes" | "messages">("minutes");
-  const rows = people.filter((p) => p.source !== "test").map((p) => ({ ...p, messages: msgCount.get(p.registrant_id) ?? 0 })).sort((a, b) => (sort === "minutes" ? b.minutes - a.minutes : b.messages - a.messages) || b.minutes - a.minutes);
-  const th = (key: "minutes" | "messages", label: string) => (
+function EngagementPane({ people, msgCount, pitchMinutes }: { people: Person[]; msgCount: Map<string, number>; pitchMinutes: number }) {
+  // A leaderboard: the same score the setters' top ten uses after the session, best first.
+  const [sort, setSort] = useState<"score" | "minutes" | "messages">("score");
+  const ranked = rankEngagement(people.filter((p) => p.source !== "test").map((p) => ({ ...p, messages: msgCount.get(p.registrant_id) ?? 0, atPitch: p.at_pitch, clicked: p.clicked_offer })), pitchMinutes);
+  const rows = sort === "score" ? ranked : [...ranked].sort((a, b) => (sort === "minutes" ? b.minutes - a.minutes : b.messages - a.messages) || b.score - a.score);
+  const th = (key: "score" | "minutes" | "messages", label: string) => (
     <th className="py-2 pr-3 text-right"><button type="button" onClick={() => setSort(key)} className={`text-[11px] font-bold uppercase tracking-wide ${sort === key ? "text-ink" : "text-muted hover:text-ink"}`}>{label}{sort === key ? " ▾" : ""}</button></th>
   );
   return (
     <table className="w-full text-sm">
-      <thead><tr className="border-b border-line text-left"><th className="py-2 pl-4 pr-3 text-[11px] font-bold uppercase tracking-wide text-muted">Name</th>{th("minutes", "Min")}{th("messages", "Msgs")}<th className="py-2 pr-3 text-center text-[11px] font-bold uppercase tracking-wide text-muted">Pitch</th><th className="py-2 pr-4 text-center text-[11px] font-bold uppercase tracking-wide text-muted">Clicked</th></tr></thead>
+      <thead><tr className="border-b border-line text-left"><th className="py-2 pl-4 pr-2 text-[11px] font-bold uppercase tracking-wide text-muted">#</th><th className="py-2 pr-3 text-[11px] font-bold uppercase tracking-wide text-muted">Name</th>{th("score", "Score")}{th("minutes", "Min")}{th("messages", "Msgs")}<th className="py-2 pr-3 text-center text-[11px] font-bold uppercase tracking-wide text-muted">Pitch</th><th className="py-2 pr-4 text-center text-[11px] font-bold uppercase tracking-wide text-muted">Clicked</th></tr></thead>
       <tbody>
-        {rows.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-muted">Nobody has joined yet.</td></tr>}
+        {rows.length === 0 && <tr><td colSpan={7} className="py-6 text-center text-muted">Nobody has joined yet.</td></tr>}
         {rows.map((p) => (
           <tr key={p.registrant_id} className={`border-b border-line/60 ${p.in_room ? "" : "opacity-60"}`}>
-            <td className="py-1.5 pl-4 pr-3"><span className="font-bold">{p.first_name}</span><span className="ml-1.5 text-[11px] text-muted">{p.in_room ? "" : "left"}</span></td>
+            <td className="py-1.5 pl-4 pr-2 text-muted tabular-nums">{p.rank}</td>
+            <td className="py-1.5 pr-3"><span className="font-bold">{p.first_name}</span><span className="ml-1.5 text-[11px] text-muted">{p.in_room ? "" : "left"}</span></td>
+            <td className="py-1.5 pr-3 text-right font-bold tabular-nums">{Math.round(p.score * 100)}</td>
             <td className="py-1.5 pr-3 text-right tabular-nums">{p.minutes}</td>
             <td className="py-1.5 pr-3 text-right tabular-nums">{p.messages}</td>
             <td className="py-1.5 pr-3 text-center">{p.at_pitch ? <span className="text-emerald-400">✓</span> : <span className="text-muted">–</span>}</td>
