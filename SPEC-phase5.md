@@ -1,6 +1,6 @@
 # Capability Map, phase 5: the moderator's desk and the numbers behind it
 
-Status: **draft, 2026-09-21 evening, awaiting William's answers** (review page: https://claude.ai/artifact/CrNrgCkWPy7vn8mVHK64Mp).
+Status: **answered 2026-09-21 evening** (review page: https://claude.ai/artifact/CrNrgCkWPy7vn8mVHK64Mp; desk before/after render: https://claude.ai/artifact/2mmpEwA3FxVrSjAonmQhaJ). William answered yes to Q1–Q11, Q13–Q15, Q17 as recommended; **Q12 (crowd reactions on real messages) is dropped.** Awaiting "go" on the render before code.
 Written from William's notes after moderating the first live session on the platform. Nothing here is built
 until each line is confirmed. The session on 2026-09-21 is the checkpoint: 250 registered, 73 joined, peak 41,
 36 live at the pitch minute, 19 offer clicks, zero broken links.
@@ -31,7 +31,7 @@ $8,000 a day in ads and about $30,000 a day in revenue ride on the 5 PM session.
 | `mod-desk` | The moderator view as a real desk: a synced video panel, tabs for Chat, People, Team chat, Engagement, Stats; who else is moderating and what they are on. | desk | `mod-fixes` | 5.1 |
 | `intel-feed` | Offer clicks and other moments posted to #autoweb-intel as they happen; Brandon's room count from our numbers, not the site's join events. | desk (Slack + leadogo) | `analytics` | 5.1 |
 | `bookings-loop` | Bookings matched to the session (iClosed via leadogo): live booking tracker, book rate against live-at-pitch, projected bookings per weekday that learn from history, the post-session top-10 engagement report to #sales-reporting. | desk (leadogo) | `intel-feed` | 5.2 |
-| `crowd-realism` | Katherine AI answering replay questions; the simulated crowd reacting to real people's messages. Behind per-event switches. | room | `mod-fixes` | 5.3 |
+| `crowd-realism` | Katherine AI answering replay questions; the people-count decline curve (Phase B). Behind per-event switches. Crowd reactions on real messages: dropped by William. | room | `mod-fixes` | 5.3 |
 
 Build order: `mod-fixes` → `mod-desk` and `intel-feed` in parallel → `bookings-loop` → `crowd-realism`.
 
