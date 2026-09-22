@@ -1,6 +1,6 @@
 # Capability Map, phase 5: the moderator's desk and the numbers behind it
 
-Status: **draft, 2026-09-21 evening, awaiting William's answers** (review page: see the "Phase 5 Review" artifact).
+Status: **draft, 2026-09-21 evening, awaiting William's answers** (review page: https://claude.ai/artifact/CrNrgCkWPy7vn8mVHK64Mp).
 Written from William's notes after moderating the first live session on the platform. Nothing here is built
 until each line is confirmed. The session on 2026-09-21 is the checkpoint: 250 registered, 73 joined, peak 41,
 36 live at the pitch minute, 19 offer clicks, zero broken links.
