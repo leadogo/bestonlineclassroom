@@ -44,7 +44,9 @@ export async function GET(request: Request) {
     const score = 0.4 * Math.min(1, minutes / pitchMin) + 0.25 * (at_pitch ? 1 : 0) + 0.2 * Math.min(1, messages / 5) + 0.15 * (clicked ? 1 : 0);
     return { registrant_id: a.registrant_id, name: r.first_name, email: r.email, phone: r.phone, source: r.source, minutes, messages, at_pitch, clicked_offer: clicked, booked: isBooked, score: Math.round(score * 100) / 100 };
   });
-  people.sort((a, b) => Number(b.clicked_offer && !b.booked) - Number(a.clicked_offer && !a.booked) || b.score - a.score || b.minutes - a.minutes);
+  // Clicked but not booked goes on top when they actually watched (a stray click by someone who never watched is not a lead).
+  const hot = (p: { clicked_offer: boolean; booked: boolean; minutes: number }) => Number(p.clicked_offer && !p.booked && p.minutes >= 5);
+  people.sort((a, b) => hot(b) - hot(a) || b.score - a.score || b.minutes - a.minutes);
   const summary = { joined: people.length, chatters: people.filter((p) => p.messages > 0).length, avg_minutes: people.length ? Math.round(people.reduce((s, p) => s + p.minutes, 0) / people.length) : 0, stayed_15: people.filter((p) => p.minutes >= 15).length, at_pitch: people.filter((p) => p.at_pitch).length, clicked: people.filter((p) => p.clicked_offer).length, booked: people.filter((p) => p.booked).length };
   return Response.json({ event: event.slug, session_date: date, summary, people }, { headers: { "cache-control": "no-store" } });
 }
