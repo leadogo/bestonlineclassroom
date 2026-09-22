@@ -95,6 +95,18 @@ export function roomState(s: Schedule, now: Date = new Date(), date?: string | n
   return { state, session, offsetSeconds };
 }
 
+/** Among several webinars: the one running right now, otherwise the one whose next session starts first. Null when there are none. */
+export function pickRunningOrNext<T extends { timezone: string; start_time: string; video_seconds: number | null; days?: number[] | null }>(events: T[], now: Date = new Date()): T | null {
+  let best: { event: T; running: boolean; start: number } | null = null;
+  for (const e of events) {
+    const s = currentOrNextSession(scheduleOf(e), now);
+    const running = s.start.getTime() <= now.getTime() && now.getTime() < s.end.getTime();
+    const cand = { event: e, running, start: s.start.getTime() };
+    if (!best || (cand.running && !best.running) || (cand.running === best.running && cand.start < best.start)) best = cand;
+  }
+  return best?.event ?? null;
+}
+
 /** The Schedule for an `events` row (`start_time` is Postgres `time`: "17:00:00" or "17:00"). */
 export function scheduleOf(event: { timezone: string; start_time: string; video_seconds: number | null; days?: number[] | null }): Schedule {
   const m = /^(\d{1,2}):(\d{2})/.exec(event.start_time);

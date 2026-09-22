@@ -10,6 +10,7 @@ import { buildRoom } from "@/lib/room-props";
 import { getSimulatedRows } from "@/lib/simulated";
 import { logClick } from "@/lib/clicks";
 import { headers } from "next/headers";
+import { pickRunningOrNext } from "@/lib/daily-schedule";
 import { clientIp, ipBlocked } from "@/lib/ip";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,13 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const r = TOKEN_RE.test(token) ? await registrantByToken(token).catch(() => null) : null;
   if (!r) {
     after(() => logClick({ path: "j", outcome: "invalid", token, userAgent: ua }));
+    // A real-looking token nobody holds any more (an old email after a cleanup): into the webinar as a guest
+    // rather than a wall. Garbage in the address still gets the page below.
+    if (TOKEN_RE.test(token)) {
+      const { data } = await db().from("events").select("slug, timezone, start_time, video_seconds, days");
+      const target = pickRunningOrNext((data ?? []) as Array<{ slug: string; timezone: string; start_time: string; video_seconds: number | null; days: number[] }>);
+      if (target) redirect(`/w/${target.slug}?src=oldlink`);
+    }
     return (
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-sm">

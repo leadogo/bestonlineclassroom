@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zoned } from "./tz.ts";
-import { AILG_R, currentOrNextSession, fourZones, nextSession, roomState, scheduleOf, sessionFor } from "./daily-schedule.ts";
+import { AILG_R, currentOrNextSession, fourZones, nextSession, pickRunningOrNext, roomState, scheduleOf, sessionFor } from "./daily-schedule.ts";
 
 const S = AILG_R;
 const mt = (y: number, m: number, d: number, h: number, min = 0, sec = 0) => new Date(zoned(y, m, d, h, min, S.timezone).getTime() + sec * 1000);
@@ -85,6 +85,16 @@ test("weekdays: a Tue/Thu schedule skips the other days everywhere", () => {
   assert.equal(sessionFor(tt, "2026-09-24")?.date, "2026-09-24");
   assert.equal(roomState(tt, mt(2026, 9, 23, 18), "2026-09-23").session.date, "2026-09-24", "a registrant dated an off day is shown the next session");
   assert.equal(currentOrNextSession(tt, mt(2026, 9, 24, 17, 30)).date, "2026-09-24", "Thursday's room while it runs");
+});
+
+test("pickRunningOrNext: the running webinar wins, otherwise the earliest next start", () => {
+  const five = { slug: "five", timezone: "America/Edmonton", start_time: "17:00:00", video_seconds: 8386, days: [0, 1, 2, 3, 4, 5, 6] };
+  const noon = { slug: "noon", timezone: "America/Edmonton", start_time: "12:00:00", video_seconds: 3600, days: [0, 1, 2, 3, 4, 5, 6] };
+  assert.equal(pickRunningOrNext([five, noon], mt(2026, 9, 21, 17, 30))?.slug, "five", "five is running at 5:30 PM");
+  assert.equal(pickRunningOrNext([five, noon], mt(2026, 9, 21, 12, 10))?.slug, "noon", "noon is running at 12:10");
+  assert.equal(pickRunningOrNext([five, noon], mt(2026, 9, 21, 14, 0))?.slug, "five", "at 2 PM the next start is 5 PM today");
+  assert.equal(pickRunningOrNext([five, noon], mt(2026, 9, 21, 20, 0))?.slug, "noon", "at 8 PM the next start is noon tomorrow");
+  assert.equal(pickRunningOrNext([], mt(2026, 9, 21, 20, 0)), null);
 });
 
 test("scheduleOf reads an events row; fourZones is computed from the start", () => {
