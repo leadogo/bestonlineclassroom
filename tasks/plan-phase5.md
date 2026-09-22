@@ -20,7 +20,7 @@ previous build named in every deploy note; the 4 PM canary posts to Slack daily.
 - [ ] D3 Presence: who is on the desk, which tab, replying to whom.
 - [ ] I1 Offer click → Slack intel post (channel confirmed).
 - [ ] I2 leadogo room-count reads /api/metrics; EasyWebinar-era inputs removed.
-- [ ] I3 Daily Tracker fed from the classroom (William, 2026-09-21 10:30 PM; plan in the chat of that night):
+- [x] I3 Daily Tracker fed from the classroom (shipped 2026-09-21 ~11 PM MT: metrics API + leadogo classroom-sync cron every 30 min) (William, 2026-09-21 10:30 PM; plan in the chat of that night):
   metrics API adds `ad_optins` (site opt-ins with an ad in their attribution), `site_optins`, `at_pitch` (concurrent at the pitch instant), keeps `joined`, `peak_live`;
   leadogo classroom sync writes registrants_auto = ad_optins, attendees_auto = peak_live, pitch_live_auto = at_pitch, joined_auto (new column) = joined, for days ≥ 2026-09-21;
   retention = at_pitch ÷ joined; booking % = bookings ÷ at_pitch (exists); SR = peak ÷ opt-ins (exists); today's rates shown once the session ran;

@@ -66,6 +66,7 @@ if (existing.data) {
   const rids = ((await db().from("registrants").select("id").eq("event_id", eventId)).data ?? []).map((r) => r.id as string);
   if (rids.length) {
     await db().from("attendance").delete().in("registrant_id", rids);
+    await db().from("reminder_sends").delete().in("registrant_id", rids);
     await db().from("registrants").update({ blocked_at: null, ghosted_at: null, replay_opened_at: null }).in("id", rids);
   }
   await db().from("chat_messages").delete().eq("event_id", eventId);
