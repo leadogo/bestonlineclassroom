@@ -38,3 +38,11 @@ previous build named in every deploy note; the 4 PM canary posts to Slack daily.
 - [x] R1 Katherine AI replay reply behind `events.katherine_enabled`, test-run first.
 - [x] R2 People-count decline curve behind `events.people_curve_enabled`, test-run first (Q12 crowd reactions: dropped).
 - Checkpoint CP-5.3: a full test-run walk with both on; then on for ailg-r in the window; watched live the next day.
+
+## Round three notes (2026-09-22 10:40 AM, William)
+- [x] Second moderator (kabrallw@gmail.com) seated at test-run; test events seat every moderator.
+- [x] Toggling the crowd or the mentions filter lands at the newest messages.
+- [x] Replies show on the desk at once (the poll took up to 3 s to bring them back); attendees still get them within their 3-second poll by design (load).
+- [x] Tabs renamed Attendees / Private Chat.
+- [x] Engagement is a leaderboard on the shared score (lib/engagement.ts), same order as the 8:15 PM top ten.
+- [x] Daily canary at 3:45 PM MT (api/cron/canary) → one line in #autoweb-intel. Sentry: proposed for next week (room-lane change, needs its own walk).

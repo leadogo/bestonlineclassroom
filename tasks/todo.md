@@ -111,4 +111,5 @@
 ## Phase 5 (2026-09-21 night)
 - [x] 5.0 mod-fixes shipped: mention names, crowd cap, moderator links + booking button, rename pencil, replay opens at 20:00, "Now playing", after-start reminder.
 - [x] 5.1 desk, 5.2 bookings loop, 5.3 Katherine + crowd curve (switches), intel-feed: all shipped 2026-09-22 ~00:30 MT.
-- [ ] William's one big walk (test-run 9:30 AM MT, checklist "Test run seven"); then flip switches for ailg-r in a morning window if he says so.
+- [ ] William's one big walk (test-run rounds 9:30 / 10:30 / 11:15 AM MT Sep 22, checklist "Test run seven"); then flip switches for ailg-r in a morning window if he says so.
+- [ ] Sentry (or Vercel error tracking) for the classroom, next week, with its own test-run walk.
