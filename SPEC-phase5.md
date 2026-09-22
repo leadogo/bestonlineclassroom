@@ -47,6 +47,11 @@ Build order: `mod-fixes` → `mod-desk` and `intel-feed` in parallel → `bookin
   moderator and admin messages render as links that open in a new tab. Attendee messages unchanged.
 - **Replay at 8 PM.** Today the replay gate lifts at the session's end (7:19 PM). After: `events.replay_opens_at`
   (local time, default 20:00). The replay page says "Available tonight at 8 PM" until then.
+- **The word "live" (Jeremy, 2026-09-21).** A recording must not be labelled LIVE. Four client-facing strings change, nothing else:
+  top bar pill "LIVE 1:16:02" → "Now playing 1:16:02" (red pill, white dot, clock and count unchanged); pre-start pill "Starting soon" → "Starts at 5:00 PM MT" (from the event's schedule);
+  replay wait screen "Your session is live right now" / "Join the live session" → "Session is in progress now" / "Enter the session";
+  replay page "Register for the next live session" (footer link and the expired subtitle default) → "Register for the next session".
+  The 5:03 PM email says "Your session has started", never "we're live". Internal admin/desk "Live" badges stay.
 - **Display name pencil.** In the moderator header, next to the name: edit, save; every message by that team
   member (past and future, all sessions unless William says this session only) shows the new name.
 
