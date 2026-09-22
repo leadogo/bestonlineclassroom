@@ -39,7 +39,11 @@ export async function GET(request: Request) {
     const session = sessionFor(scheduleOf(event), row.session_date);
     const pitchAt = session && event.cta_at_seconds !== null ? session.start.getTime() + event.cta_at_seconds * 1000 : null;
     const at_pitch = pitchAt === null ? null : real.filter((a) => new Date(a.joined_at as string).getTime() <= pitchAt && new Date(a.last_seen_at as string).getTime() >= pitchAt).length;
-    sessions.push({ ...row, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, at_pitch, peak_live, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
+    const nowMs = Date.now();
+    const in_room = real.filter((a) => nowMs - new Date(a.last_seen_at as string).getTime() < 120_000).length;
+    const site_joined = real.filter((a) => (a.registrant as unknown as { source: string }).source === "site").length;
+    const booked = await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", row.session_date);
+    sessions.push({ ...row, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, site_joined, in_room, at_pitch, peak_live, booked: booked.count ?? 0, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
   }
   return Response.json({ event: event.slug, sessions }, { headers: { "cache-control": "no-store" } });
 }

@@ -8,6 +8,7 @@ import { TOKEN_RE } from "@/lib/registrants";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { postToChatChannel } from "@/lib/slack";
 import { tagNow } from "@/lib/tagging";
+import { katherineReply } from "@/lib/katherine";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,11 @@ const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offs
 
 async function registrant(token: string) {
   if (!TOKEN_RE.test(token)) return null;
-  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days)").eq("token", token).maybeSingle();
+  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days, katherine_enabled)").eq("token", token).maybeSingle();
   if (!data) return null;
-  const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[] } | null;
+  const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean } | null;
   const start = ev ? sessionFor(scheduleOf(ev), data.session_date as string)?.start ?? null : null;
-  return { ...data, sessionStart: start ? start.toISOString() : null };
+  return { ...data, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled) };
 }
 
 /** GET ?token=&after=<id>&since=<iso>: new real messages after `after`, and deletes/reactions since `since`. */
@@ -96,5 +97,7 @@ export async function POST(request: Request) {
   }
   if (r.source !== "test" && !r.ghosted_at) after(() => postToChatChannel(slackLine(r.first_name, r.email, body)));
   after(() => tagNow(r.id, "asked_question"));
+  // Katherine answers the replay question (switch per event), a few seconds later, once per person.
+  if (r.katherine && !r.ghosted_at) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name }, body, offset));
   return Response.json({ message: ins.data });
 }

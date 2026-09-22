@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 import type { SimulatedRow } from "@/lib/chat";
 import { ChatPanel, type Mentionable } from "./ChatPanel";
 import { PeoplePanel } from "./PeoplePanel";
+import { crowdNames, crowdShare } from "@/lib/crowd";
 
-export function Panel({ token, registrantId, firstName, hostName, simulatedNames, simulated, live, expected, onCount, onRemoved }: { token: string; registrantId: string; firstName: string; hostName: string; simulatedNames: string[]; simulated: SimulatedRow[]; live: boolean; expected: () => number; onCount: (n: number) => void; onRemoved: () => void }) {
+export function Panel({ token, registrantId, firstName, hostName, simulatedNames, crowd, simulated, live, expected, onCount, onRemoved }: { token: string; registrantId: string; firstName: string; hostName: string; simulatedNames: string[]; crowd: { curve: boolean; pitchAt: number | null; seconds: number }; simulated: SimulatedRow[]; live: boolean; expected: () => number; onCount: (n: number) => void; onRemoved: () => void }) {
   const [tab, setTab] = useState<"chat" | "people">("chat");
   const [unread, setUnread] = useState(0);
   const [real, setReal] = useState<string[]>([]);
@@ -35,8 +36,16 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
     };
   }, [live, token]);
 
+  // The crowd thins on Jeremy's curve when the event's switch is on; re-read every half minute so names roll off.
+  const [, setBeat] = useState(0);
+  useEffect(() => {
+    if (!crowd.curve || !live) return;
+    const id = setInterval(() => setBeat((b) => b + 1), 30_000);
+    return () => clearInterval(id);
+  }, [crowd.curve, live]);
+  const shownSim = crowd.curve && live ? crowdNames(simulatedNames, crowdShare(expected(), crowd.pitchAt, crowd.seconds)) : simulatedNames;
   const realNames = real.includes(firstName) ? real : [firstName, ...real];
-  const count = 1 + mods.length + realNames.length + simulatedNames.length;
+  const count = 1 + mods.length + realNames.length + shownSim.length;
   useEffect(() => onCount(count), [count, onCount]);
 
   return (
@@ -55,7 +64,7 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
         <ChatPanel token={token} registrantId={registrantId} people={people} onRemoved={onRemoved} simulated={simulated} live={live} expected={expected} visible={tab === "chat"} onUnread={() => setUnread((n) => n + 1)} />
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "people"}>
-        <PeoplePanel hostName={hostName} moderators={mods} you={firstName} realNames={realNames} simulatedNames={simulatedNames} />
+        <PeoplePanel hostName={hostName} moderators={mods} you={firstName} realNames={realNames} simulatedNames={shownSim} />
       </div>
     </aside>
   );

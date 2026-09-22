@@ -33,6 +33,8 @@ export type EventRow = {
   replay_hours: number;
   /** "HH:MM:SS" local, or null = when the session ends. */
   replay_opens_at: string | null;
+  katherine_enabled: boolean;
+  people_curve_enabled: boolean;
   replay_copy: Record<string, unknown>;
   tags: Record<string, string>;
   reminder_rules: Array<{ key: string; minutes_before: number; subject: string; body: string }>;

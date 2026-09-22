@@ -88,6 +88,7 @@ export async function GET(request: Request) {
     at_pitch: pitchAt !== null && pitchAt <= nowMs ? real.filter((p) => p.at_pitch).length : null,
     clicked: real.filter((p) => p.clicked_offer).length,
     stayed_15: real.filter((p) => p.minutes >= 15).length,
+    booked: (await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", s.event.id).eq("session_date", s.session.date)).count ?? 0,
   };
   const team = ((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => ({ id: `m:${m.id}`, name: m.display_name as string }));
   const presence = await db().from("team_presence").select("member_id, tab, replying_to, last_seen_at").eq("event_id", s.event.id).eq("session_date", s.session.date).gte("last_seen_at", new Date(nowMs - 60_000).toISOString());

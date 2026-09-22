@@ -99,6 +99,17 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             <Field label="Replay opens at" name="replay_opens_at" type="time" value={(event.replay_opens_at ?? "").slice(0, 5)} hint="Local time on the session's day. Blank = the moment the session ends. 20:00 keeps the room clean and matches the replay emails." />
           </div>
           <Field label="Replay chapters" name="chapters" rows={7} value={chaptersText(event.chapters ?? [])} hint="One per line: time then label, e.g. 1:15:00 Offer and next steps" />
+            <div className="flex flex-col gap-2 rounded-xl border border-line p-4">
+              <p className="text-sm font-bold">Switches (off by default; try them on Test run first)</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="katherine" defaultChecked={event.katherine_enabled} className="h-4 w-4 accent-brand" />
+                Katherine AI answers &ldquo;is there a replay?&rdquo; once per person: &ldquo;A replay will be sent tonight after the event!&rdquo;
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="people_curve" defaultChecked={event.people_curve_enabled} className="h-4 w-4 accent-brand" />
+                The crowd in the People tab thins as the session runs (85% by 15 min, 80% at the pitch, 60% at 1:45, 40% at the end)
+              </label>
+            </div>
         </ActionForm>
       </Section>
 

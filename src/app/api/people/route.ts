@@ -9,7 +9,7 @@ const WINDOW_MS = 120_000;
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token") ?? "";
   if (!TOKEN_RE.test(token)) return Response.json({ error: "Bad token" }, { status: 400 });
-  const reg = await db().from("registrants").select("event_id, session_date").eq("token", token).maybeSingle();
+  const reg = await db().from("registrants").select("event_id, session_date, event:events(katherine_enabled)").eq("token", token).maybeSingle();
   if (reg.error || !reg.data) return Response.json({ error: "Not found" }, { status: 404 });
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
   const { data, error } = await db()
@@ -27,5 +27,6 @@ export async function GET(request: Request) {
   const people = rows.map((r) => ({ id: r.id, name: r.first_name, sub: `joined ${new Date(r.joined_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` }));
   const mods = await db().from("team_presence").select("member_id, member:team_members!inner(display_name)").eq("event_id", reg.data.event_id).eq("session_date", reg.data.session_date).gte("last_seen_at", since);
   const moderators = (mods.data ?? []).map((m) => ({ id: `m:${m.member_id}`, name: (m.member as unknown as { display_name: string }).display_name }));
+  if ((reg.data.event as unknown as { katherine_enabled?: boolean } | null)?.katherine_enabled) moderators.push({ id: "m:katherine", name: "Katherine AI" });
   return Response.json({ names, people, moderators }, { headers: { "cache-control": "no-store" } });
 }

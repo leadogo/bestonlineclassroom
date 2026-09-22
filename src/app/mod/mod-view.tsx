@@ -13,7 +13,8 @@ import { Avatar } from "@/components/room/PeoplePanel";
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[] };
 type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null };
 type Desk = { member_id: string; name: string; tab: string | null; replying_to: string | null; last_seen_at: string };
-type Stats = { registered: number; joined: number; in_room: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number };
+type Stats = { registered: number; joined: number; in_room: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
+type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number };
 type Mentionable = { id: string; name: string; sub?: string };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
@@ -22,7 +23,7 @@ const SIDE_TABS: Array<[Exclude<Tab, "chat">, string]> = [["people", "People"], 
 const clock = (iso: string | number) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const mmss = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}:${String(m).padStart(2, "0")}` : `${m} min`; };
 
-export function ModView({ member, event, session, serverNow, backHref }: { member: { id: string; display_name: string; email: string }; event: { slug: string; title: string; iconUrl: string | null; hostName: string; videoUrl: string | null; ctaAt: number | null }; session: { date: string; startsAt: number; endsAt: number }; serverNow: number; backHref: string }) {
+export function ModView({ member, event, session, serverNow, backHref }: { member: { id: string; display_name: string; email: string }; event: { slug: string; title: string; iconUrl: string | null; hostName: string; videoUrl: string | null; ctaAt: number | null; katherine: boolean }; session: { date: string; startsAt: number; endsAt: number }; serverNow: number; backHref: string }) {
   const skew = useRef(0);
   const router = useRouter();
   const [list, setList] = useState<Item[]>([]);
@@ -48,6 +49,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const [tab, setTab] = useState<Tab>("chat");
   const [sideTab, setSideTab] = useState<Exclude<Tab, "chat">>("people");
   const [teamUnread, setTeamUnread] = useState(0);
+  const [history, setHistory] = useState<HistoryRow[] | null>(null);
   const [monitorOpen, setMonitorOpen] = useState(true);
   const cursor = useRef({ after: 0, since: "" });
   const sim = useRef<{ rows: SimulatedRow[]; next: number }>({ rows: [], next: 0 });
@@ -61,6 +63,10 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const offset = useCallback(() => (Date.now() + skew.current - session.startsAt) / 1000, [session.startsAt]);
   const offsetNow = (now - session.startsAt) / 1000;
   const live = now >= session.startsAt && now < session.endsAt;
+
+  useEffect(() => {
+    fetch(`/api/mod/history?event=${event.slug}&today=${session.date}`, { cache: "no-store" }).then((r) => r.json()).then((j: { sessions?: HistoryRow[] }) => setHistory(j.sessions ?? [])).catch(() => setHistory([]));
+  }, [event.slug, session.date]);
 
   useEffect(() => {
     skew.current = serverNow - Date.now();
@@ -230,7 +236,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
     which === "people" ? <PeoplePane people={people} msgCount={msgCount} confirmBlock={confirmBlock} setConfirmBlock={setConfirmBlock} act={act} edge={edge} />
     : which === "team" ? <TeamPane msgs={teamMsgs} me={name} text={teamText} setText={setTeamText} onSend={sendTeam} scroller={teamScroller} />
     : which === "engagement" ? <EngagementPane people={people} msgCount={msgCount} />
-    : <StatsPane stats={stats} chatters={msgCount.size} messages={messages} now={now} ctaAt={event.ctaAt} startsAt={session.startsAt} />;
+    : <StatsPane stats={stats} chatters={msgCount.size} messages={messages} now={now} ctaAt={event.ctaAt} startsAt={session.startsAt} history={history} />;
 
   const tabButton = (key: Tab, label: string, active: boolean, onClick: () => void) => (
     <button key={key} type="button" onClick={() => { onClick(); if (key === "team") setTeamUnread(0); }} className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 px-2 text-[15px] ${active ? "border-b-2 border-brand font-bold text-ink" : "text-muted hover:text-ink"} focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand`}>
@@ -280,9 +286,15 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         </form>
       </header>
 
-      {desk.length > 0 && (
+      {(desk.length > 0 || event.katherine) && (
         <div className="flex items-center gap-2 overflow-x-auto border-b border-line px-4 py-1.5 text-[13px] text-muted">
           <span className="shrink-0">On the desk:</span>
+          {event.katherine && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-cta/60 py-0.5 pl-1 pr-2.5 text-ink" title="Answers the replay question once per person">
+              <Avatar name="Katherine AI" size="h-5 w-5 text-[9px]" />
+              Katherine AI<span className="text-muted">auto · replay questions</span>
+            </span>
+          )}
           {desk.map((d) => (
             <span key={d.member_id} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-panel py-0.5 pl-1 pr-2.5 text-ink" title={d.last_seen_at}>
               <Avatar name={d.name} size="h-5 w-5 text-[9px]" />
@@ -323,6 +335,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                     <div className="flex items-baseline gap-2">
                       <span className={`font-bold ${m.role === "moderator" ? "text-brand" : m.role === "simulated" ? "text-muted" : ""}`}>{m.name}</span>
                       {m.role === "simulated" && <span className="text-xs text-muted">simulated</span>}
+                      {m.name === "Katherine AI" && <span className="rounded bg-cta/20 px-1.5 text-[11px] font-bold text-cta">auto</span>}
                       {m.role === "attendee" && person(m.registrantId) && <span className="text-xs text-muted">{person(m.registrantId)!.source} · {person(m.registrantId)!.minutes} min</span>}
                       {m.ghost && <span className="rounded bg-panel px-1.5 text-xs text-muted" title="Only they can see this">ghost</span>}
                       <span className="ml-auto text-xs text-muted tabular-nums">{clock(m.at)}</span>
@@ -552,7 +565,7 @@ function EngagementPane({ people, msgCount }: { people: Person[]; msgCount: Map<
   );
 }
 
-function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt }: { stats: Stats | null; chatters: number; messages: number; now: number; ctaAt: number | null; startsAt: number }) {
+function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history }: { stats: Stats | null; chatters: number; messages: number; now: number; ctaAt: number | null; startsAt: number; history: HistoryRow[] | null }) {
   if (!stats) return <p className="py-6 text-center text-sm text-muted">Loading…</p>;
   const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : "–");
   const untilPitch = ctaAt !== null ? Math.max(0, Math.round((startsAt + ctaAt * 1000 - now) / 60000)) : null;
@@ -573,7 +586,18 @@ function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt }: { stats:
       {tile(stats.clicked, "offer clicks")}
       {tile(chatters, `chatters · ${messages} messages`)}
       {tile(stats.stayed_15, "stayed 15+ min")}
-      <div className="col-span-2 rounded-xl border border-dashed border-line px-3 py-2.5 text-xs text-muted">Bookings and the projection arrive with the bookings loop (5.2).</div>
+      {tile(stats.booked, `booked${stats.at_pitch ? ` · ${pct(stats.booked, stats.at_pitch)} of those at the pitch` : ""}`, false, "from iClosed, via leadogo, within the half hour")}
+      {(() => {
+        // Projection: tonight's at-the-pitch count × the book rate of past sessions, this weekday once it has four, else all.
+        if (!history) return tile("…", "projected bookings");
+        const wd = new Date(startsAt).getDay();
+        const same = history.filter((h) => h.weekday === wd && h.at_pitch > 0);
+        const pool = same.length >= 4 ? same : history.filter((h) => h.at_pitch > 0);
+        const sumPitch = pool.reduce((s, h) => s + h.at_pitch, 0);
+        const rate = sumPitch > 0 ? pool.reduce((s, h) => s + h.booked, 0) / sumPitch : null;
+        const base = stats.at_pitch ?? stats.in_room;
+        return rate === null ? tile("–", "projected bookings", false, "no past sessions with bookings yet") : tile(`≈ ${Math.round(base * rate)}`, "projected bookings", true, `${Math.round(rate * 100)}% of ${stats.at_pitch !== null ? "those at the pitch" : "the room now"} · ${same.length >= 4 ? "this weekday" : "all days"}, ${pool.length} session${pool.length === 1 ? "" : "s"}`);
+      })()}
     </div>
   );
 }

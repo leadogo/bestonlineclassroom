@@ -47,6 +47,8 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     end_url: str(fd, "end_url", 500) || event.end_url,
     replay_hours: Number.isFinite(replay_hours) && replay_hours >= 0 ? Math.floor(replay_hours) : 72,
     replay_opens_at: replay_opens_at ? `${replay_opens_at}:00` : null,
+    katherine_enabled: fd.get("katherine") === "on",
+    people_curve_enabled: fd.get("people_curve") === "on",
     chapters: parseChapters(str(fd, "chapters", 4000)),
     days: [0, 1, 2, 3, 4, 5, 6].filter((d) => fd.get(`day_${d}`) === "on"),
     host_tagline: str(fd, "host_tagline", 120) || null,

@@ -32,6 +32,8 @@ export type RoomProps = {
   endUrl: string;
   params: Record<string, string>;
   simulatedNames: string[];
+  /** The People-tab crowd thins over the session when the event's switch is on (lib/crowd.ts). */
+  crowd: { curve: boolean; pitchAt: number | null; seconds: number };
   sessionDate: string;
   preview: boolean;
   zones: Array<[string, string]>;
@@ -100,6 +102,7 @@ export function buildRoom(event: EventRow, r: Registrant, sp: Record<string, str
       endUrl: withParams(event.end_url, params),
       params,
       simulatedNames: event.simulated_names ?? [],
+      crowd: { curve: Boolean(event.people_curve_enabled), pitchAt: event.cta_at_seconds ?? null, seconds },
       sessionDate: rejoinDate ?? r.session_date,
       preview,
       zones: fourZones(rs.session),
