@@ -12,7 +12,7 @@ import { tagNow } from "@/lib/tagging";
 export const dynamic = "force-dynamic";
 
 const HISTORY = 300;
-const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offset_seconds, reactions, mentions, created_at";
+const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offset_seconds, reactions, mentions, mention_names, created_at";
 
 async function registrant(token: string) {
   if (!TOKEN_RE.test(token)) return null;
@@ -45,8 +45,8 @@ export async function GET(request: Request) {
 
   let updated: Array<{ id: number; reactions: Record<string, number>; deleted: boolean }> = [];
   if (since && after_ > 0) {
-    const u = await db().from("chat_messages").select("id, reactions, deleted_at").eq("event_id", r.event_id).eq("session_date", r.session_date).lte("id", after_).gt("updated_at", since).limit(200);
-    updated = (u.data ?? []).map((m) => ({ id: m.id, reactions: (m.reactions as Record<string, number>) ?? {}, deleted: Boolean(m.deleted_at) }));
+    const u = await db().from("chat_messages").select("id, reactions, deleted_at, author_name").eq("event_id", r.event_id).eq("session_date", r.session_date).lte("id", after_).gt("updated_at", since).limit(200);
+    updated = (u.data ?? []).map((m) => ({ id: m.id, reactions: (m.reactions as Record<string, number>) ?? {}, deleted: Boolean(m.deleted_at), name: m.author_name as string }));
   }
   const own = after_ === 0 ? await mine(r.id, news.map((m) => m.id)) : [];
   return Response.json({ new: news, updated, now: new Date().toISOString(), you: r.id, mine: own }, { headers: { "cache-control": "no-store" } });
@@ -78,15 +78,16 @@ export async function POST(request: Request) {
   // Mentions: registrant ids in this session, or m:<team member id>; anything else is dropped.
   const wanted = Array.isArray(b.mentions) ? b.mentions.map(String).slice(0, 10) : [];
   const mentions: string[] = [];
+  const mention_names: string[] = [];
   if (wanted.length) {
     const rids = wanted.filter((m) => /^[0-9a-f-]{36}$/i.test(m));
     const mids = wanted.filter((m) => /^m:[0-9a-f-]{36}$/i.test(m)).map((m) => m.slice(2));
-    if (rids.length) mentions.push(...((await db().from("registrants").select("id").eq("event_id", r.event_id).eq("session_date", r.session_date).in("id", rids)).data ?? []).map((x) => x.id as string));
-    if (mids.length) mentions.push(...((await db().from("team_members").select("id").in("id", mids)).data ?? []).map((x) => `m:${x.id}`));
+    if (rids.length) for (const x of (await db().from("registrants").select("id, first_name").eq("event_id", r.event_id).eq("session_date", r.session_date).in("id", rids)).data ?? []) { mentions.push(x.id as string); mention_names.push(x.first_name as string); }
+    if (mids.length) for (const x of (await db().from("team_members").select("id, display_name").in("id", mids)).data ?? []) { mentions.push(`m:${x.id}`); mention_names.push(x.display_name as string); }
   }
   const ins = await db()
     .from("chat_messages")
-    .insert({ event_id: r.event_id, session_date: r.session_date, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: r.ghosted_at ? "author" : "all", mentions })
+    .insert({ event_id: r.event_id, session_date: r.session_date, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: r.ghosted_at ? "author" : "all", mentions, mention_names })
     .select(SELECT)
     .single();
   if (ins.error) {

@@ -5,12 +5,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "../login/actions";
-import { mergeUpdates, simulatedCursor, splitMentions, trimList, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
+import { mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 
-type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author"; mentions: string[] };
-type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string };
+type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author"; mentions: string[]; mention_names?: string[] };
+type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null };
 type Mentionable = { id: string; name: string; sub?: string };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean };
 
@@ -28,6 +28,10 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const [confirmBlock, setConfirmBlock] = useState<string | null>(null);
   const [onlyMentions, setOnlyMentions] = useState(false);
   const [edge, setEdge] = useState(true);
+  const [bookingHref, setBookingHref] = useState<string | null>(null);
+  const [name, setName] = useState(member.display_name);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(member.display_name);
   const [mine, setMine] = useState<Set<string>>(new Set());
   const [now, setNow] = useState(serverNow);
   const cursor = useRef({ after: 0, since: "" });
@@ -58,18 +62,20 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
           router.push("/login");
           return;
         }
-        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; team?: Mentionable[]; now: string; edge?: boolean; session_start?: number; session_date?: string };
+        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; team?: Mentionable[]; now: string; edge?: boolean; session_start?: number; session_date?: string; booking_href?: string | null };
         // The session moved (a restart, or the day turned): start over with the right clock.
         if (j.session_start && j.session_start !== session.startsAt && j.session_date === session.date) {
           window.location.reload();
           return;
         }
-        const fresh: Item[] = j.new.map((m) => ({ key: `r${m.id}`, id: m.id, registrantId: m.registrant_id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, deleted: Boolean(m.deleted_at), ghost: m.visibility === "author", mentionsMe: (m.mentions ?? []).includes(`m:${member.id}`) }));
+        const fresh: Item[] = j.new.map((m) => ({ key: `r${m.id}`, id: m.id, registrantId: m.registrant_id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, deleted: Boolean(m.deleted_at), ghost: m.visibility === "author", mentionNames: m.mention_names ?? [], mentionsMe: (m.mentions ?? []).includes(`m:${member.id}`) }));
         setEdge(j.edge !== false);
+        setBookingHref(j.booking_href ?? null);
         if (fresh.length) cursor.current.after = fresh[fresh.length - 1].id!;
         cursor.current.since = j.now;
         if (fresh.length && !atBottomRef.current) setPending((n) => n + fresh.length);
-        setList((l) => trimList([...mergeUpdates(l, j.updated).map((x) => (j.updated.find((u) => u.id === x.id)?.deleted ? { ...x, deleted: true } : x)), ...fresh.filter((f) => !l.some((x) => x.id === f.id))], 600) as Item[]);
+        // Real rows are never trimmed (the moderator needs them all); only the crowd is capped, see trimCrowd.
+        setList((l) => trimCrowd([...mergeUpdates(l, j.updated).map((x) => (j.updated.find((u) => u.id === x.id)?.deleted ? { ...x, deleted: true } : x)), ...fresh.filter((f) => !l.some((x) => x.id === f.id))], 300) as Item[]);
         setPeople(j.people);
         if (j.team) setTeam(j.team);
       } catch {
@@ -98,7 +104,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
       sim.current.next = nextIndex;
       if (!atBottomRef.current) setPending((c) => c + items.length);
       const n = Date.now();
-      setList((l) => trimList([...l, ...items.map((r, i) => ({ key: `s${nextIndex}-${i}`, name: r.name, role: "simulated" as const, body: r.body, at: n - (offset() - r.offset_seconds) * 1000, reactions: {} }))], 600) as Item[]);
+      setList((l) => trimCrowd([...l, ...items.map((r, i) => ({ key: `s${nextIndex}-${i}`, name: r.name, role: "simulated" as const, body: r.body, at: n - (offset() - r.offset_seconds) * 1000, reactions: {} }))], 300) as Item[]);
     }, 1000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,6 +156,24 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const options: Mentionable[] = atWord
     ? [...people.map((p) => ({ id: p.registrant_id, name: p.first_name, sub: p.email_masked })), ...team].filter((p) => p.name.toLowerCase().startsWith(atWord[1].toLowerCase())).slice(0, 8)
     : [];
+  async function saveName() {
+    const n = nameDraft.trim().replace(/\s+/g, " ");
+    if (!n || n === name) { setEditingName(false); return; }
+    if (await act({ action: "rename", name: n })) {
+      const old = name;
+      setName(n);
+      setList((l) => l.map((x) => (x.role === "moderator" && x.name === old ? { ...x, name: n } : x)));
+      setEditingName(false);
+    }
+  }
+  // The booking link, with the one @mentioned person's first name and id when there is exactly one, so their form greets them.
+  function insertBookingLink() {
+    const one = picked.filter((p) => !p.id.startsWith("m:") && text.includes(`@${p.name}`));
+    const href = (one.length === 1 ? people.find((x) => x.registrant_id === one[0].id)?.booking_href : null) ?? bookingHref;
+    if (!href) return;
+    setText((t) => `${t && !/\s$/.test(t) ? `${t} ` : t}${href} `.slice(0, 500));
+    input.current?.focus();
+  }
   function pick(p: Mentionable) {
     setText(text.replace(/@[^@\s]*$/, `@${p.name} `));
     setPicked((l) => (l.some((x) => x.id === p.id) ? l : [...l, p]));
@@ -172,7 +196,21 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold">{event.title}</h1>
           <p className="text-sm text-muted">
-            {session.date}, {live ? `live, ${Math.floor(Math.max(0, offsetNow) / 60)} min in, ` : now < session.startsAt ? "not started. " : "ended. "}{live && <span className="font-bold text-ink tabular-nums">{recent.filter((p) => p.source !== "test").length} in the room</span>}{live && ". "}Replying as <span className="text-ink">{member.display_name}</span>
+            {session.date}, {live ? `live, ${Math.floor(Math.max(0, offsetNow) / 60)} min in, ` : now < session.startsAt ? "not started. " : "ended. "}{live && <span className="font-bold text-ink tabular-nums">{recent.filter((p) => p.source !== "test").length} in the room</span>}{live && ". "}Replying as{" "}
+            {editingName ? (
+              <span className="inline-flex items-center gap-1 align-middle">
+                <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value.slice(0, 40))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveName(); } if (e.key === "Escape") setEditingName(false); }} autoFocus aria-label="Your display name" className="h-7 w-44 rounded-md border border-line bg-panel px-2 text-sm text-ink focus:border-brand focus:outline-none" />
+                <button type="button" onClick={saveName} className="h-7 rounded-md bg-brand px-2 text-xs font-bold text-white">Save</button>
+                <button type="button" onClick={() => setEditingName(false)} className="h-7 px-1 text-xs text-muted hover:text-ink">Cancel</button>
+              </span>
+            ) : (
+              <>
+                <span className="text-ink">{name}</span>
+                <button type="button" onClick={() => { setNameDraft(name); setEditingName(true); }} className="ml-1 inline-grid h-7 w-7 place-items-center rounded-md align-middle text-brand hover:bg-panel" aria-label="Change your display name" title="Change your display name. Every message you have sent updates too.">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                </button>
+              </>
+            )}
           </p>
         </div>
         <a href={`/admin/blocked?event=${event.slug}`} className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-ink">
@@ -217,7 +255,11 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                 <span className="ml-auto text-xs text-muted tabular-nums">{new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
               </div>
               <p className={`whitespace-pre-wrap break-words text-[15px] ${m.deleted ? "line-through" : ""}`}>
-                {splitMentions(m.body).map((part, i) => (part.mention ? <span key={i} className="font-bold text-brand">{part.text}</span> : <span key={i}>{part.text}</span>))}
+                {splitBody(m.body, m.mentionNames, m.role === "moderator").map((part, i) =>
+                  part.kind === "mention" ? <span key={i} className="font-bold text-brand">{part.text}</span>
+                  : part.kind === "link" ? <a key={i} href={part.text.startsWith("www.") ? `https://${part.text}` : part.text} target="_blank" rel="noopener" className="break-all text-brand underline">{part.text}</a>
+                  : <span key={i}>{part.text}</span>,
+                )}
               </p>
               {m.id !== undefined && !m.deleted && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -286,7 +328,13 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
           </ul>
         )}
         <div className="flex items-end gap-2">
-          <input ref={input} value={text} onChange={(e) => setText(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Tab" && options[0]) { e.preventDefault(); pick(options[0]); } }} placeholder={`Reply as ${member.display_name}… type @ to mention`} autoComplete="off" enterKeyHint="send" className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-panel px-3 text-base focus:border-brand focus:outline-none" />
+          {bookingHref && (
+            <button type="button" onClick={insertBookingLink} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-bold text-ink hover:border-brand" title="Insert the booking link. With one person @mentioned it carries their name, so their form greets them.">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5" /></svg>
+              Booking link
+            </button>
+          )}
+          <input ref={input} value={text} onChange={(e) => setText(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Tab" && options[0]) { e.preventDefault(); pick(options[0]); } }} placeholder={`Reply as ${name}… type @ to mention`} autoComplete="off" enterKeyHint="send" className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-panel px-3 text-base focus:border-brand focus:outline-none" />
           <button type="submit" disabled={!text.trim()} className="min-h-11 rounded-xl bg-brand px-4 font-bold text-white disabled:opacity-40">
             Send
           </button>

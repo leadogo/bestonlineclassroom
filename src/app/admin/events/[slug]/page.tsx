@@ -96,6 +96,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             <Field label="Hides at" name="cta_hide" value={secondsText(event.cta_hide_seconds)} hint="h:mm:ss, blank keeps it to the end" />
             <Field label="After the session ends, send people to" name="end_url" value={event.end_url} />
             <Field label="Replay window (hours)" name="replay_hours" type="number" value={String(event.replay_hours)} hint="Counted from the first time a person opens their replay link. 0 = no limit." />
+            <Field label="Replay opens at" name="replay_opens_at" type="time" value={(event.replay_opens_at ?? "").slice(0, 5)} hint="Local time on the session's day. Blank = the moment the session ends. 20:00 keeps the room clean and matches the replay emails." />
           </div>
           <Field label="Replay chapters" name="chapters" rows={7} value={chaptersText(event.chapters ?? [])} hint="One per line: time then label, e.g. 1:15:00 Offer and next steps" />
         </ActionForm>
@@ -143,7 +144,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
         </div>
       </Section>
 
-      <Section id="emails" title="Emails" description={<>The confirmation goes out the moment someone registers, with the calendar invite attached. Reminders go 30 and 15 minutes before the start. Placeholders: {"#FIRST_NAME# #WEBINAR_DATE# #WEBINAR_TIME# #EVENT_LINK# #REPLAY_LINK# #SKOOL_LINK#"}, or {"{{first_name}} {{join_url}}"} style.</>}>
+      <Section id="emails" title="Emails" description={<>The confirmation goes out the moment someone registers, with the calendar invite attached. Reminders go 30 and 15 minutes before the start, and one a few minutes after the start to anyone not in the room yet. Placeholders: {"#FIRST_NAME# #WEBINAR_DATE# #WEBINAR_TIME# #EVENT_LINK# #REPLAY_LINK# #SKOOL_LINK#"}, or {"{{first_name}} {{join_url}}"} style.</>}>
         <div className="flex flex-col gap-8">
           <ActionForm action={bind(saveConfirmation)} submit="Save confirmation">
             <Field label="Confirmation subject" name="subject" value={event.confirmation?.subject ?? ""} placeholder={CONFIRMATION_SUBJECT} hint="Blank keeps the default shown." />
@@ -154,9 +155,13 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             </label>
           </ActionForm>
           <ActionForm action={bind(saveReminders)} submit="Save reminders">
-            {(["before30", "before15", "before5"] as const).map((k) => (
+            {(["before30", "before15", "before5", "started"] as const).map((k) => (
               <div key={k} className="grid gap-3 rounded-xl border border-line p-4 sm:grid-cols-[140px_minmax(0,1fr)]">
-                <Field label="Minutes before" name={`${k}_minutes`} type="number" value={String(rule(k)?.minutes_before ?? (k === "before30" ? 30 : k === "before15" ? 15 : 5))} />
+                {k === "started" ? (
+                  <Field label="Minutes after start" name={`${k}_minutes`} type="number" value={String(Math.abs(rule(k)?.minutes_before ?? -3))} hint="Sent only to people not in the room yet." />
+                ) : (
+                  <Field label="Minutes before" name={`${k}_minutes`} type="number" value={String(rule(k)?.minutes_before ?? (k === "before30" ? 30 : k === "before15" ? 15 : 5))} />
+                )}
                 <div className="flex flex-col gap-3">
                   <Field label="Subject" name={`${k}_subject`} value={rule(k)?.subject ?? ""} placeholder="Blank turns this reminder off" />
                   <Field label="Message" name={`${k}_body`} rows={4} value={rule(k)?.body ?? ""} />
@@ -164,7 +169,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
               </div>
             ))}
           </ActionForm>
-          <EmailSamples slug={slug} defaultTo={me?.email ?? ""} kinds={[["confirmation", "Confirmation"], ["before30", "30 minutes before"], ["before15", "15 minutes before"]]} />
+          <EmailSamples slug={slug} defaultTo={me?.email ?? ""} kinds={[["confirmation", "Confirmation"], ["before30", "30 minutes before"], ["before15", "15 minutes before"], ["started", "After the start"]]} />
         </div>
       </Section>
 

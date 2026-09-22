@@ -31,7 +31,7 @@ export const REPLAY_COPY = {
   after: "Questions? Reply to the email your link came in and a real person answers.",
   expiresLead: "Available for",
   expiredHeadline: "Your replay access has ended",
-  expiredSub: "The recording was available for 72 hours after you first opened it. You can still book your call, or register for the next live session.",
+  expiredSub: "The recording was available for 72 hours after you first opened it. You can still book your call, or register for the next session.",
 };
 
 export type Testimonial = { name: string; brokerage: string; title: string; quote: string; photo: string };

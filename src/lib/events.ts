@@ -31,6 +31,8 @@ export type EventRow = {
   icon_url: string | null;
   chapters: Array<{ at: number; label: string }>;
   replay_hours: number;
+  /** "HH:MM:SS" local, or null = when the session ends. */
+  replay_opens_at: string | null;
   replay_copy: Record<string, unknown>;
   tags: Record<string, string>;
   reminder_rules: Array<{ key: string; minutes_before: number; subject: string; body: string }>;

@@ -253,7 +253,7 @@ export function ReplayExpired({ logoUrl, cta: ctaIn, onClickHref, copy }: { logo
       <p className="text-base text-muted">{REPLAY_COPY.expiredSub}</p>
       {cta && <CtaButton cta={cta} onClick={() => {}} />}
       <a href={onClickHref} className="text-center text-base text-brand underline">
-        Register for the next live session
+        Register for the next session
       </a>
     </main>
   );

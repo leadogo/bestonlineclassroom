@@ -17,7 +17,7 @@ export function TopBar({ title, iconUrl, live, offset, watching, preview }: { ti
           {live ? (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-live px-2 py-0.5 text-xs font-bold tracking-wide text-white">
               <span className="h-1.5 w-1.5 rounded-full bg-white" aria-hidden />
-              LIVE
+              Now playing
               <span className="font-normal tabular-nums text-white/85">{elapsed(offset)}</span>
             </span>
           ) : (

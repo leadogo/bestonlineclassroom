@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canPost, mergeUpdates, simulatedCursor, slackLine, trimList, type ChatItem, splitMentions } from "./chat.ts";
+import { canPost, mergeUpdates, simulatedCursor, slackLine, splitBody, trimCrowd, trimList, type ChatItem, splitMentions } from "./chat.ts";
 
 const rows = [33, 37, 37, 60, 4460].map((o, i) => ({ offset_seconds: o, name: `n${i}`, body: `b${i}` }));
 
@@ -36,12 +36,46 @@ test("posting rule and Slack line", () => {
   assert.equal(trimList(Array.from({ length: 450 }, (_, i) => ({ key: String(i), name: "", role: "simulated" as const, body: "", at: i, reactions: {} }))).length, 400);
 });
 
-test("splitMentions: @Name runs are marked, the rest is plain", () => {
-  assert.deepEqual(splitMentions("hi @Sarah Lee how are you @bob"), [
+test("splitMentions: only the stored names are marked; without names, one word after @", () => {
+  assert.deepEqual(splitMentions("hi @Sarah Lee how are you @bob", ["Sarah Lee"]), [
     { text: "hi ", mention: false },
     { text: "@Sarah Lee", mention: true },
     { text: " how are you @bob", mention: false },
   ]);
+  assert.deepEqual(splitMentions("@Will Great point", ["Will"]), [
+    { text: "@Will", mention: true },
+    { text: " Great point", mention: false },
+  ]);
+  assert.deepEqual(splitMentions("@Will Great point"), [
+    { text: "@Will", mention: true },
+    { text: " Great point", mention: false },
+  ]);
   assert.deepEqual(splitMentions("no mentions"), [{ text: "no mentions", mention: false }]);
   assert.deepEqual(splitMentions("@Ann"), [{ text: "@Ann", mention: true }]);
+  assert.deepEqual(splitMentions("@Willow here", ["Will"]), [{ text: "@Willow here", mention: false }]);
+  assert.deepEqual(splitMentions("mail me@example.com", ["Sarah"]), [{ text: "mail me@example.com", mention: false }]);
+});
+
+test("splitBody: links only when asked, trailing period stays text, mentions still coloured", () => {
+  assert.deepEqual(splitBody("@Priya Here you go: https://bookmoreshowings.com/book?fn=Priya.", ["Priya"], true), [
+    { text: "@Priya", kind: "mention" },
+    { text: " Here you go: ", kind: "text" },
+    { text: "https://bookmoreshowings.com/book?fn=Priya", kind: "link" },
+    { text: ".", kind: "text" },
+  ]);
+  assert.deepEqual(splitBody("see www.example.com now", [], true), [
+    { text: "see ", kind: "text" },
+    { text: "www.example.com", kind: "link" },
+    { text: " now", kind: "text" },
+  ]);
+  assert.deepEqual(splitBody("see https://example.com now", [], false), [{ text: "see https://example.com now", kind: "text" }]);
+});
+
+test("trimCrowd: real rows are never dropped, only the oldest crowd rows", () => {
+  const list = Array.from({ length: 705 }, (_, i) => ({ key: String(i), name: "", role: i % 141 === 0 ? ("attendee" as const) : ("simulated" as const), body: "", at: i, reactions: {} }));
+  const kept = trimCrowd(list, 300);
+  assert.equal(kept.filter((x) => x.role === "attendee").length, list.filter((x) => x.role === "attendee").length);
+  assert.equal(kept.filter((x) => x.role === "simulated").length, 300);
+  assert.equal(kept[kept.length - 1].key, "704");
+  assert.equal(trimCrowd(list.slice(0, 50), 300).length, 50);
 });

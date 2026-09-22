@@ -3,11 +3,11 @@
 // 3 s poll, and the viewer types into one box. A late joiner sees the room as it already is. Phase 4 chat-social:
 // everyone reacts (one per emoji per person, tap again to remove) and can @mention people in the room.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { canPost, MAX_BODY, mergeUpdates, simulatedCursor, splitMentions, trimList, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
+import { canPost, MAX_BODY, mergeUpdates, simulatedCursor, splitBody, trimList, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "./PeoplePanel";
 
-type Wire = { id: number; registrant_id: string | null; team_member_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; mentions: string[]; created_at: string };
+type Wire = { id: number; registrant_id: string | null; team_member_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; mentions: string[]; mention_names?: string[]; created_at: string };
 type Item = ChatItem & { mentionsMe?: boolean; mentionId?: string; local?: Record<string, number> };
 export type Mentionable = { id: string; name: string; sub?: string };
 
@@ -30,7 +30,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
   const seq = useRef(0);
   const [mods, setMods] = useState<Mentionable[]>([]);
 
-  const toItem = (m: Wire): Item => ({ key: `r${m.id}`, id: m.id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, mine: m.registrant_id === registrantId, mentionsMe: (m.mentions ?? []).includes(registrantId), mentionId: m.team_member_id ? `m:${m.team_member_id}` : (m.registrant_id ?? undefined) });
+  const toItem = (m: Wire): Item => ({ key: `r${m.id}`, id: m.id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, mine: m.registrant_id === registrantId, mentionsMe: (m.mentions ?? []).includes(registrantId), mentionNames: m.mention_names ?? [], mentionId: m.team_member_id ? `m:${m.team_member_id}` : (m.registrant_id ?? undefined) });
 
   const append = useCallback(
     (items: Item[]) => {
@@ -261,7 +261,11 @@ function Message({ m, mine, onReact, onReactLocal, onReply }: { m: Item; mine: S
           <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{time}</span>
         </div>
         <p className="whitespace-pre-wrap break-words text-[15px] leading-snug text-ink landscape-phone:leading-normal">
-          {splitMentions(m.body).map((part, i) => (part.mention ? <span key={i} className="font-bold text-brand">{part.text}</span> : <span key={i}>{part.text}</span>))}
+          {splitBody(m.body, m.mentionNames, m.role === "moderator").map((part, i) =>
+            part.kind === "mention" ? <span key={i} className="font-bold text-brand">{part.text}</span>
+            : part.kind === "link" ? <a key={i} href={part.text.startsWith("www.") ? `https://${part.text}` : part.text} target="_blank" rel="noopener" className="break-all text-brand underline">{part.text}</a>
+            : <span key={i}>{part.text}</span>,
+          )}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1">
           {entries.map(([e, n]) => (

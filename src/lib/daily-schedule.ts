@@ -114,6 +114,18 @@ export function scheduleOf(event: { timezone: string; start_time: string; video_
   return { timezone: event.timezone, startHour: Number(m[1]), startMinute: Number(m[2]), seconds: event.video_seconds ?? 0, days: event.days && event.days.length ? event.days : ALL_DAYS };
 }
 
+/**
+ * When a session's replay opens: the later of the session's end and `opensAt` ("HH:MM", local, on the session's
+ * day); the end alone when blank. ailg-r opens at 8 PM so the room ends clean and the link matches the emails.
+ */
+export function replayOpensAt(session: Session, opensAt: string | null | undefined, timezone: string): Date {
+  const m = /^(\d{1,2}):(\d{2})/.exec(opensAt ?? "");
+  if (!m) return session.end;
+  const [y, mo, d] = session.date.split("-").map(Number);
+  const at = zoned(y, mo, d, Number(m[1]), Number(m[2]), timezone);
+  return at.getTime() > session.end.getTime() ? at : session.end;
+}
+
 const ZONES: Array<[string, string]> = [
   ["Pacific", "America/Los_Angeles"],
   ["Mountain", "America/Denver"],

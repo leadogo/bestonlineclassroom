@@ -107,3 +107,7 @@
 ## Fixes from the 22:45 test (tasks/plan-fixes-2026-09-20.md)
 - [ ] A1–A11 tonight, then CP-A: second test run 10 minutes after done.
 - [ ] B1–B3 tomorrow daytime if safe. C1–C2 after launch.
+
+## Phase 5 (2026-09-21 night)
+- [x] 5.0 mod-fixes shipped: mention names, crowd cap, moderator links + booking button, rename pencil, replay opens at 20:00, "Now playing", after-start reminder.
+- [ ] CP-5.0: William's test-run walk; then 5.1 mod-desk + intel-feed (see tasks/plan-phase5.md).

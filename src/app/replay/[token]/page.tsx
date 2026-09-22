@@ -10,7 +10,7 @@ import { tagNow } from "@/lib/tagging";
 import { logClick } from "@/lib/clicks";
 import { headers } from "next/headers";
 import { getTeamMember } from "@/lib/auth";
-import { fourZones, scheduleOf, sessionFor } from "@/lib/daily-schedule";
+import { fourZones, replayOpensAt, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -47,27 +47,35 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   const p = cleanParams(sp);
   const now = new Date();
 
-  // Not before their live session has ended: the replay is for afterwards, and the 72-hour clock must not start early.
+  const cta = e.cta_href ? { label: e.cta_label ?? "Book your call", href: ctaHref(e.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, p), at: e.cta_at_seconds ?? 0 } : null;
+
+  // The replay opens at the later of the session's end and the event's opening time (8 PM for ailg-r). Before that the
+  // link explains, without the word "live" (Jeremy, 2026-09-21). Team members bypass the gate to check the page.
   const session = sessionFor(scheduleOf(e), r.session_date);
-  if (session && now.getTime() < session.end.getTime() && !(await getTeamMember().catch(() => null))) {
+  const opens = session ? replayOpensAt(session, e.replay_opens_at, e.timezone) : null;
+  if (session && opens && now.getTime() < opens.getTime() && !(await getTeamMember().catch(() => null))) {
     after(() => logClick({ path: "replay", outcome: "countdown", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
-    const zones = fourZones(session);
+    const running = now.getTime() >= session.start.getTime() && now.getTime() < session.end.getTime();
+    const ended = now.getTime() >= session.end.getTime();
+    const zones = fourZones(ended ? { ...session, start: opens } : session);
+    const zoneLine = zones.map(([z, t]) => `${t} ${z}`).join(" · ");
     const day = new Intl.DateTimeFormat("en-US", { timeZone: e.timezone, weekday: "long", month: "long", day: "numeric" }).format(session.start);
-    const live = now.getTime() >= session.start.getTime();
+    const button = "mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-6 text-lg font-bold text-white focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50";
     return (
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-md">
           {e.logo_url && <img src={e.logo_url} alt={e.title} className="mx-auto mb-8 h-10 w-auto" />}
-          <h1 className="text-2xl font-bold text-balance">{live ? "Your session is live right now" : `Your session is ${day}`}</h1>
-          <p className="mt-3 text-base text-muted">{zones.map(([z, t]) => `${t} ${z}`).join(" · ")}. The full replay is available here right after it ends.</p>
-          <a href={`/j/${r.token}`} className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-6 text-lg font-bold text-white focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50">
-            {live ? "Join the live session" : "Open the room"}
-          </a>
+          <h1 className="text-2xl font-bold text-balance">{running ? "Session is in progress now" : ended ? `Your replay opens tonight at ${zones[1][1]} Mountain` : `Your session is ${day}`}</h1>
+          <p className="mt-3 text-base text-muted">{ended ? `${zoneLine}. Come back to this same link then.` : `${zoneLine}. The full replay is available here afterwards.`}</p>
+          {ended ? (
+            cta && <a href={cta.href} target="_blank" rel="noopener" className={button}>{cta.label}</a>
+          ) : (
+            <a href={`/j/${r.token}`} className={button}>{running ? "Enter the session" : "Open the room"}</a>
+          )}
         </div>
       </main>
     );
   }
-  const cta = e.cta_href ? { label: e.cta_label ?? "Book your call", href: ctaHref(e.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, p), at: e.cta_at_seconds ?? 0 } : null;
 
   // The clock starts now if it has not started; a race between two first opens keeps the earliest.
   let openedAt = r.replay_opened_at ? new Date(r.replay_opened_at) : null;

@@ -1,17 +1,17 @@
-# Plan: phase 5 (answered 2026-09-21; Q12 dropped; awaiting "go" on the desk render)
+# Plan: phase 5 (5.0 shipped 2026-09-21 night, checkpoint CP-5.0 pending William's test-run walk)
 
 Guardrails apply to every task: no deploys 3:30–7:45 PM MT; desk-lane work never touches attendee routes;
 room-lane work runs the test-run ritual first; per-event switches for crowd behaviour; additive migrations;
 previous build named in every deploy note; the 4 PM canary posts to Slack daily.
 
 ## 5.0 mod-fixes (this week, desk lane except the replay gate)
-- [ ] F1 @mention highlight only the picked names (store `mention_names`); test.
-- [ ] F2 Real rows never trimmed in the moderator list; crowd rows capped separately; test with 700 crowd rows.
-- [ ] F3 Moderator/admin message URLs clickable, new tab (room-lane: the message renderer; ritual applies); "Booking link" button in the reply box, prefilled for the person being replied to.
-- [ ] F4 `events.replay_opens_at` (default 20:00 local) + replay page "available tonight at 8 PM" (room lane: replay page only; ritual applies).
-- [ ] F5 Display-name pencil in the moderator header; rename rewrites past messages (scope per William).
-- [ ] F6 The word "live" out of client-facing copy (Jeremy): TopBar pill "Now playing" + "Starts at 5:00 PM MT"; replay wait screen headline/button; replay "next session" link + expired subtitle default. Room lane (TopBar): ritual applies; ships with F3.
-- [ ] F0 No-code: ActiveCampaign link with merge tags; 5:02 PM "we're live" text to the SMS list.
+- [x] F1 @mention highlight only the picked names (store `mention_names`); test.
+- [x] F2 Real rows never trimmed in the moderator list; crowd rows capped separately; test with 700 crowd rows.
+- [x] F3 Moderator/admin message URLs clickable, new tab (room-lane: the message renderer; ritual applies); "Booking link" button in the reply box, prefilled for the person being replied to.
+- [x] F4 `events.replay_opens_at` (default 20:00 local) + replay page "available tonight at 8 PM" (room lane: replay page only; ritual applies).
+- [x] F5 Display-name pencil in the moderator header; rename rewrites past messages (scope per William).
+- [x] F6 The word "live" out of client-facing copy (Jeremy): TopBar pill "Now playing" + "Starts at 5:00 PM MT"; replay wait screen headline/button; replay "next session" link + expired subtitle default. Room lane (TopBar): ritual applies; ships with F3.
+- [~] F0 No-code (5:03 email done as the "started" reminder rule; AC merge-tag link and the Roezan text are on William): ActiveCampaign link with merge tags; 5:02 PM "we're live" text to the SMS list.
 - Checkpoint CP-5.0: smoke green; moderator walkthrough on test-run; deploy in window; canary next day green.
 
 ## 5.1 mod-desk + intel-feed (desk lane)

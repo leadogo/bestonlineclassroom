@@ -1,6 +1,6 @@
 # Capability Map, phase 5: the moderator's desk and the numbers behind it
 
-Status: **answered 2026-09-21 evening** (review page: https://claude.ai/artifact/CrNrgCkWPy7vn8mVHK64Mp; desk before/after render: https://claude.ai/artifact/2mmpEwA3FxVrSjAonmQhaJ). William answered yes to Q1–Q11, Q13–Q15, Q17 as recommended; **Q12 (crowd reactions on real messages) is dropped.** Awaiting "go" on the render before code.
+Status: **answered 2026-09-21 evening** (review page: https://claude.ai/artifact/CrNrgCkWPy7vn8mVHK64Mp; desk before/after render: https://claude.ai/artifact/2mmpEwA3FxVrSjAonmQhaJ). William answered yes to Q1–Q11, Q13–Q15, Q17 as recommended; **Q12 (crowd reactions on real messages) is dropped.** 5.0 built and deployed 2026-09-21 ~10:20 PM MT (test-run round for William); "Starting soon" kept by William, the rest of the wording per Jeremy.
 Written from William's notes after moderating the first live session on the platform. Nothing here is built
 until each line is confirmed. The session on 2026-09-21 is the checkpoint: 250 registered, 73 joined, peak 41,
 36 live at the pitch minute, 19 offer clicks, zero broken links.

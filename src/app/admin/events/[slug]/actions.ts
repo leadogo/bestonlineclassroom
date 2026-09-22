@@ -32,6 +32,8 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
   const replay_hours = Number(str(fd, "replay_hours"));
   const start_time = str(fd, "start_time", 8);
   if (!/^\d{2}:\d{2}$/.test(start_time)) return { error: "Start time must look like 17:00." };
+  const replay_opens_at = str(fd, "replay_opens_at", 8);
+  if (replay_opens_at && !/^\d{2}:\d{2}$/.test(replay_opens_at)) return { error: "Replay opens at must look like 20:00, or be blank." };
   if (!str(fd, "title")) return { error: "The title is required." };
   const patch = {
     title: str(fd, "title", 120),
@@ -44,6 +46,7 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     cta_hide_seconds: cta_hide,
     end_url: str(fd, "end_url", 500) || event.end_url,
     replay_hours: Number.isFinite(replay_hours) && replay_hours >= 0 ? Math.floor(replay_hours) : 72,
+    replay_opens_at: replay_opens_at ? `${replay_opens_at}:00` : null,
     chapters: parseChapters(str(fd, "chapters", 4000)),
     days: [0, 1, 2, 3, 4, 5, 6].filter((d) => fd.get(`day_${d}`) === "on"),
     host_tagline: str(fd, "host_tagline", 120) || null,
@@ -141,13 +144,14 @@ export async function setVideo(slug: string, url: string): Promise<ActionState> 
 export async function saveReminders(slug: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
   const event = await guard(slug);
   const rules = [];
-  for (const key of ["before30", "before15", "before5"]) {
+  for (const key of ["before30", "before15", "before5", "started"]) {
     const minutes = Number(str(fd, `${key}_minutes`, 5));
     const subject = str(fd, `${key}_subject`, 200);
     const body = str(fd, `${key}_body`, 4000);
     if (!subject || !body) continue;
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 7 * 24 * 60) return { error: `${key}: minutes must be between 1 and 10080.` };
-    rules.push({ key, minutes_before: Math.floor(minutes), subject, body });
+    // "started" is minutes after the start (stored negative) and goes only to people not yet in the room.
+    rules.push({ key, minutes_before: key === "started" ? -Math.floor(minutes) : Math.floor(minutes), subject, body });
   }
   const { error } = await db().from("events").update({ reminder_rules: rules }).eq("id", event.id);
   if (error) return { error: "Could not save." };

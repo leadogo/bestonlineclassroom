@@ -14,7 +14,7 @@ async function admin() {
 }
 
 // What a copy carries over: everything except the video, the brand images and the rows that belong to sessions.
-const COPIED = "host_name, timezone, start_time, days, cta_at_seconds, cta_hide_seconds, cta_label, cta_href, end_url, simulated_names, logo_url, icon_url, chapters, replay_hours, replay_copy, tags, reminder_rules, confirmation";
+const COPIED = "host_name, timezone, start_time, days, cta_at_seconds, cta_hide_seconds, cta_label, cta_href, end_url, simulated_names, logo_url, icon_url, chapters, replay_hours, replay_opens_at, replay_copy, tags, reminder_rules, confirmation";
 
 /** New webinar from an existing one; lands on its settings page. */
 export async function createEvent(_prev: DashState, fd: FormData): Promise<DashState> {

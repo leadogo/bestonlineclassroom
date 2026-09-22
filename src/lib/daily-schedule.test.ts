@@ -2,7 +2,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zoned } from "./tz.ts";
-import { AILG_R, currentOrNextSession, fourZones, nextSession, pickRunningOrNext, roomState, scheduleOf, sessionFor } from "./daily-schedule.ts";
+import { AILG_R, currentOrNextSession, fourZones, nextSession, pickRunningOrNext, replayOpensAt, roomState, scheduleOf, sessionFor } from "./daily-schedule.ts";
+
+test("replayOpensAt: the later of the session's end and the local opening time; blank means the end", () => {
+  const s = sessionFor(AILG_R, "2026-09-21")!;
+  assert.equal(replayOpensAt(s, "20:00", AILG_R.timezone).toISOString(), zoned(2026, 9, 21, 20, 0, AILG_R.timezone).toISOString());
+  assert.equal(replayOpensAt(s, "18:00", AILG_R.timezone).getTime(), s.end.getTime());
+  assert.equal(replayOpensAt(s, null, AILG_R.timezone).getTime(), s.end.getTime());
+  assert.equal(replayOpensAt(s, "", AILG_R.timezone).getTime(), s.end.getTime());
+});
 
 const S = AILG_R;
 const mt = (y: number, m: number, d: number, h: number, min = 0, sec = 0) => new Date(zoned(y, m, d, h, min, S.timezone).getTime() + sec * 1000);
