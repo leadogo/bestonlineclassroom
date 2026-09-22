@@ -20,8 +20,8 @@ type Mentionable = { id: string; name: string; sub?: string };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
 
-const SIDE_TABS: Array<[Exclude<Tab, "chat">, string]> = [["people", "Attendees"], ["team", "Private Chat"], ["engagement", "Engagement"], ["stats", "Stats"]];
-const SHORT: Record<string, string> = { "Private Chat": "Private", Engagement: "Engage" };
+const SIDE_TABS: Array<[Exclude<Tab, "chat">, string]> = [["people", "Attendees"], ["team", "Mod Chat"], ["engagement", "Engagement"], ["stats", "Stats"]];
+const SHORT: Record<string, string> = { "Mod Chat": "Mods", Engagement: "Engage" };
 const clock = (iso: string | number) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const mmss = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}:${String(m).padStart(2, "0")}` : `${m} min`; };
 
