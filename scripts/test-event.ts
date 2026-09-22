@@ -19,10 +19,13 @@ const { values } = parseArgs({
     seconds: { type: "string" },
     /** "HH:MM" local: when the replay opens (events.replay_opens_at). Blank = at the session's end. */
     "replay-at": { type: "string" },
+    /** Seconds into the video the offer appears (cta_at_seconds), so a short test still reaches its pitch. */
+    "cta-at": { type: "string" },
   },
 });
 const seconds = values.seconds ? Number(values.seconds) : null;
 const replayAt = values["replay-at"] ? `${values["replay-at"]}:00` : null;
+const ctaAt = values["cta-at"] ? Number(values["cta-at"]) : null;
 const APP = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bestonlineclassroom.com").replace(/\/$/, "").replace("://bestonlineclassroom.com", "://www.bestonlineclassroom.com");
 const slug = values.slug!;
 if (slug === "ailg-r") throw new Error("Not the main webinar.");
@@ -56,12 +59,12 @@ const src = await db().from("events").select("*").eq("slug", values.from!).singl
 if (src.error) throw new Error(src.error.message);
 const { id: fromId, created_at: _c, ...copy } = src.data as Record<string, unknown> & { id: string; created_at: string };
 void _c;
-const row = { ...copy, slug, title: "Test run", start_time: values.at, days: [0, 1, 2, 3, 4, 5, 6], tags: {}, replay_opens_at: replayAt, ...(seconds ? { video_seconds: seconds } : {}) };
+const row = { ...copy, slug, title: "Test run", start_time: values.at, days: [0, 1, 2, 3, 4, 5, 6], tags: {}, replay_opens_at: replayAt, ...(seconds ? { video_seconds: seconds } : {}), ...(ctaAt ? { cta_at_seconds: ctaAt } : {}) };
 const existing = await db().from("events").select("id").eq("slug", slug).maybeSingle();
 let eventId: string;
 if (existing.data) {
   eventId = existing.data.id as string;
-  const { error } = await db().from("events").update({ start_time: values.at, title: "Test run", replay_opens_at: replayAt, ...(seconds ? { video_seconds: seconds } : {}) }).eq("id", eventId);
+  const { error } = await db().from("events").update({ start_time: values.at, title: "Test run", replay_opens_at: replayAt, ...(seconds ? { video_seconds: seconds } : {}), ...(ctaAt ? { cta_at_seconds: ctaAt } : {}) }).eq("id", eventId);
   if (error) throw new Error(error.message);
   const rids = ((await db().from("registrants").select("id").eq("event_id", eventId)).data ?? []).map((r) => r.id as string);
   if (rids.length) {
