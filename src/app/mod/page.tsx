@@ -56,7 +56,7 @@ export async function ModSeat({ slug, date }: { slug?: string; date?: string }) 
   return (
     <ModView
       member={{ id: member.id, display_name: member.display_name, email: member.email }}
-      event={{ slug: event.slug, title: event.title, iconUrl: event.icon_url, hostName: event.host_name }}
+      event={{ slug: event.slug, title: event.title, iconUrl: event.icon_url, hostName: event.host_name, videoUrl: event.video_url, ctaAt: event.cta_at_seconds }}
       session={{ date: session.date, startsAt: session.start.getTime(), endsAt: session.end.getTime() }}
       serverNow={new Date().getTime()}
       backHref={member.role === "admin" ? `/admin/events/${event.slug}` : "/admin"}

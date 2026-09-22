@@ -6,6 +6,7 @@ import { blockAtEdge, edgeConfigured, unblockAtEdge } from "@/lib/edge-block";
 import { forgetBlockedIps } from "@/lib/ip";
 import { toggleReaction } from "@/lib/reactions";
 import { withQuery } from "@/lib/params";
+import { peakConcurrent } from "@/lib/outcomes";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,9 @@ export async function GET(request: Request) {
   if (!(await canModerate(member, s.event.id))) return Response.json({ error: "Not your webinar" }, { status: 403 });
   const after_ = Number(q.get("after") ?? 0) || 0;
   const since = q.get("since") ?? "";
-  await db().from("team_presence").upsert({ member_id: member.id, event_id: s.event.id, session_date: s.session.date, last_seen_at: new Date().toISOString() }, { onConflict: "member_id,event_id,session_date" });
+  const tab = (q.get("tab") ?? "").slice(0, 20) || null;
+  const replyingTo = (q.get("to") ?? "").slice(0, 60) || null;
+  await db().from("team_presence").upsert({ member_id: member.id, event_id: s.event.id, session_date: s.session.date, last_seen_at: new Date().toISOString(), tab, replying_to: replyingTo }, { onConflict: "member_id,event_id,session_date" });
   const base = () => db().from("chat_messages").select(SELECT).eq("event_id", s.event.id).eq("session_date", s.session.date).gte("created_at", s.session.start.toISOString());
   const fresh = after_ === 0 ? await base().order("id", { ascending: false }).limit(400) : await base().gt("id", after_).order("id").limit(400);
   const news = after_ === 0 ? (fresh.data ?? []).reverse() : (fresh.data ?? []);
@@ -48,23 +51,48 @@ export async function GET(request: Request) {
     const u = await db().from("chat_messages").select("id, reactions, deleted_at, author_name").eq("event_id", s.event.id).eq("session_date", s.session.date).lte("id", after_).gt("updated_at", since).limit(300);
     updated = (u.data ?? []).map((m) => ({ id: m.id, reactions: (m.reactions as Record<string, number>) ?? {}, deleted: Boolean(m.deleted_at), name: m.author_name as string }));
   }
+  // Everyone who joined this session, with what they did: the People, Engagement and Stats tabs read this list.
+  const nowMs = Date.now();
+  const pitchAt = s.event.cta_at_seconds !== null ? s.session.start.getTime() + s.event.cta_at_seconds * 1000 : null;
   const ppl = await db()
     .from("attendance")
-    .select("last_seen_at, joined_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip)")
+    .select("last_seen_at, joined_at, seconds_watched, cta_clicked_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip)")
     .eq("session_date", s.session.date)
     .eq("kind", "live")
     .eq("registrant.event_id", s.event.id)
-    .gte("last_seen_at", new Date(Date.now() - 120_000).toISOString())
     .order("last_seen_at", { ascending: false })
-    .limit(300);
+    .limit(600);
   const blocked = new Set(((await db().from("blocked_ips").select("ip")).data ?? []).map((b) => String(b.ip)));
-  const people = (ppl.data ?? []).map((row) => {
+  const rows = (ppl.data ?? []).filter((row) => (row.registrant as unknown as { source: string }).source !== "test" || true);
+  const people = rows.map((row) => {
     const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null };
     const masked = r.email ? r.email.replace(/^(.{3}).*(@.*)$/, "$1…$2") : "guest";
-    return { first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, joined_at: row.joined_at, registrant_id: row.registrant_id, ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked, booking_href: bookingLink(s.event.cta_href, { first_name: r.first_name, registrant_id: row.registrant_id }) };
+    const joinedMs = new Date(row.joined_at as string).getTime();
+    const seenMs = new Date(row.last_seen_at as string).getTime();
+    return {
+      first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, joined_at: row.joined_at, registrant_id: row.registrant_id,
+      in_room: nowMs - seenMs < 120_000, minutes: Math.round(((row.seconds_watched as number) ?? 0) / 60), clicked_offer: Boolean(row.cta_clicked_at),
+      at_pitch: pitchAt !== null && pitchAt <= nowMs && joinedMs <= pitchAt && seenMs >= pitchAt,
+      ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked,
+      booking_href: bookingLink(s.event.cta_href, { first_name: r.first_name, registrant_id: row.registrant_id }),
+    };
   });
+  const real = people.filter((p) => p.source !== "test");
+  const registered = await db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", s.event.id).eq("session_date", s.session.date).neq("source", "test");
+  const stats = {
+    registered: registered.count ?? 0,
+    joined: real.length,
+    in_room: real.filter((p) => p.in_room).length,
+    peak: peakConcurrent(rows.map((row) => ({ from: new Date(row.joined_at as string).getTime(), to: new Date(row.last_seen_at as string).getTime() }))),
+    pitch_at: pitchAt,
+    at_pitch: pitchAt !== null && pitchAt <= nowMs ? real.filter((p) => p.at_pitch).length : null,
+    clicked: real.filter((p) => p.clicked_offer).length,
+    stayed_15: real.filter((p) => p.minutes >= 15).length,
+  };
   const team = ((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => ({ id: `m:${m.id}`, name: m.display_name as string }));
-  return Response.json({ new: news, updated, people, team, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date, booking_href: bookingLink(s.event.cta_href) }, { headers: { "cache-control": "no-store" } });
+  const presence = await db().from("team_presence").select("member_id, tab, replying_to, last_seen_at").eq("event_id", s.event.id).eq("session_date", s.session.date).gte("last_seen_at", new Date(nowMs - 60_000).toISOString());
+  const desk = (presence.data ?? []).map((p) => ({ member_id: p.member_id, name: team.find((t) => t.id === `m:${p.member_id}`)?.name ?? "Team", tab: p.tab, replying_to: p.replying_to, last_seen_at: p.last_seen_at }));
+  return Response.json({ new: news, updated, people, team, desk, stats, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date, booking_href: bookingLink(s.event.cta_href) }, { headers: { "cache-control": "no-store" } });
 }
 
 /** POST { event, date, action: reply | delete | block | react, ... } */
@@ -87,6 +115,12 @@ export async function POST(request: Request) {
       const body = String(b.body ?? "").trim().slice(0, 500);
       if (!body) return Response.json({ error: "Type a reply first." }, { status: 422 });
       const offset = Math.max(0, Math.floor((Date.now() - s.session.start.getTime()) / 1000));
+      // The team channel: a moderator row only the desk reads (the attendee feed selects 'all' or the person's own rows).
+      if (b.team === true) {
+        const { data, error } = await db().from("chat_messages").insert({ event_id: s.event.id, session_date: s.session.date, team_member_id: member.id, author_name: member.display_name, role: "moderator", body, offset_seconds: offset, visibility: "team", mentions: [], mention_names: [] }).select(SELECT).single();
+        if (error) return Response.json({ error: "Could not send." }, { status: 500 });
+        return Response.json({ message: data });
+      }
       const wanted = Array.isArray(b.mentions) ? (b.mentions as unknown[]).map(String).slice(0, 10) : [];
       const mentions: string[] = [];
       const mention_names: string[] = [];

@@ -38,7 +38,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     name = `${slug}-chat-${session.date}`;
     const past = Date.now() >= session.end.getTime();
     const [real, sim] = await Promise.all([
-      db().from("chat_messages").select("offset_seconds, author_name, role, body, deleted_at, visibility, created_at, registrant:registrants(email, source)").eq("event_id", event.id).eq("session_date", session.date).order("id").limit(5000),
+      db().from("chat_messages").select("offset_seconds, author_name, role, body, deleted_at, visibility, created_at, registrant:registrants(email, source)").neq("visibility", "team").eq("event_id", event.id).eq("session_date", session.date).order("id").limit(5000),
       db().from("simulated_messages").select("offset_seconds, name, body").eq("event_id", event.id).order("offset_seconds").limit(5000),
     ]);
     const all = [
