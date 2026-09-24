@@ -116,4 +116,4 @@
 
 ## Phase 6 (2026-09-23)
 - [x] 6.0 counters/desk fixes shipped ~8:05 PM MT; test-run eight at 8:30 PM for William's walk.
-- [x] 6.1–6.4 shipped 2026-09-23 night; walk on test-run 8:30 AM Sep 24 (Test run nine). On William: iClosed webhook subscriber URL, old New BOOKED Zap off after the first post, QR → /qr.
+- [x] 6.1–6.4 shipped 2026-09-23 night; walk on test-run 8:30 AM Sep 24 (Test run nine). William added the iClosed webhook (created/rescheduled/cancelled). Still on him: old New BOOKED Zap off after the first post, QR → /qr. Join card redesigned Sep 23 late.
