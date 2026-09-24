@@ -7,6 +7,7 @@ import { getEvent } from "@/lib/events";
 
 export const dynamic = "force-dynamic";
 
+const sinceDay = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 const mmss = (s: number) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}`;
 
 /** Every question asked in the room, with who answered it: the record a future AI moderator learns from (phase 6.3, note 27). */
@@ -18,7 +19,7 @@ export default async function Questions({ params, searchParams }: { params: Prom
   const me = (await getTeamMember())!;
   if (!(await canModerate(me, event.id))) notFound();
   const days = sp.days === "90" ? 90 : 30;
-  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const since = sinceDay(days);
   const { data: rows } = await db().from("chat_messages").select("id, session_date, offset_seconds, author_name, body, answered_by, created_at").eq("event_id", event.id).eq("role", "attendee").eq("is_question", true).is("deleted_at", null).gte("session_date", since).order("created_at", { ascending: false }).limit(800);
   const team = new Map(((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => [m.id as string, m.display_name as string]));
   const list = rows ?? [];
