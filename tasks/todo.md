@@ -116,4 +116,4 @@
 
 ## Phase 6 (2026-09-23)
 - [x] 6.0 counters/desk fixes shipped ~8:05 PM MT; test-run eight at 8:30 PM for William's walk.
-- [ ] 6.1 Brandon on the Stats order + opt-ins denominator; 6.2 fast bookings (iClosed webhook: William has one, needs our subscriber URL) + appointments post + /qr; 6.3 engagement; 6.4 chat (switches). See tasks/plan-phase6.md.
+- [x] 6.1–6.4 shipped 2026-09-23 night; walk on test-run 8:30 AM Sep 24 (Test run nine). On William: iClosed webhook subscriber URL, old New BOOKED Zap off after the first post, QR → /qr.

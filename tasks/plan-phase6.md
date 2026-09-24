@@ -1,4 +1,4 @@
-# Plan: phase 6 (specced 2026-09-23; William said go at 7:45 PM; 6.0 shipped 2026-09-23 ~8:05 PM MT, walk on test-run 8:30 PM)
+# Plan: phase 6 (specced 2026-09-23; William said go at 7:45 PM and asked for all of it tonight; 6.0–6.4 shipped by 2026-09-23 ~11 PM MT; one walk on test-run 8:30 AM Sep 24)
 
 Guardrails as phase 5. Room-lane tasks are marked; each gets the test-run walk before a morning deploy.
 
@@ -14,28 +14,28 @@ Guardrails as phase 5. Room-lane tasks are marked; each gets the test-run walk b
 - Checkpoint: iPad + phone walk on test-run; the peak never sits below the live count for a whole test.
 
 ## 6.1 brandon
-- [ ] B1 Brandon's post = Stats order, opt-ins denominator, typical-night line.
-- [ ] B2 Tracker retention = pitch ÷ peak.
+- [x] B1 Brandon's post = Stats order, opt-ins denominator, typical-night line.
+- [x] B2 Tracker retention = pitch ÷ peak.
 - Checkpoint: `room-count?force=1&dry=1` matches the Stats tab number for number.
 
 ## 6.2 bookings-fast
-- [ ] F1 leadogo `iclosed-pull` every 3 min 6–8 PM, hourly otherwise; push to classroom at once.
-- [ ] F2 Classroom `POST /api/bookings` returns the match; cancellations tracked.
-- [ ] F3 🟢 🌟 New BOOKED post to #appointments-webinar; William turns the Zap off.
-- [ ] F4 `/qr` redirect + scan post; link handed to William.
+- [x] F1 iClosed webhook → leadogo `/api/webhooks/iclosed?key=…` (William adds the subscriber URL; triggers: created, rescheduled, cancelled) → upcoming pull → push → announce; the 30-minute sync stays as the fallback. No 3-minute poll needed.
+- [x] F2 Classroom `POST /api/bookings` returns the match; cancellations tracked.
+- [x] F3 🟢 🌟 New BOOKED post to #appointments-webinar; William turns the Zap off.
+- [x] F4 `/qr` redirect + scan post; link handed to William.
 - Checkpoint: a test booking in iClosed reaches the desk and the channel within 3 minutes, with source lines.
 
 ## 6.3 engagement-2
-- [ ] E1 Belief phrases (Settings) + score weights (+ tests).
-- [ ] E2 Heartbeat minute + `attendance.minutes_seen` (migration 028; room lane) + testimonials %.
-- [ ] E3 Engagement endpoint additions; PAR columns; pre-call brief Webinar block + flag.
-- [ ] E4 Questions flag/answered_by (migration 029); admin Questions page + CSV.
+- [x] E1 Belief phrases (Settings) + score weights (+ tests).
+- [x] E2 Heartbeat minute + `attendance.minutes_seen` (migration 028; room lane) + testimonials %.
+- [x] E3 Engagement endpoint additions; PAR columns; pre-call brief Webinar block + flag.
+- [x] E4 Questions flag/answered_by (migration 029); admin Questions page + CSV.
 - Checkpoint: a pre-call brief for a real booker reads right; PAR shows the two columns.
 
 ## 6.4 chat-2 (switches)
-- [ ] K1 "Book now" row (kind cta) rendered per viewer; schedule in Settings (room lane).
-- [ ] K2 Prompt script per event; draft lines from the transcript refined with William (room lane, Katherine switch).
-- [ ] K3 Phone-number prompt → #sales-reporting with iClosed-closer round-robin (room lane + leadogo).
-- [ ] K4 Ghost replies visible only to the ghost (`visible_to`).
-- [ ] K5 Auto-ghost previously ghosted/blocked and 3rd-night repeats; "watched before ×N" on the desk.
+- [x] K1 "Book now" row (kind cta) rendered per viewer; schedule in Settings (room lane).
+- [x] K2 Prompt script per event; draft lines from the transcript refined with William (room lane, Katherine switch).
+- [x] K3 Phone-number prompt → #sales-reporting with iClosed-closer round-robin (room lane + leadogo).
+- [x] K4 Ghost replies visible only to the ghost (`visible_to`).
+- [x] K5 Auto-ghost previously ghosted/blocked and 3rd-night repeats; "watched before ×N" on the desk.
 - Checkpoint: full test-run walk with every switch on; on for ailg-r only when William says.

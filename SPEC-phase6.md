@@ -3,7 +3,7 @@
 Status: **specced 2026-09-23 7:20 PM MT from William's 31 notes after the first two nights**; review page
 https://claude.ai/artifact/Epapgj9ppiLdVtekdHLShm. Answers: all recommended except Q15 (the QR is in the video; he only
 needs the target link), Q2 (prompt questions are drafted from the transcript and refined with him), Q26 (round-robin over
-the iClosed closer list, not Close CRM). **No code until the room is empty and he says go.**
+the iClosed closer list, not Close CRM). **Shipped in full the night of 2026-09-23** (William: build it all tonight, one walk). The sitrep is a separate DM from the same bot (the brief's renderer lives in bms-dashboard, not in this repo). Testimonials watched % accrues from Sep 24 (minutes seen start then).
 
 ## The rule above every module (unchanged from phase 5)
 No deploys 3:30–7:45 PM Mountain. Two lanes: room (anything a phone loads) and desk (moderator, admin, crons, leadogo,
