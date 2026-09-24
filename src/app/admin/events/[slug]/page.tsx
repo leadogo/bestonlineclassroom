@@ -45,6 +45,9 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             <Link href={`/admin/events/${slug}/sessions/${next.date}`} className={btnQuiet}>
               Registrants
             </Link>
+            <Link href={`/admin/events/${slug}/questions`} className={btnQuiet}>
+              Questions
+            </Link>
             <Link href={`/admin/events/${slug}/analytics`} className={btnQuiet}>
               Analytics
             </Link>
@@ -110,6 +113,10 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
                 The crowd in the People tab thins as the session runs (85% by 15 min, 80% at the pitch, 60% at 1:45, 40% at the end)
               </label>
             </div>
+            <Field label="Belief phrases (comma-separated)" name="belief_phrases" rows={2} value={(event.belief_phrases ?? []).join(", ")} hint="A chat message containing any of these counts as a belief signal in the engagement score." />
+            <Field label="Katherine's timed prompts" name="prompts" rows={8} value={(event.prompts ?? []).map((p) => `${p.minute} | ${p.text}`).join("\n")} hint="One per line: minute | what she says. Posted on the room's clock while the Katherine switch is on. The draft from the transcript is in docs/katherine-prompts-draft.md." />
+            <Field label="Book-now rows (minutes after the pitch)" name="cta_prompt_minutes" value={(event.cta_prompt_minutes ?? [0, 3, 8, 15]).join(", ")} hint="Katherine posts a row each viewer sees with their own booking button. Blank turns them off." />
+            <Field label="Testimonials start" name="testimonials_from" value={secondsText(event.testimonials_from_seconds ?? null)} hint="h:mm:ss into the video; testimonials watched % is measured from here to the end." />
         </ActionForm>
       </Section>
 

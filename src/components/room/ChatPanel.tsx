@@ -3,17 +3,17 @@
 // 3 s poll, and the viewer types into one box. A late joiner sees the room as it already is. Phase 4 chat-social:
 // everyone reacts (one per emoji per person, tap again to remove) and can @mention people in the room.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { canPost, MAX_BODY, mergeUpdates, simulatedCursor, splitBody, trimList, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
+import { canPost, MAX_BODY, mergeUpdates, PHONE_RE, simulatedCursor, splitBody, trimList, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "./PeoplePanel";
 
-type Wire = { id: number; registrant_id: string | null; team_member_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; mentions: string[]; mention_names?: string[]; created_at: string };
+type Wire = { id: number; registrant_id: string | null; team_member_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; mentions: string[]; mention_names?: string[]; kind?: string; created_at: string };
 type Item = ChatItem & { mentionsMe?: boolean; mentionId?: string; local?: Record<string, number> };
 export type Mentionable = { id: string; name: string; sub?: string };
 
 const POLL_MS = 3000;
 
-export function ChatPanel({ token, registrantId, simulated, live, expected, visible, onUnread, people, onRemoved }: { token: string; registrantId: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void; people: Mentionable[]; onRemoved: () => void }) {
+export function ChatPanel({ token, registrantId, simulated, live, expected, visible, onUnread, people, onRemoved, ctaHref, ctaLabel }: { token: string; registrantId: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void; people: Mentionable[]; ctaHref: string | null; ctaLabel: string; onRemoved: () => void }) {
   const [list, setList] = useState<Item[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -22,6 +22,8 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
   const [pending, setPending] = useState(0);
   const [mine, setMine] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Mentionable[]>([]);
+  // A phone number in the box: ask whether they want a call before anything posts (phase 6.4).
+  const [askCall, setAskCall] = useState(false);
   const sim = useRef<{ rows: SimulatedRow[]; next: number }>({ rows: simulated, next: 0 });
   const cursor = useRef({ after: 0, since: "" });
   const lastPost = useRef<number | null>(null);
@@ -30,7 +32,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
   const seq = useRef(0);
   const [mods, setMods] = useState<Mentionable[]>([]);
 
-  const toItem = (m: Wire): Item => ({ key: `r${m.id}`, id: m.id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, mine: m.registrant_id === registrantId, mentionsMe: (m.mentions ?? []).includes(registrantId), mentionNames: m.mention_names ?? [], mentionId: m.team_member_id ? `m:${m.team_member_id}` : (m.registrant_id ?? undefined) });
+  const toItem = (m: Wire): Item => ({ key: `r${m.id}`, id: m.id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, mine: m.registrant_id === registrantId, mentionsMe: (m.mentions ?? []).includes(registrantId), mentionNames: m.mention_names ?? [], kind: m.kind, mentionId: m.team_member_id ? `m:${m.team_member_id}` : (m.registrant_id ?? undefined) });
 
   const append = useCallback(
     (items: Item[]) => {
@@ -164,8 +166,11 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
     input.current?.focus();
   }
 
-  async function send(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
+    void send();
+  }
+  async function send(callMe?: boolean) {
     const body = text.trim();
     if (!body || blocked) return;
     if (!canPost(lastPost.current, Date.now())) {
@@ -174,8 +179,10 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
     }
     setError("");
     const mentions = picked.filter((p) => body.includes(`@${p.name}`)).map((p) => p.id);
+    if (PHONE_RE.test(body) && callMe === undefined) { setAskCall(true); return; }
+    setAskCall(false);
     try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, body, offset: Math.floor(expected()), mentions }) });
+      const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, body, offset: Math.floor(expected()), mentions, ...(callMe !== undefined ? { call_me: callMe } : {}) }) });
       const j = (await res.json().catch(() => ({}))) as { message?: Wire; error?: string };
       if (res.status === 403) {
         setBlocked(true);
@@ -200,7 +207,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
       <div ref={scroller} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {!live && <p className="px-1 py-6 text-center text-base text-muted">The chat opens when the session starts.</p>}
         {list.map((m) => (
-          <Message key={m.key} m={m} mine={mine} onReact={react} onReactLocal={reactLocal} onReply={replyTo} />
+          <Message key={m.key} m={m} mine={mine} onReact={react} onReactLocal={reactLocal} onReply={replyTo} ctaHref={ctaHref} ctaLabel={ctaLabel} token={token} />
         ))}
       </div>
       {pending > 0 && !atBottom && (
@@ -208,7 +215,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
           {pending} new message{pending > 1 ? "s" : ""} ↓
         </button>
       )}
-      <form onSubmit={send} className="relative border-t border-line p-2" style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}>
+      <form onSubmit={submit} className="relative border-t border-line p-2" style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}>
         {options.length > 0 && (
           <ul className="absolute bottom-full left-2 right-2 mb-1 overflow-hidden rounded-xl border border-line bg-panel shadow-lg" role="listbox">
             {options.map((p) => (
@@ -221,6 +228,16 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
               </li>
             ))}
           </ul>
+        )}
+        {askCall && !blocked && (
+          <div className="mb-2 rounded-xl border border-cta/50 bg-cta/10 p-3 text-sm">
+            <p className="font-bold">That looks like a phone number.</p>
+            <p className="text-muted">Numbers don&rsquo;t post in the chat. Want someone from the team to call you?</p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={() => void send(true)} className="min-h-10 rounded-lg bg-brand px-3 text-sm font-bold text-white">Yes, call me</button>
+              <button type="button" onClick={() => void send(false)} className="min-h-10 rounded-lg border border-line px-3 text-sm text-muted">No, post without it</button>
+            </div>
+          </div>
         )}
         {blocked ? (
           <p className="px-2 py-2 text-center text-sm text-muted">Chat is unavailable.</p>
@@ -253,7 +270,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
   );
 }
 
-function Message({ m, mine, onReact, onReactLocal, onReply }: { m: Item; mine: Set<string>; onReact: (id: number, emoji: string) => void; onReactLocal: (key: string, emoji: string) => void; onReply: (m: Item) => void }) {
+function Message({ m, mine, onReact, onReactLocal, onReply, ctaHref, ctaLabel, token }: { m: Item; mine: Set<string>; onReact: (id: number, emoji: string) => void; onReactLocal: (key: string, emoji: string) => void; onReply: (m: Item) => void; ctaHref: string | null; ctaLabel: string; token: string }) {
   const time = new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const entries = Object.entries(m.reactions).filter(([, n]) => n > 0);
   const real = m.id !== undefined;
@@ -275,6 +292,11 @@ function Message({ m, mine, onReact, onReactLocal, onReply }: { m: Item; mine: S
             : <span key={i}>{part.text}</span>,
           )}
         </p>
+        {m.kind === "cta" && ctaHref && (
+          <a href={ctaHref} target="_blank" rel="noopener" onClick={() => { fetch("/api/cta", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, kind: "live" }), keepalive: true }).catch(() => {}); }} className="mt-1.5 inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-cta px-4 text-[15px] font-bold text-cta-ink">
+            {ctaLabel} →
+          </a>
+        )}
         <div className="mt-1 flex flex-wrap items-center gap-1">
           {entries.map(([e, n]) => (
             <button key={e} type="button" onClick={() => tap(e)} className={`min-h-7 rounded-full px-2 text-xs tabular-nums transition-transform active:scale-90 ${pressed(e) ? "border border-brand bg-brand/15 text-ink" : "bg-panel text-ink/90"}`} aria-pressed={pressed(e)} aria-label={`${e} ${n}`}>

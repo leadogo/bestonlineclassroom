@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { engagementScore, rankEngagement } from "./engagement.ts";
+import { engagementScore, isBelief, isQuestion, rankEngagement } from "./engagement.ts";
 
 test("engagementScore: weights add to one, capped at the pitch and five messages", () => {
-  assert.equal(engagementScore({ minutes: 75, atPitch: true, messages: 5, clicked: true }, 75), 1);
-  assert.equal(engagementScore({ minutes: 200, atPitch: true, messages: 50, clicked: true }, 75), 1);
+  assert.equal(engagementScore({ minutes: 75, atPitch: true, messages: 5, belief: 2, clicked: true }, 75), 1);
+  assert.equal(engagementScore({ minutes: 75, atPitch: true, messages: 5, clicked: true }, 75), 0.9);
+  assert.equal(engagementScore({ minutes: 200, atPitch: true, messages: 50, belief: 9, clicked: true }, 75), 1);
   assert.equal(engagementScore({ minutes: 0, atPitch: false, messages: 0, clicked: false }, 75), 0);
-  assert.equal(engagementScore({ minutes: 37.5, atPitch: false, messages: 0, clicked: false }, 75), 0.2);
+  assert.equal(engagementScore({ minutes: 37.5, atPitch: false, messages: 0, clicked: false }, 75), 0.18);
   assert.equal(engagementScore({ minutes: 0, atPitch: false, messages: 0, clicked: true }, 0), 0.15);
 });
 
@@ -19,4 +20,17 @@ test("rankEngagement: a watched click that has not booked leads, then score, the
   ], 75);
   assert.deepEqual(r.map((x) => x.n), ["b", "a", "d", "c"]);
   assert.deepEqual(r.map((x) => x.rank), [1, 2, 3, 4]);
+});
+
+test("isBelief and isQuestion", () => {
+  assert.equal(isBelief("MAKES SENSE"), true);
+  assert.equal(isBelief("wow that’s great"), true);
+  assert.equal(isBelief("That's great"), true);
+  assert.equal(isBelief("does it work with FUB"), false);
+  assert.equal(isBelief("love this", ["love this"]), true);
+  assert.equal(isBelief("love this", ["makes sense"]), false);
+  assert.equal(isQuestion("does it work with Follow Up Boss"), true);
+  assert.equal(isQuestion("Is there a replay?"), true);
+  assert.equal(isQuestion("makes sense"), false);
+  assert.equal(isQuestion("Toronto here"), false);
 });

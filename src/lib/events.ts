@@ -35,6 +35,10 @@ export type EventRow = {
   replay_opens_at: string | null;
   katherine_enabled: boolean;
   people_curve_enabled: boolean;
+  belief_phrases: string[];
+  prompts: Array<{ minute: number; text: string }>;
+  cta_prompt_minutes: number[];
+  testimonials_from_seconds: number | null;
   replay_copy: Record<string, unknown>;
   tags: Record<string, string>;
   reminder_rules: Array<{ key: string; minutes_before: number; subject: string; body: string }>;

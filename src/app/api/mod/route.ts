@@ -10,7 +10,7 @@ import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
 
 export const dynamic = "force-dynamic";
 
-const SELECT = "id, registrant_id, author_name, role, body, offset_seconds, reactions, deleted_at, created_at, visibility, mentions, mention_names";
+const SELECT = "id, registrant_id, author_name, role, body, offset_seconds, reactions, deleted_at, created_at, visibility, mentions, mention_names, belief, is_question, kind, visible_to";
 
 /** The event's booking link with `src=chat` (and, per person, their first name and id so the form greets them). Null when the link is not a URL. */
 function bookingLink(base: string | null, person?: { first_name: string; registrant_id: string }): string | null {
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   const pitchAt = s.event.cta_at_seconds !== null ? s.session.start.getTime() + s.event.cta_at_seconds * 1000 : null;
   const ppl = await db()
     .from("attendance")
-    .select("last_seen_at, joined_at, seconds_watched, cta_clicked_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip)")
+    .select("last_seen_at, joined_at, seconds_watched, cta_clicked_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip, prior_sessions, auto_ghost_reason)")
     .eq("session_date", s.session.date)
     .eq("kind", "live")
     .eq("registrant.event_id", s.event.id)
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
   const blocked = new Set(((await db().from("blocked_ips").select("ip")).data ?? []).map((b) => String(b.ip)));
   const rows = (ppl.data ?? []).filter((row) => (row.registrant as unknown as { source: string }).source !== "test" || true);
   const people = rows.map((row) => {
-    const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null };
+    const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null; prior_sessions: number | null; auto_ghost_reason: string | null };
     const masked = r.email ? r.email.replace(/^(.{3}).*(@.*)$/, "$1…$2") : "guest";
     const joinedMs = new Date(row.joined_at as string).getTime();
     const seenMs = new Date(row.last_seen_at as string).getTime();
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
       first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, joined_at: row.joined_at, registrant_id: row.registrant_id,
       in_room: nowMs - seenMs < 120_000, minutes: Math.round(((row.seconds_watched as number) ?? 0) / 60), clicked_offer: Boolean(row.cta_clicked_at),
       at_pitch: pitchAt !== null && pitchAt <= nowMs && joinedMs <= pitchAt && seenMs + PRESENCE_GRACE_MS >= pitchAt,
-      ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked,
+      ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked, prior_sessions: r.prior_sessions ?? 0, auto_ghost_reason: r.auto_ghost_reason,
       booking_href: bookingLink(s.event.cta_href, { first_name: r.first_name, registrant_id: row.registrant_id }),
     };
   });
@@ -129,8 +129,12 @@ export async function POST(request: Request) {
       const mids = wanted.filter((m) => /^m:[0-9a-f-]{36}$/i.test(m)).map((m) => m.slice(2));
       if (rids.length) for (const x of (await db().from("registrants").select("id, first_name").eq("event_id", s.event.id).eq("session_date", s.session.date).in("id", rids)).data ?? []) { mentions.push(x.id as string); mention_names.push(x.first_name as string); }
       if (mids.length) for (const x of (await db().from("team_members").select("id, display_name").in("id", mids)).data ?? []) { mentions.push(`m:${x.id}`); mention_names.push(x.display_name as string); }
-      const { data, error } = await db().from("chat_messages").insert({ event_id: s.event.id, session_date: s.session.date, team_member_id: member.id, author_name: member.display_name, role: "moderator", body, offset_seconds: offset, mentions, mention_names }).select(SELECT).single();
+      // A reply to a ghost is seen by that ghost and the desk only; the room would otherwise watch us talk to nobody.
+      const ghosted = rids.length ? ((await db().from("registrants").select("id").in("id", rids).not("ghosted_at", "is", null)).data ?? []).map((x) => x.id as string) : [];
+      const { data, error } = await db().from("chat_messages").insert({ event_id: s.event.id, session_date: s.session.date, team_member_id: member.id, author_name: member.display_name, role: "moderator", body, offset_seconds: offset, mentions, mention_names, visible_to: ghosted[0] ?? null }).select(SELECT).single();
       if (error) return Response.json({ error: "Could not send." }, { status: 500 });
+      // Their open questions are now answered, by this moderator (the Questions page pairs them).
+      if (rids.length) await db().from("chat_messages").update({ answered_by: member.id }).eq("event_id", s.event.id).eq("session_date", s.session.date).in("registrant_id", rids).eq("is_question", true).is("answered_by", null);
       return Response.json({ message: data });
     }
     case "rename": {

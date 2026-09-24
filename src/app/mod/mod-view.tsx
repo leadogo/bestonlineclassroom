@@ -11,13 +11,13 @@ import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
 
-type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[] };
-type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null };
+type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[]; belief?: boolean; is_question?: boolean; kind?: string; visible_to?: string | null };
+type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null };
 type Desk = { member_id: string; name: string; tab: string | null; replying_to: string | null; last_seen_at: string };
 type Stats = { registered: number; joined: number; in_room: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
 type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
 type Mentionable = { id: string; name: string; sub?: string };
-type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean };
+type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean; belief?: boolean; question?: boolean; ghostReply?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
 
 const SIDE_TABS: Array<[Exclude<Tab, "chat">, string]> = [["people", "Attendees"], ["team", "Mod Chat"], ["engagement", "Engagement"], ["stats", "Stats"]];
@@ -101,7 +101,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
           window.location.reload();
           return;
         }
-        const fresh: Item[] = j.new.map((m) => ({ key: `r${m.id}`, id: m.id, registrantId: m.registrant_id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, deleted: Boolean(m.deleted_at), ghost: m.visibility === "author", team: m.visibility === "team", mentionNames: m.mention_names ?? [], mentionsMe: (m.mentions ?? []).includes(`m:${member.id}`) }));
+        const fresh: Item[] = j.new.map((m) => ({ key: `r${m.id}`, id: m.id, registrantId: m.registrant_id, name: m.author_name, role: m.role, body: m.body, at: new Date(m.created_at).getTime(), reactions: m.reactions ?? {}, deleted: Boolean(m.deleted_at), ghost: m.visibility === "author", team: m.visibility === "team", belief: Boolean(m.belief), question: Boolean(m.is_question), kind: m.kind, ghostReply: Boolean(m.visible_to), mentionNames: m.mention_names ?? [], mentionsMe: (m.mentions ?? []).includes(`m:${member.id}`) }));
         setEdge(j.edge !== false);
         setBookingHref(j.booking_href ?? null);
         if (fresh.length) cursor.current.after = fresh[fresh.length - 1].id!;
@@ -253,13 +253,14 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const shown = chat.filter((m) => (m.role !== "simulated" || showSim) && (!onlyMentions || m.mentionsMe));
   const inRoom = people.filter((p) => p.in_room && p.source !== "test");
   const msgCount = new Map<string, number>();
-  for (const m of chat) if (m.role === "attendee" && m.registrantId && !m.deleted) msgCount.set(m.registrantId, (msgCount.get(m.registrantId) ?? 0) + 1);
+  const beliefCount = new Map<string, number>();
+  for (const m of chat) if (m.role === "attendee" && m.registrantId && !m.deleted) { msgCount.set(m.registrantId, (msgCount.get(m.registrantId) ?? 0) + 1); if (m.belief) beliefCount.set(m.registrantId, (beliefCount.get(m.registrantId) ?? 0) + 1); }
   const messages = chat.filter((m) => m.role === "attendee" && !m.deleted).length;
 
   const panes = (which: Exclude<Tab, "chat">) =>
     which === "people" ? <PeoplePane people={people} msgCount={msgCount} confirmBlock={confirmBlock} setConfirmBlock={setConfirmBlock} act={act} edge={edge} />
     : which === "team" ? <TeamPane msgs={teamMsgs} me={name} text={teamText} setText={setTeamText} onSend={sendTeam} scroller={teamScroller} />
-    : which === "engagement" ? <EngagementPane people={people} msgCount={msgCount} pitchMinutes={event.ctaAt !== null ? event.ctaAt / 60 : 75} />
+    : which === "engagement" ? <EngagementPane people={people} msgCount={msgCount} beliefCount={beliefCount} pitchMinutes={event.ctaAt !== null ? event.ctaAt / 60 : 75} />
     : <StatsPane stats={stats} chatters={msgCount.size} messages={messages} now={now} ctaAt={event.ctaAt} startsAt={session.startsAt} history={history} live={live} />;
 
   const tabButton = (key: Tab, label: string, active: boolean, onClick: () => void) => (
@@ -359,7 +360,11 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                     <div className="flex items-baseline gap-2">
                       <span className={`font-bold ${m.role === "moderator" ? "text-brand" : m.role === "simulated" ? "text-muted" : ""}`}>{m.name}</span>
                       {m.role === "simulated" && <span className="text-xs text-muted">simulated</span>}
-                      {m.name === "Katherine AI" && <span className="rounded bg-cta/20 px-1.5 text-[11px] font-bold text-cta">auto</span>}
+                      {m.name === "Katherine AI" && <span className="rounded bg-cta/20 px-1.5 text-[11px] font-bold text-cta">{m.kind === "cta" ? "book-now row" : "auto"}</span>}
+                      {m.ghostReply && <span className="rounded bg-panel px-1.5 text-[11px] text-muted" title="Only the ghost and the desk see this">ghost reply</span>}
+                      {m.belief && <span className="rounded bg-emerald-500/15 px-1.5 text-[11px] font-bold text-emerald-400" title="Counts toward their score">belief</span>}
+                      {m.question && <span className="rounded bg-panel px-1.5 text-[11px] text-muted">question</span>}
+                      {m.role === "attendee" && person(m.registrantId)?.prior_sessions ? <span className="rounded bg-panel px-1.5 text-[11px] text-muted">watched before ×{person(m.registrantId)!.prior_sessions}</span> : null}
                       {m.role === "attendee" && person(m.registrantId) && <span className="text-xs text-muted">{person(m.registrantId)!.source} · {person(m.registrantId)!.minutes} min</span>}
                       {m.ghost && <span className="rounded bg-panel px-1.5 text-xs text-muted" title="Only they can see this">ghost</span>}
                       <span className="ml-auto text-xs text-muted tabular-nums">{clock(m.at)}</span>
@@ -510,7 +515,8 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
         <p className="truncate text-[15px] font-bold">
           {p.first_name}
           <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] font-bold text-muted">{p.source === "zapier" ? "zap" : p.source}</span>
-          {p.ghosted && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted line-through">ghosted</span>}
+          {p.ghosted && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted line-through" title={p.auto_ghost_reason ? `auto: ${p.auto_ghost_reason}` : undefined}>{p.auto_ghost_reason ? "auto-ghosted" : "ghosted"}</span>}
+          {p.prior_sessions ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted">watched before ×{p.prior_sessions}</span> : null}
           {p.ip_blocked && <span className="ml-1.5 rounded bg-live/20 px-1.5 text-[11px] font-bold text-live">IP blocked</span>}
         </p>
         <p className="truncate text-xs text-muted">
@@ -571,10 +577,10 @@ function TeamPane({ msgs, me, text, setText, onSend, scroller }: { msgs: Item[];
   );
 }
 
-function EngagementPane({ people, msgCount, pitchMinutes }: { people: Person[]; msgCount: Map<string, number>; pitchMinutes: number }) {
+function EngagementPane({ people, msgCount, beliefCount, pitchMinutes }: { people: Person[]; msgCount: Map<string, number>; beliefCount: Map<string, number>; pitchMinutes: number }) {
   // A leaderboard: the same score the setters' top ten uses after the session, best first.
   const [sort, setSort] = useState<"score" | "minutes" | "messages">("score");
-  const ranked = rankEngagement(people.filter((p) => p.source !== "test").map((p) => ({ ...p, messages: msgCount.get(p.registrant_id) ?? 0, atPitch: p.at_pitch, clicked: p.clicked_offer })), pitchMinutes);
+  const ranked = rankEngagement(people.filter((p) => p.source !== "test").map((p) => ({ ...p, messages: msgCount.get(p.registrant_id) ?? 0, belief: beliefCount.get(p.registrant_id) ?? 0, atPitch: p.at_pitch, clicked: p.clicked_offer })), pitchMinutes);
   const rows = sort === "score" ? ranked : [...ranked].sort((a, b) => (sort === "minutes" ? b.minutes - a.minutes : b.messages - a.messages) || b.score - a.score);
   const th = (key: "score" | "minutes" | "messages", label: string) => (
     <th className="py-2 pr-3 text-right"><button type="button" onClick={() => setSort(key)} className={`text-[11px] font-bold uppercase tracking-wide ${sort === key ? "text-ink" : "text-muted hover:text-ink"}`}>{label}{sort === key ? " ▾" : ""}</button></th>
@@ -590,7 +596,7 @@ function EngagementPane({ people, msgCount, pitchMinutes }: { people: Person[]; 
             <td className="py-1.5 pr-3"><span className="font-bold">{p.first_name}</span><span className="ml-1.5 text-[11px] text-muted">{p.in_room ? "" : "left"}</span></td>
             <td className="py-1.5 pr-3 text-right font-bold tabular-nums">{Math.round(p.score * 100)}</td>
             <td className="py-1.5 pr-3 text-right tabular-nums">{p.minutes}</td>
-            <td className="py-1.5 pr-3 text-right tabular-nums">{p.messages}</td>
+            <td className="py-1.5 pr-3 text-right tabular-nums">{p.messages}{p.belief ? <span className="ml-1 text-[11px] text-emerald-400">+{p.belief}</span> : null}</td>
             <td className="py-1.5 pr-3 text-center">{p.at_pitch ? <span className="text-emerald-400">✓</span> : <span className="text-muted">–</span>}</td>
             <td className="py-1.5 pr-4 text-center">{p.clicked_offer ? <span className="text-emerald-400">✓</span> : <span className="text-muted">–</span>}</td>
           </tr>

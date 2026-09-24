@@ -9,19 +9,21 @@ import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { postToChatChannel } from "@/lib/slack";
 import { tagNow } from "@/lib/tagging";
 import { katherineReply } from "@/lib/katherine";
+import { isBelief, isQuestion } from "@/lib/engagement";
+import { forwardCallRequest, PHONE_RE } from "@/lib/call-requests";
 
 export const dynamic = "force-dynamic";
 
 const HISTORY = 300;
-const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offset_seconds, reactions, mentions, mention_names, created_at";
+const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offset_seconds, reactions, mentions, mention_names, kind, created_at";
 
 async function registrant(token: string) {
   if (!TOKEN_RE.test(token)) return null;
-  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days, katherine_enabled)").eq("token", token).maybeSingle();
+  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases)").eq("token", token).maybeSingle();
   if (!data) return null;
-  const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean } | null;
+  const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean; belief_phrases?: string[] } | null;
   const start = ev ? sessionFor(scheduleOf(ev), data.session_date as string)?.start ?? null : null;
-  return { ...data, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled) };
+  return { ...data, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled), beliefPhrases: ev?.belief_phrases ?? undefined };
 }
 
 /** GET ?token=&after=<id>&since=<iso>: new real messages after `after`, and deletes/reactions since `since`. */
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
   const since = q.get("since") ?? "";
   // Ghosted people see their own rows; nobody else does.
   const scope = () => {
-    const q = db().from("chat_messages").select(SELECT).eq("event_id", r.event_id).eq("session_date", r.session_date).or(`visibility.eq.all,registrant_id.eq.${r.id}`);
+    const q = db().from("chat_messages").select(SELECT).eq("event_id", r.event_id).eq("session_date", r.session_date).or(`and(visibility.eq.all,visible_to.is.null),registrant_id.eq.${r.id},visible_to.eq.${r.id}`);
     return r.sessionStart ? q.gte("created_at", r.sessionStart) : q;
   };
 
@@ -55,7 +57,7 @@ export async function GET(request: Request) {
 
 /** POST { token, body, offset }: a real attendee message, relayed to Slack in the background. */
 export async function POST(request: Request) {
-  let b: { token?: string; body?: string; offset?: number; mentions?: string[] };
+  let b: { token?: string; body?: string; offset?: number; mentions?: string[]; call_me?: boolean };
   try {
     b = (await request.json()) as typeof b;
   } catch {
@@ -66,7 +68,12 @@ export async function POST(request: Request) {
   const ip = clientIp(request.headers);
   if (r.blocked_at || (await ipBlocked(ip))) return Response.json({ error: "Chat is unavailable." }, { status: 403 });
   if (!r.ip && ip) after(async () => { await db().from("registrants").update({ ip, ip_seen_at: new Date().toISOString() }).eq("id", r.id).is("ip", null); });
-  const body = String(b.body ?? "").trim().slice(0, MAX_BODY);
+  let body = String(b.body ?? "").trim().slice(0, MAX_BODY);
+  if (!body) return Response.json({ error: "Type a message first." }, { status: 422 });
+  // A phone number posts only if they asked for a call (the room then sees a note, the team sees the number); otherwise the number comes out.
+  const phone = PHONE_RE.exec(body)?.[0] ?? null;
+  const callMe = phone !== null && b.call_me === true;
+  if (phone) body = body.replace(PHONE_RE, callMe ? "(phone number sent to the team)" : "").replace(/\s{2,}/g, " ").trim() || (callMe ? "(phone number sent to the team)" : "");
   if (!body) return Response.json({ error: "Type a message first." }, { status: 422 });
   const verdict = checkMessage(body);
   if (!verdict.ok) return Response.json({ error: verdict.reason }, { status: 422 });
@@ -88,7 +95,7 @@ export async function POST(request: Request) {
   }
   const ins = await db()
     .from("chat_messages")
-    .insert({ event_id: r.event_id, session_date: r.session_date, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: r.ghosted_at ? "author" : "all", mentions, mention_names })
+    .insert({ event_id: r.event_id, session_date: r.session_date, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: r.ghosted_at ? "author" : "all", mentions, mention_names, is_question: isQuestion(body), belief: isBelief(body, r.beliefPhrases) })
     .select(SELECT)
     .single();
   if (ins.error) {
@@ -96,6 +103,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Please try again." }, { status: 500 });
   }
   if (r.source !== "test" && !r.ghosted_at) after(() => postToChatChannel(slackLine(r.first_name, r.email, body)));
+  if (callMe && phone) after(() => forwardCallRequest({ registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, firstName: r.first_name, email: r.email, phone, message: String(b.body ?? "").slice(0, 500), offset }));
   after(() => tagNow(r.id, "asked_question"));
   // Katherine answers the replay question (switch per event), a few seconds later, once per person.
   if (r.katherine && !r.ghosted_at) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name }, body, offset));

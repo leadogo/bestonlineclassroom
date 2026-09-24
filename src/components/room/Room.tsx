@@ -152,7 +152,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
           </div>
           {showCta && !chatHidden && <div className="lg:hidden landscape-phone:hidden">{banner(false)}</div>}
         </div>
-        {live && !chatHidden && <Panel token={p.token} registrantId={p.registrantId} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} crowd={p.crowd} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} onRemoved={() => setRemoved(true)} />}
+        {live && !chatHidden && <Panel token={p.token} registrantId={p.registrantId} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} crowd={p.crowd} ctaHref={p.cta?.href ?? null} ctaLabel={p.cta?.label ?? "Book your call"} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} onRemoved={() => setRemoved(true)} />}
       </div>
     </div>
   );

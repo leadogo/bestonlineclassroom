@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { rankEngagement } from "@/lib/engagement";
+import { testimonialsPct } from "@/lib/lead-engagement";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +24,14 @@ export async function GET(request: Request) {
   if (!session) return Response.json({ error: "No session that day" }, { status: 404 });
   const pitchAt = event.cta_at_seconds !== null ? session.start.getTime() + event.cta_at_seconds * 1000 : null;
   const pitchMin = event.cta_at_seconds !== null ? event.cta_at_seconds / 60 : 75;
-  const att = await db().from("attendance").select("registrant_id, joined_at, last_seen_at, seconds_watched, cta_clicked_at, registrant:registrants!inner(first_name, email, phone, source, event_id)").eq("session_date", date).eq("kind", "live").eq("registrant.event_id", event.id).limit(2000);
+  const att = await db().from("attendance").select("registrant_id, joined_at, last_seen_at, seconds_watched, cta_clicked_at, minutes_seen, registrant:registrants!inner(first_name, email, phone, source, event_id)").eq("session_date", date).eq("kind", "live").eq("registrant.event_id", event.id).limit(2000);
   const rows = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test");
   const ids = rows.map((a) => a.registrant_id as string);
   const msgs = new Map<string, number>();
+  const beliefs = new Map<string, number>();
   for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await db().from("chat_messages").select("registrant_id").eq("event_id", event.id).eq("session_date", date).eq("role", "attendee").is("deleted_at", null).in("registrant_id", ids.slice(i, i + 200)).limit(5000);
-    for (const m of data ?? []) msgs.set(m.registrant_id as string, (msgs.get(m.registrant_id as string) ?? 0) + 1);
+    const { data } = await db().from("chat_messages").select("registrant_id, belief").eq("event_id", event.id).eq("session_date", date).eq("role", "attendee").is("deleted_at", null).in("registrant_id", ids.slice(i, i + 200)).limit(5000);
+    for (const m of data ?? []) { msgs.set(m.registrant_id as string, (msgs.get(m.registrant_id as string) ?? 0) + 1); if (m.belief) beliefs.set(m.registrant_id as string, (beliefs.get(m.registrant_id as string) ?? 0) + 1); }
   }
   const booked = new Set<string>();
   const bk = await db().from("bookings").select("registrant_id, email, phone").eq("event_id", event.id).eq("session_date", date).eq("status", "scheduled");
@@ -38,11 +40,11 @@ export async function GET(request: Request) {
   const rows0 = rows.map((a) => {
     const r = a.registrant as unknown as { first_name: string; email: string | null; phone: string | null; source: string };
     const minutes = Math.round(((a.seconds_watched as number) ?? 0) / 60);
-    const at_pitch = pitchAt !== null && new Date(a.joined_at as string).getTime() <= pitchAt && new Date(a.last_seen_at as string).getTime() >= pitchAt;
+    const at_pitch = pitchAt !== null && new Date(a.joined_at as string).getTime() <= pitchAt && new Date(a.last_seen_at as string).getTime() + 120_000 >= pitchAt;
     const messages = msgs.get(a.registrant_id as string) ?? 0;
     const clicked = Boolean(a.cta_clicked_at);
     const isBooked = booked.has(a.registrant_id as string) || (r.email ? bookedEmails.has(r.email.toLowerCase()) : false);
-    return { registrant_id: a.registrant_id, name: r.first_name, email: r.email, phone: r.phone, source: r.source, minutes, messages, at_pitch, clicked_offer: clicked, booked: isBooked, atPitch: at_pitch, clicked };
+    return { registrant_id: a.registrant_id, name: r.first_name, email: r.email, phone: r.phone, source: r.source, minutes, messages, belief: beliefs.get(a.registrant_id as string) ?? 0, testimonials_pct: testimonialsPct((a.minutes_seen as number[] | null) ?? [], event.testimonials_from_seconds ?? null, event.video_seconds), at_pitch, clicked_offer: clicked, booked: isBooked, atPitch: at_pitch, clicked };
   });
   const people = rankEngagement(rows0, pitchMin).map(({ atPitch: _a, clicked: _c, ...p }) => { void _a; void _c; return p; });
   const summary = { joined: people.length, chatters: people.filter((p) => p.messages > 0).length, avg_minutes: people.length ? Math.round(people.reduce((s, p) => s + p.minutes, 0) / people.length) : 0, stayed_15: people.filter((p) => p.minutes >= 15).length, at_pitch: people.filter((p) => p.at_pitch).length, clicked: people.filter((p) => p.clicked_offer).length, booked: people.filter((p) => p.booked).length };

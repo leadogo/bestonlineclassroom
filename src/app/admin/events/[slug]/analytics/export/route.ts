@@ -20,7 +20,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
   let rows: Array<Array<string | number | null>> = [];
   let name = `${slug}-${kind}`;
 
-  if (kind === "sessions") {
+  if (kind === "questions") {
+    const { data } = await db().from("chat_messages").select("session_date, offset_seconds, author_name, body, answered_by, created_at").eq("event_id", event.id).eq("role", "attendee").eq("is_question", true).is("deleted_at", null).gte("session_date", since).order("created_at", { ascending: false }).limit(5000);
+    const team = new Map(((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => [m.id as string, m.display_name as string]));
+    rows = [["session", "minute", "who", "question", "answered_by", "asked_at"], ...(data ?? []).map((r) => [r.session_date, Math.floor(((r.offset_seconds as number) ?? 0) / 60), r.author_name, r.body, r.answered_by ? (team.get(r.answered_by as string) ?? "") : "", r.created_at])];
+  } else if (kind === "sessions") {
     const { data } = await db().from("session_metrics").select("*").eq("event_id", event.id).gte("session_date", since).order("session_date");
     rows = [["date", "registered", "joined", "attended_15min", "missed", "live_at_pitch", "clicked_offer", "saw_offer_no_click", "watched_replay", "stayed_40min", "asked_question", "left_early", "avg_live_minutes"], ...(data ?? []).map((r) => [r.session_date, r.registered, r.joined, r.attended, r.missed, r.live_at_pitch, r.clicked_offer, r.saw_offer_no_click, r.watched_replay, r.stayed_40min, r.asked_question, r.left_early, Math.round(r.avg_live_seconds / 60)])];
   } else if (kind === "registrants") {

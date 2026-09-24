@@ -15,6 +15,8 @@ export type ChatItem = {
   mine?: boolean;
   /** The names this row @mentions (stored with the row); only these are coloured. */
   mentionNames?: string[];
+  /** "cta": Katherine's book-now row, drawn by each viewer with their own link. */
+  kind?: string;
 };
 
 export type ChatUpdate = { id: number; reactions: Record<string, number>; deleted: boolean; /** set when the author renamed themselves */ name?: string };
@@ -41,6 +43,9 @@ export function mergeUpdates(list: ChatItem[], updates: ChatUpdate[]): ChatItem[
 }
 
 export const MAX_BODY = 500;
+
+/** A North American phone number in the usual shapes; prices, years and deal counts do not match. */
+export const PHONE_RE = /(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/;
 export const POST_GAP_MS = 2000;
 
 export function canPost(lastPostedAt: number | null, now: number): boolean {
