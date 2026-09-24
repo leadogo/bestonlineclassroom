@@ -15,6 +15,19 @@ export function crowdShare(offset: number, pitchAt: number | null, seconds: numb
   return 0.4;
 }
 
+/**
+ * The waiting number on the join card (William, Sep 23): starts at `floor` fifteen minutes out and climbs toward the
+ * crowd the room shows at the start (host plus every crowd name), real openers on top, and is never allowed above
+ * that crowd. The room adds the real people and the moderators on top of the same crowd, so what they see on
+ * entering is always at least one more than the last number they waited behind.
+ */
+export function waitingCount(progress: number, crowd: number, realOpeners: number, floor = 90): number {
+  const p = Math.min(1, Math.max(0, progress));
+  const base = Math.min(floor, crowd);
+  const climb = Math.round(base + (crowd - base) * Math.pow(p, 1.2));
+  return Math.max(0, Math.min(crowd, climb + Math.max(0, realOpeners)));
+}
+
 export function crowdNames(names: string[], share: number): string[] {
   return names.slice(0, Math.round(names.length * Math.min(1, Math.max(0, share))));
 }

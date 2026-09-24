@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/room/PeoplePanel";
+import { waitingCount } from "@/lib/crowd";
 
 /**
  * "Agents waiting: 92 and climbing" (Jeremy, Sep 23): the room's own crowd arriving. From fifteen minutes out the
@@ -16,9 +17,7 @@ export function WaitingCount({ startsAt, crowd, realOpeners, names, floor = 90, 
   const windowMs = windowMinutes * 60_000;
   const t = startsAt - now;
   if (t <= 0 || t > windowMs) return null;
-  const progress = 1 - t / windowMs;
-  const target = Math.max(floor, crowd);
-  const n = Math.round(floor + (target - floor) * Math.pow(progress, 1.2)) + realOpeners;
+  const n = waitingCount(1 - t / windowMs, crowd, realOpeners, floor);
   return (
     <div className="mt-3 flex items-center gap-3 text-sm" aria-live="polite">
       <div className="flex">

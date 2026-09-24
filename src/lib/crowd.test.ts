@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { crowdNames, crowdShare } from "./crowd.ts";
+import { crowdNames, crowdShare, waitingCount } from "./crowd.ts";
 
 test("crowdShare follows Jeremy's points on the real session and never climbs", () => {
   const S = 8385, P = 4500;
@@ -21,4 +21,15 @@ test("crowdNames keeps the front of the list", () => {
   assert.deepEqual(crowdNames(names, 0.4), ["a", "b", "c", "d"]);
   assert.deepEqual(crowdNames(names, 1), names);
   assert.deepEqual(crowdNames(names, 2), names);
+});
+
+test("waitingCount: starts at the floor, climbs, and never passes the crowd the room shows", () => {
+  assert.equal(waitingCount(0, 188, 0), 90);
+  assert.ok(waitingCount(0.5, 188, 0) > 90 && waitingCount(0.5, 188, 0) < 188);
+  assert.equal(waitingCount(1, 188, 0), 188);
+  assert.equal(waitingCount(1, 188, 40), 188);
+  assert.equal(waitingCount(0.9, 188, 500), 188);
+  assert.equal(waitingCount(0, 60, 0), 60);
+  assert.equal(waitingCount(0.3, 60, 10), 60 >= waitingCount(0.3, 60, 10) ? waitingCount(0.3, 60, 10) : 60);
+  for (let i = 0; i <= 30; i++) { const a = waitingCount(i / 30, 188, 3), b = waitingCount((i + 1) / 30, 188, 3); assert.ok(b >= a, `climbs at ${i}`); assert.ok(a <= 188); }
 });
