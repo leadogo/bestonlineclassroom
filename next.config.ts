@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: security }];
   },
+  // The desk is /mod; these are what people type (Akash, Sep 23).
+  async redirects() {
+    return ["/moderate", "/moderator", "/desk"].map((source) => ({ source, destination: "/mod", permanent: false }));
+  },
 };
 
 export default nextConfig;

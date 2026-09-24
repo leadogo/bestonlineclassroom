@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
-import { peakConcurrent, retentionCurve } from "@/lib/outcomes";
+import { peakConcurrent, PRESENCE_GRACE_MS, retentionCurve } from "@/lib/outcomes";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     // In the room at the pitch instant (what the tracker calls Pitch Live), not "watched past the pitch".
     const session = sessionFor(scheduleOf(event), row.session_date);
     const pitchAt = session && event.cta_at_seconds !== null ? session.start.getTime() + event.cta_at_seconds * 1000 : null;
-    const at_pitch = pitchAt === null ? null : real.filter((a) => new Date(a.joined_at as string).getTime() <= pitchAt && new Date(a.last_seen_at as string).getTime() >= pitchAt).length;
+    const at_pitch = pitchAt === null ? null : real.filter((a) => new Date(a.joined_at as string).getTime() <= pitchAt && new Date(a.last_seen_at as string).getTime() + PRESENCE_GRACE_MS >= pitchAt).length;
     const nowMs = Date.now();
     const in_room = real.filter((a) => nowMs - new Date(a.last_seen_at as string).getTime() < 120_000).length;
     const site_joined = real.filter((a) => (a.registrant as unknown as { source: string }).source === "site").length;

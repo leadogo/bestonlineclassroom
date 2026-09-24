@@ -131,10 +131,18 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
 
   async function react(id: number, emoji: string) {
     const key = `${id}:${emoji}`;
+    // Show it at once; the server's answer replaces it, or it snaps back if refused.
+    const wasOn = mine.has(key);
+    setMine((s) => { const n = new Set(s); if (wasOn) n.delete(key); else n.add(key); return n; });
+    setList((l) => l.map((m) => (m.id === id ? { ...m, reactions: { ...m.reactions, [emoji]: Math.max(0, (m.reactions[emoji] ?? 0) + (wasOn ? -1 : 1)) } } : m)));
+    const undo = () => {
+      setMine((s) => { const n = new Set(s); if (wasOn) n.add(key); else n.delete(key); return n; });
+      setList((l) => l.map((m) => (m.id === id ? { ...m, reactions: { ...m.reactions, [emoji]: Math.max(0, (m.reactions[emoji] ?? 0) + (wasOn ? 1 : -1)) } } : m)));
+    };
     try {
       const res = await fetch("/api/react", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, id, emoji }) });
       const j = (await res.json().catch(() => ({}))) as { reactions?: Record<string, number>; on?: boolean };
-      if (!res.ok || !j.reactions) return;
+      if (!res.ok || !j.reactions) { undo(); return; }
       setMine((s) => {
         const n = new Set(s);
         if (j.on) n.add(key);
@@ -143,7 +151,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
       });
       setList((l) => l.map((m) => (m.id === id ? { ...m, reactions: j.reactions! } : m)));
     } catch {
-      /* ignore */
+      undo();
     }
   }
 
@@ -269,7 +277,7 @@ function Message({ m, mine, onReact, onReactLocal, onReply }: { m: Item; mine: S
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1">
           {entries.map(([e, n]) => (
-            <button key={e} type="button" onClick={() => tap(e)} className={`min-h-7 rounded-full px-2 text-xs tabular-nums ${pressed(e) ? "border border-brand bg-brand/15 text-ink" : "bg-panel text-ink/90"}`} aria-pressed={pressed(e)} aria-label={`${e} ${n}`}>
+            <button key={e} type="button" onClick={() => tap(e)} className={`min-h-7 rounded-full px-2 text-xs tabular-nums transition-transform active:scale-90 ${pressed(e) ? "border border-brand bg-brand/15 text-ink" : "bg-panel text-ink/90"}`} aria-pressed={pressed(e)} aria-label={`${e} ${n}`}>
               {e} {n}
             </button>
           ))}

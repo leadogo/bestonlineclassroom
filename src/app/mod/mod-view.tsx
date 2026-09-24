@@ -15,7 +15,7 @@ type Wire = { id: number; registrant_id: string | null; author_name: string; rol
 type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null };
 type Desk = { member_id: string; name: string; tab: string | null; replying_to: string | null; last_seen_at: string };
 type Stats = { registered: number; joined: number; in_room: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
-type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number };
+type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
 type Mentionable = { id: string; name: string; sub?: string };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
@@ -260,7 +260,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
     which === "people" ? <PeoplePane people={people} msgCount={msgCount} confirmBlock={confirmBlock} setConfirmBlock={setConfirmBlock} act={act} edge={edge} />
     : which === "team" ? <TeamPane msgs={teamMsgs} me={name} text={teamText} setText={setTeamText} onSend={sendTeam} scroller={teamScroller} />
     : which === "engagement" ? <EngagementPane people={people} msgCount={msgCount} pitchMinutes={event.ctaAt !== null ? event.ctaAt / 60 : 75} />
-    : <StatsPane stats={stats} chatters={msgCount.size} messages={messages} now={now} ctaAt={event.ctaAt} startsAt={session.startsAt} history={history} />;
+    : <StatsPane stats={stats} chatters={msgCount.size} messages={messages} now={now} ctaAt={event.ctaAt} startsAt={session.startsAt} history={history} live={live} />;
 
   const tabButton = (key: Tab, label: string, active: boolean, onClick: () => void) => (
     <button key={key} type="button" onClick={() => { onClick(); if (key === "team") setTeamUnread(0); }} className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 px-2 text-[15px] ${active ? "border-b-2 border-brand font-bold text-ink" : "text-muted hover:text-ink"} focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand`}>
@@ -283,7 +283,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold">{event.title}</h1>
           <p className="text-sm text-muted">
-            {session.date}, {live ? `live, ${mmss(Math.max(0, Math.floor(offsetNow)))} in, ` : now < session.startsAt ? "not started. " : "ended. "}{live && <span className="font-bold text-ink tabular-nums">{inRoom.length} in the room</span>}{live && stats && stats.at_pitch !== null && <span className="text-muted"> · at the pitch <span className="font-bold text-ink tabular-nums">{stats.at_pitch}</span></span>}{live && ". "}Replying as{" "}
+            {session.date}, {live ? `live, ${mmss(Math.max(0, Math.floor(offsetNow)))} in, ` : now < session.startsAt ? "not started. " : "ended. "}{live && <span className="font-bold text-emerald-400 tabular-nums">{inRoom.length} in the room</span>}{live && stats && stats.at_pitch !== null && <span className="text-muted"> · at the pitch <span className="font-bold text-ink tabular-nums">{stats.at_pitch}</span></span>}{live && ". "}Replying as{" "}
             {editingName ? (
               <span className="inline-flex items-center gap-1 align-middle">
                 <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value.slice(0, 40))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveName(); } if (e.key === "Escape") setEditingName(false); }} autoFocus aria-label="Your display name" className="h-7 w-44 rounded-md border border-line bg-panel px-2 text-sm text-ink focus:border-brand focus:outline-none" />
@@ -439,7 +439,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
               )}
               <div className="flex items-end gap-2">
                 {bookingHref && (
-                  <button type="button" onClick={insertBookingLink} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-bold text-ink hover:border-brand" title="Insert the booking link. With one person @mentioned it carries their name, so their form greets them.">
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={insertBookingLink} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-bold text-ink hover:border-brand" title="Insert the booking link. With one person @mentioned it carries their name, so their form greets them.">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5" /></svg>
                     <span className="hidden sm:inline">Booking link</span>
                   </button>
@@ -474,7 +474,7 @@ function Monitor({ url, live, offset, open, onToggle }: { url: string; live: boo
     const id = setInterval(() => {
       const v = ref.current;
       if (!v) return;
-      if (!live) { if (!v.paused) v.pause(); return; }
+      if (!live || document.visibilityState !== "visible") { if (!v.paused) v.pause(); return; }
       const want = offset();
       if (Math.abs(v.currentTime - want) > 2) v.currentTime = want;
       if (v.paused) v.play().catch(() => {});
@@ -499,8 +499,10 @@ function Monitor({ url, live, offset, open, onToggle }: { url: string; live: boo
 }
 
 function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge }: { people: Person[]; msgCount: Map<string, number>; confirmBlock: string | null; setConfirmBlock: (v: string | null) => void; act: (b: object) => Promise<boolean>; edge: boolean }) {
-  const here = people.filter((p) => p.in_room).sort((a, b) => a.joined_at.localeCompare(b.joined_at));
-  const left = people.filter((p) => !p.in_room).sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at));
+  const [q, setQ] = useState("");
+  const hit = (p: Person) => !q.trim() || `${p.first_name} ${p.email_masked}`.toLowerCase().includes(q.trim().toLowerCase());
+  const here = people.filter((p) => p.in_room && hit(p)).sort((a, b) => a.joined_at.localeCompare(b.joined_at));
+  const left = people.filter((p) => !p.in_room && hit(p)).sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at));
   const row = (p: Person, gone: boolean) => (
     <li key={p.registrant_id} className={`flex items-center gap-2.5 border-b border-line/60 px-4 py-2 ${gone ? "opacity-60" : ""}`}>
       <Avatar name={p.first_name} />
@@ -532,12 +534,17 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
     </li>
   );
   return (
+    <div>
+      <div className="border-b border-line px-3 py-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find someone by name or email…" aria-label="Search attendees" className="min-h-9 w-full rounded-lg border border-line bg-panel px-3 text-sm focus:border-brand focus:outline-none" />
+      </div>
     <ul className="py-1">
-      {here.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">Nobody in the room yet.</li>}
+      {here.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">{q ? "No one matches." : "Nobody in the room yet."}</li>}
       {here.map((p) => row(p, false))}
       {left.length > 0 && <li className="px-4 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-muted">Left the room · {left.length}</li>}
       {left.map((p) => row(p, true))}
     </ul>
+    </div>
   );
 }
 
@@ -593,7 +600,7 @@ function EngagementPane({ people, msgCount, pitchMinutes }: { people: Person[]; 
   );
 }
 
-function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history }: { stats: Stats | null; chatters: number; messages: number; now: number; ctaAt: number | null; startsAt: number; history: HistoryRow[] | null }) {
+function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history, live }: { stats: Stats | null; chatters: number; messages: number; now: number; ctaAt: number | null; startsAt: number; history: HistoryRow[] | null; live: boolean }) {
   if (!stats) return <p className="py-6 text-center text-sm text-muted">Loading…</p>;
   const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : "–");
   const untilPitch = ctaAt !== null ? Math.max(0, Math.round((startsAt + ctaAt * 1000 - now) / 60000)) : null;
@@ -608,12 +615,29 @@ function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history }:
     <div className="grid grid-cols-2 gap-2 p-4">
       {tile(stats.registered, "held a link tonight")}
       {tile(stats.joined, `joined · ${pct(stats.joined, stats.registered)}`)}
-      {tile(stats.in_room, "in the room now")}
+      <div className="rounded-xl border border-emerald-500/40 bg-panel px-3 py-2.5">
+        <div className="text-[22px] font-bold leading-tight text-emerald-400 tabular-nums">{stats.in_room}</div>
+        <div className="text-xs text-muted">in the room now</div>
+        {stats.peak > 0 && <div className="text-[11px] text-muted">retention {pct(stats.in_room, stats.peak)} of peak</div>}
+      </div>
       {tile(stats.peak, "peak")}
       {stats.at_pitch !== null ? tile(stats.at_pitch, `at the pitch (${ctaAt !== null ? mmss(ctaAt) : ""})`, true) : tile(untilPitch !== null ? `${untilPitch}m` : "–", "until the pitch", false, ctaAt !== null ? `at ${mmss(ctaAt)} in` : undefined)}
       {tile(stats.clicked, "offer clicks")}
       {tile(chatters, `chatters · ${messages} messages`)}
       {tile(stats.stayed_15, "stayed 15+ min")}
+      {(() => {
+        // Typical night: the average minute curve of the last ten sessions, and where tonight sits on it.
+        const curves = (history ?? []).map((h) => h.curve).filter((c): c is number[] => Array.isArray(c) && c.length > 0);
+        if (curves.length === 0) return tile("–", "typical night", false, "no past sessions yet");
+        const len = Math.max(...curves.map((c) => c.length));
+        const avg = Array.from({ length: len }, (_, m) => { const xs = curves.map((c) => c[m]).filter((v) => typeof v === "number"); return xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : 0; });
+        const peakV = Math.max(...avg); const peakM = avg.indexOf(peakV);
+        let holdEnd = peakM; for (let m = peakM; m < avg.length; m++) if (avg[m] >= 0.75 * peakV) holdEnd = m;
+        const m = Math.max(0, Math.floor((now - startsAt) / 60000));
+        const cur = avg[Math.min(m, avg.length - 1)] ?? 0;
+        const phase = !live ? "—" : cur >= 0.9 * peakV ? "Peak" : m < peakM ? "Warming" : cur >= 0.75 * peakV ? "Holding" : "Cooling";
+        return tile(phase, `typical night · peak at min ${peakM}`, phase === "Peak", `holding to ${mmss(holdEnd * 60)}, cooling after · tonight ${stats.in_room} vs ${Math.round(cur)} typical at this minute · ${curves.length} sessions`);
+      })()}
       {tile(stats.booked, `booked${stats.at_pitch ? ` · ${pct(stats.booked, stats.at_pitch)} of those at the pitch` : ""}`, false, "from iClosed, via leadogo, within the half hour")}
       {(() => {
         // Projection: tonight's at-the-pitch count × the book rate of past sessions, this weekday once it has four, else all.

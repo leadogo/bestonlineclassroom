@@ -6,7 +6,7 @@ import { blockAtEdge, edgeConfigured, unblockAtEdge } from "@/lib/edge-block";
 import { forgetBlockedIps } from "@/lib/ip";
 import { toggleReaction } from "@/lib/reactions";
 import { withQuery } from "@/lib/params";
-import { peakConcurrent } from "@/lib/outcomes";
+import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     return {
       first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, joined_at: row.joined_at, registrant_id: row.registrant_id,
       in_room: nowMs - seenMs < 120_000, minutes: Math.round(((row.seconds_watched as number) ?? 0) / 60), clicked_offer: Boolean(row.cta_clicked_at),
-      at_pitch: pitchAt !== null && pitchAt <= nowMs && joinedMs <= pitchAt && seenMs >= pitchAt,
+      at_pitch: pitchAt !== null && pitchAt <= nowMs && joinedMs <= pitchAt && seenMs + PRESENCE_GRACE_MS >= pitchAt,
       ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked,
       booking_href: bookingLink(s.event.cta_href, { first_name: r.first_name, registrant_id: row.registrant_id }),
     };
@@ -83,7 +83,7 @@ export async function GET(request: Request) {
     registered: registered.count ?? 0,
     joined: real.length,
     in_room: real.filter((p) => p.in_room).length,
-    peak: peakConcurrent(rows.map((row) => ({ from: new Date(row.joined_at as string).getTime(), to: new Date(row.last_seen_at as string).getTime() }))),
+    peak: peakConcurrent(real.map((p) => ({ from: new Date(p.joined_at as string).getTime(), to: new Date(p.last_seen_at as string).getTime() }))),
     pitch_at: pitchAt,
     at_pitch: pitchAt !== null && pitchAt <= nowMs ? real.filter((p) => p.at_pitch).length : null,
     clicked: real.filter((p) => p.clicked_offer).length,

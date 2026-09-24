@@ -51,13 +51,23 @@ export function retentionCurve(maxOffsets: number[], videoSeconds: number, stepS
 }
 
 /** The most people in the room at once: intervals [from, to] in ms, sampled every `stepMs`. */
-export function peakConcurrent(intervals: Array<{ from: number; to: number }>, stepMs = 60_000): number {
+/** Heartbeats land every 15 s or so; a person is still there for this long after their last one (William, Sep 23: every counter uses the same rule). */
+export const PRESENCE_GRACE_MS = 120_000;
+
+/** How many intervals cover the instant `at`, each extended by the grace. */
+export function concurrentAt(intervals: Array<{ from: number; to: number }>, at: number, graceMs = PRESENCE_GRACE_MS): number {
+  let n = 0;
+  for (const i of intervals) if (i.from <= at && at <= i.to + graceMs) n++;
+  return n;
+}
+
+export function peakConcurrent(intervals: Array<{ from: number; to: number }>, stepMs = 15_000, graceMs = PRESENCE_GRACE_MS): number {
   if (intervals.length === 0) return 0;
   const start = Math.min(...intervals.map((i) => i.from));
-  const end = Math.max(...intervals.map((i) => i.to));
+  const end = Math.max(...intervals.map((i) => i.to)) + graceMs;
   let peak = 0;
   for (let t = start; t <= end; t += stepMs) {
-    const n = intervals.filter((i) => i.from <= t && t <= i.to).length;
+    const n = concurrentAt(intervals, t, graceMs);
     if (n > peak) peak = n;
   }
   return peak;
