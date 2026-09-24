@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
 import { peakConcurrent, PRESENCE_GRACE_MS, retentionCurve } from "@/lib/outcomes";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
+import { loadHistory, projectBookings, typicalNight } from "@/lib/history";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +43,16 @@ export async function GET(request: Request) {
     const nowMs = Date.now();
     const in_room = real.filter((a) => nowMs - new Date(a.last_seen_at as string).getTime() < 120_000).length;
     const site_joined = real.filter((a) => (a.registrant as unknown as { source: string }).source === "site").length;
-    const booked = await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", row.session_date);
-    sessions.push({ ...row, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, site_joined, in_room, at_pitch, peak_live, booked: booked.count ?? 0, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0 });
+    const booked = await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", row.session_date).eq("status", "scheduled");
+    // One session asked for by date: Brandon's post also wants minutes to the pitch, the projection and the typical night.
+    let extras = {};
+    if (date && session) {
+      const minuteNow = Math.max(0, Math.floor((nowMs - session.start.getTime()) / 60_000));
+      const history = await loadHistory(event, row.session_date as string);
+      const proj = at_pitch !== null && at_pitch > 0 ? projectBookings(history, session.start.getUTCDay(), at_pitch) : in_room > 0 ? projectBookings(history, session.start.getUTCDay(), in_room) : null;
+      extras = { until_pitch_minutes: pitchAt !== null && pitchAt > nowMs ? Math.round((pitchAt - nowMs) / 60_000) : null, projected: proj, typical: typicalNight(history.map((h) => h.curve).filter((c): c is number[] => Array.isArray(c)), minuteNow), minute: minuteNow };
+    }
+    sessions.push({ ...row, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, site_joined, in_room, at_pitch, peak_live, booked: booked.count ?? 0, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0, ...extras });
   }
   return Response.json({ event: event.slug, sessions }, { headers: { "cache-control": "no-store" } });
 }

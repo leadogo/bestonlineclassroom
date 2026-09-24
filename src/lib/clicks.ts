@@ -2,9 +2,9 @@
 // the ones to watch: a person clicked and could not see the session. Best-effort, never blocks the page.
 import { db } from "./db.ts";
 
-export type ClickOutcome = "live" | "countdown" | "ended" | "replay" | "replay_expired" | "invalid" | "prompt";
+export type ClickOutcome = "live" | "countdown" | "ended" | "replay" | "replay_expired" | "invalid" | "prompt" | "scan";
 
-export async function logClick(input: { path: "j" | "w" | "replay"; outcome: ClickOutcome; token?: string | null; registrantId?: string | null; eventId?: string | null; sessionDate?: string | null; src?: string | null; userAgent?: string | null }): Promise<void> {
+export async function logClick(input: { path: "j" | "w" | "replay" | "qr"; outcome: ClickOutcome; token?: string | null; registrantId?: string | null; eventId?: string | null; sessionDate?: string | null; src?: string | null; userAgent?: string | null }): Promise<void> {
   try {
     await db().from("link_clicks").insert({
       path: input.path,

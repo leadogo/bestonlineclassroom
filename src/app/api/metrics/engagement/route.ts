@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     for (const m of data ?? []) msgs.set(m.registrant_id as string, (msgs.get(m.registrant_id as string) ?? 0) + 1);
   }
   const booked = new Set<string>();
-  const bk = await db().from("bookings").select("registrant_id, email, phone").eq("event_id", event.id).eq("session_date", date);
+  const bk = await db().from("bookings").select("registrant_id, email, phone").eq("event_id", event.id).eq("session_date", date).eq("status", "scheduled");
   const bookedEmails = new Set((bk.data ?? []).map((b) => (b.email ?? "").toLowerCase()).filter(Boolean));
   for (const b of bk.data ?? []) if (b.registrant_id) booked.add(b.registrant_id as string);
   const rows0 = rows.map((a) => {
