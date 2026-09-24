@@ -1,16 +1,16 @@
-# Plan: phase 6 (specced 2026-09-23; build starts when William says go and the room is empty)
+# Plan: phase 6 (specced 2026-09-23; William said go at 7:45 PM; 6.0 shipped 2026-09-23 ~8:05 PM MT, walk on test-run 8:30 PM)
 
 Guardrails as phase 5. Room-lane tasks are marked; each gets the test-run walk before a morning deploy.
 
 ## 6.0 counters
-- [ ] C1 `presence()` grace rule for in-room, peak, at-the-pitch (+ tests); at-the-pitch frozen at pitch + 2 min.
-- [ ] C2 `session_stats` minute rows (migration 027) written by the desk poll and the outcomes cron; typical-night tile + phase word.
-- [ ] C3 Green live count; retention on the live card.
-- [ ] C4 Attendees search.
-- [ ] C5 Booking link + Enter; press feedback on buttons (desk; room CSS = room lane).
-- [ ] C6 Monitor pauses when hidden.
-- [ ] C7 Redirects /moderate /moderator /desk → /mod; team page shows the short address.
-- [ ] C8 Room: overscroll off; reaction pop (room lane).
+- [x] C1 `presence()` grace rule for in-room, peak, at-the-pitch (+ tests); at-the-pitch frozen at pitch + 2 min.
+- [x] C2 Typical-night tile + phase word from the last ten sessions' attendance intervals (no new table needed; the history endpoint returns each session's minute curve).
+- [x] C3 Green live count; retention on the live card.
+- [x] C4 Attendees search.
+- [x] C5 Booking link + Enter; press feedback on buttons (desk; room CSS = room lane).
+- [x] C6 Monitor pauses when hidden.
+- [x] C7 Redirects /moderate /moderator /desk → /mod; team page shows the short address.
+- [x] C8 Room: overscroll off; reaction pop (room lane).
 - Checkpoint: iPad + phone walk on test-run; the peak never sits below the live count for a whole test.
 
 ## 6.1 brandon

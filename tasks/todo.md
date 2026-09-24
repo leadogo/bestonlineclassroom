@@ -113,3 +113,7 @@
 - [x] 5.1 desk, 5.2 bookings loop, 5.3 Katherine + crowd curve (switches), intel-feed: all shipped 2026-09-22 ~00:30 MT.
 - [ ] William's one big walk (test-run rounds 9:30 / 10:30 / 11:15 AM MT Sep 22, checklist "Test run seven"); then flip switches for ailg-r in a morning window if he says so.
 - [ ] Sentry (or Vercel error tracking) for the classroom, next week, with its own test-run walk.
+
+## Phase 6 (2026-09-23)
+- [x] 6.0 counters/desk fixes shipped ~8:05 PM MT; test-run eight at 8:30 PM for William's walk.
+- [ ] 6.1 Brandon on the Stats order + opt-ins denominator; 6.2 fast bookings (iClosed webhook: William has one, needs our subscriber URL) + appointments post + /qr; 6.3 engagement; 6.4 chat (switches). See tasks/plan-phase6.md.
