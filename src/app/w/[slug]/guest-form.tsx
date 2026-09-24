@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 /** The one field on the join card: the name shown in chat and the people list. Creates a guest seat and opens their link. */
-export function GuestForm({ slug, sessionDate, src, rid, passthrough, live }: { slug: string; sessionDate: string; src: string; rid: string | null; passthrough: Record<string, string>; live: boolean }) {
+export function GuestForm({ slug, sessionDate, src, rid, passthrough, live, startLabel }: { slug: string; sessionDate: string; src: string; rid: string | null; passthrough: Record<string, string>; live: boolean; startLabel: string }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -12,7 +12,7 @@ export function GuestForm({ slug, sessionDate, src, rid, passthrough, live }: { 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
-    await join(name);
+    await join(name.trim() || "Guest");
   }
 
   async function join(who: string) {
@@ -33,14 +33,13 @@ export function GuestForm({ slug, sessionDate, src, rid, passthrough, live }: { 
   return (
     <form onSubmit={submit} className="mt-5">
       <label htmlFor="first_name" className="block text-sm font-bold">
-        Your first name <span className="font-normal text-muted">(shown in the chat)</span>
+        First name <span className="font-normal text-muted">(optional, shown in the chat)</span>
       </label>
       <input
         id="first_name"
         name="first_name"
         autoComplete="given-name"
         autoFocus
-        required
         maxLength={40}
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -48,11 +47,8 @@ export function GuestForm({ slug, sessionDate, src, rid, passthrough, live }: { 
         placeholder="Sarah"
       />
       {error && <p className="mt-2 text-base text-live">{error}</p>}
-      <button type="submit" disabled={busy || !name.trim()} className="mt-4 min-h-13 w-full rounded-xl bg-brand text-lg font-bold text-white shadow-[0_6px_24px_rgba(47,124,246,0.35)] disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50">
-        {busy ? "Joining…" : live ? "Join now" : "Save my seat"}
-      </button>
-      <button type="button" disabled={busy} onClick={() => join("Guest")} className="mt-3 min-h-11 w-full text-sm text-muted underline-offset-2 hover:text-ink hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60">
-        Continue without a name
+      <button type="submit" disabled={busy} className="mt-4 min-h-13 w-full rounded-xl bg-brand text-lg font-bold text-white shadow-[0_6px_24px_rgba(47,124,246,0.35)] disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50">
+        {busy ? "Joining…" : live ? "Join now" : `Save my seat for ${startLabel} MT`}
       </button>
     </form>
   );
