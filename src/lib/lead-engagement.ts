@@ -10,6 +10,8 @@ export type LeadStory = {
   email: string;
   sessions_registered: number;
   sessions_attended: number;
+  /** Pre-webinar free training (the site's flags): null until they crossed the hot line or watched anything. */
+  training: null | { hot: boolean; ultra_hot: boolean; minutes: number; completed: string[] };
   source: string | null;
   ad: string | null;
   campaign: string | null;
@@ -43,7 +45,7 @@ export async function leadStories(event: EventRow, emails: string[]): Promise<Le
   if (wanted.length === 0) return [];
   const schedule = scheduleOf(event);
   const pitchMin = event.cta_at_seconds !== null ? event.cta_at_seconds / 60 : 75;
-  const { data: regs } = await db().from("registrants").select("id, email, source, attribution, created_at, session_date").eq("event_id", event.id).in("email", wanted).limit(2000);
+  const { data: regs } = await db().from("registrants").select("id, email, source, attribution, created_at, session_date, flags").eq("event_id", event.id).in("email", wanted).limit(2000);
   const byEmail = new Map<string, typeof regs>();
   for (const r of regs ?? []) { const k = (r.email as string).toLowerCase(); byEmail.set(k, [...(byEmail.get(k) ?? []), r]); }
   const ids = (regs ?? []).map((r) => r.id as string);
@@ -76,7 +78,11 @@ export async function leadStories(event: EventRow, emails: string[]): Promise<Le
         score: engagementScore({ minutes, atPitch: at_pitch, messages: (msgs ?? []).length, belief: belief.length, clicked: Boolean(latestAtt.cta_clicked_at) }, pitchMin),
       };
     }
-    out.push({ email, sessions_registered: mine.length, sessions_attended: new Set(myAtt.map((x) => x.session_date)).size, source: withAttr?.source ?? null, ad: a.utm_content ?? null, campaign: a.utm_campaign ?? null, first_optin_days_ago: first ? Math.floor((Date.now() - first) / 86_400_000) : null, latest });
+    // Free training before the session (SPEC-free-training.md in the site repo): the site sets these flags when a
+    // registrant crosses Jeremy's hot line; the newest registration with any flag speaks for the person.
+    const flagged = [...mine].sort((x, y) => String(y.created_at).localeCompare(String(x.created_at))).map((r) => (r as { flags?: Record<string, unknown> | null }).flags ?? {}).find((f) => f.hot === true || typeof f.training_minutes === "number");
+    const training = flagged ? { hot: flagged.hot === true, ultra_hot: flagged.ultra_hot === true, minutes: typeof flagged.training_minutes === "number" ? flagged.training_minutes : 0, completed: Array.isArray(flagged.training_completed) ? (flagged.training_completed as string[]) : [] } : null;
+    out.push({ email, sessions_registered: mine.length, sessions_attended: new Set(myAtt.map((x) => x.session_date)).size, source: withAttr?.source ?? null, ad: a.utm_content ?? null, campaign: a.utm_campaign ?? null, first_optin_days_ago: first ? Math.floor((Date.now() - first) / 86_400_000) : null, latest, training });
   }
   return out;
 }
