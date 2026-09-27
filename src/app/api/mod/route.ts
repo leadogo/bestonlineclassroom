@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   const pitchAt = s.event.cta_at_seconds !== null ? s.session.start.getTime() + s.event.cta_at_seconds * 1000 : null;
   const ppl = await db()
     .from("attendance")
-    .select("last_seen_at, joined_at, seconds_watched, cta_clicked_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip, prior_sessions, auto_ghost_reason)")
+    .select("last_seen_at, joined_at, seconds_watched, cta_clicked_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip, prior_sessions, auto_ghost_reason, flags)")
     .eq("session_date", s.session.date)
     .eq("kind", "live")
     .eq("registrant.event_id", s.event.id)
@@ -65,7 +65,8 @@ export async function GET(request: Request) {
   const blocked = new Set(((await db().from("blocked_ips").select("ip")).data ?? []).map((b) => String(b.ip)));
   const rows = (ppl.data ?? []).filter((row) => (row.registrant as unknown as { source: string }).source !== "test" || true);
   const people = rows.map((row) => {
-    const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null; prior_sessions: number | null; auto_ghost_reason: string | null };
+    const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null; prior_sessions: number | null; auto_ghost_reason: string | null; flags: Record<string, unknown> | null };
+    const flags = r.flags ?? {};
     const masked = r.email ? r.email.replace(/^(.{3}).*(@.*)$/, "$1…$2") : "guest";
     const joinedMs = new Date(row.joined_at as string).getTime();
     const seenMs = new Date(row.last_seen_at as string).getTime();
@@ -75,6 +76,8 @@ export async function GET(request: Request) {
       at_pitch: pitchAt !== null && pitchAt <= nowMs && joinedMs <= pitchAt && seenMs + PRESENCE_GRACE_MS >= pitchAt,
       ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked, prior_sessions: r.prior_sessions ?? 0, auto_ghost_reason: r.auto_ghost_reason,
       booking_href: bookingLink(s.event.cta_href, { first_name: r.first_name, registrant_id: row.registrant_id }),
+      // Free training before the session (SPEC-free-training.md in the site repo): Jeremy's hot line, set by the site.
+      hot: flags.hot === true, ultra_hot: flags.ultra_hot === true, training_minutes: typeof flags.training_minutes === "number" ? flags.training_minutes : 0,
     };
   });
   const real = people.filter((p) => p.source !== "test");

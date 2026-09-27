@@ -12,7 +12,7 @@ import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[]; belief?: boolean; is_question?: boolean; kind?: string; visible_to?: string | null };
-type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null };
+type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
 type Desk = { member_id: string; name: string; tab: string | null; replying_to: string | null; last_seen_at: string };
 type Stats = { registered: number; joined: number; in_room: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
 type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
@@ -517,6 +517,7 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
           <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] font-bold text-muted">{p.source === "zapier" ? "zap" : p.source}</span>
           {p.ghosted && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted line-through" title={p.auto_ghost_reason ? `auto: ${p.auto_ghost_reason}` : undefined}>{p.auto_ghost_reason ? "auto-ghosted" : "ghosted"}</span>}
           {p.prior_sessions ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted">watched before ×{p.prior_sessions}</span> : null}
+          {p.hot ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted" title={`Watched ${p.training_minutes ?? 0} min of the free training before the session`}>{p.ultra_hot ? "🔥🔥 ultra-hot" : "🔥 hot"}</span> : null}
           {p.ip_blocked && <span className="ml-1.5 rounded bg-live/20 px-1.5 text-[11px] font-bold text-live">IP blocked</span>}
         </p>
         <p className="truncate text-xs text-muted">
