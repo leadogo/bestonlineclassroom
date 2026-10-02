@@ -2,24 +2,35 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-/** The one field on the join card: the name shown in chat and the people list. Creates a guest seat and opens their link. */
-export function GuestForm({ slug, sessionDate, src, rid, passthrough, live, startLabel }: { slug: string; sessionDate: string; src: string; rid: string | null; passthrough: Record<string, string>; live: boolean; startLabel: string }) {
+const input = "mt-2 min-h-13 w-full rounded-xl border border-line bg-room px-4 text-lg text-ink placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40";
+
+/**
+ * The field on the join card. `name`: the name shown in chat (optional). `email` (SPEC-phase7.md): the email they
+ * registered with, required, with the name optional under it. Creates a guest seat and opens their link.
+ */
+export function GuestForm({ slug, sessionDate, src, rid, passthrough, live, startLabel, field = "name" }: { slug: string; sessionDate: string; src: string; rid: string | null; passthrough: Record<string, string>; live: boolean; startLabel: string; field?: "name" | "email" }) {
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const asksEmail = field === "email";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
-    await join(name.trim() || "Guest");
+    if (asksEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      setError("Enter the email you registered with.");
+      return;
+    }
+    await join(name.trim() || (asksEmail ? "" : "Guest"));
   }
 
   async function join(who: string) {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug, first_name: who, session_date: sessionDate, src, rid }) });
+      const res = await fetch("/api/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug, first_name: who, session_date: sessionDate, src, rid, ...(asksEmail ? { email: email.trim() } : {}) }) });
       const j = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
       if (!res.ok || !j.token) throw new Error(j.error ?? "Please try again.");
       const q = new URLSearchParams(passthrough).toString();
@@ -32,18 +43,26 @@ export function GuestForm({ slug, sessionDate, src, rid, passthrough, live, star
 
   return (
     <form onSubmit={submit} className="mt-5">
-      <label htmlFor="first_name" className="block text-sm font-bold">
+      {asksEmail && (
+        <>
+          <label htmlFor="email" className="block text-sm font-bold">
+            Your email
+          </label>
+          <input id="email" name="email" type="email" inputMode="email" autoComplete="email" autoFocus required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} className={input} placeholder="sarah@example.com" />
+        </>
+      )}
+      <label htmlFor="first_name" className={`block text-sm font-bold ${asksEmail ? "mt-4" : ""}`}>
         First name <span className="font-normal text-muted">(optional, shown in the chat)</span>
       </label>
       <input
         id="first_name"
         name="first_name"
         autoComplete="given-name"
-        autoFocus
+        autoFocus={!asksEmail}
         maxLength={40}
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="mt-2 min-h-13 w-full rounded-xl border border-line bg-room px-4 text-lg text-ink placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+        className={input}
         placeholder="Sarah"
       />
       {error && <p className="mt-2 text-base text-live">{error}</p>}

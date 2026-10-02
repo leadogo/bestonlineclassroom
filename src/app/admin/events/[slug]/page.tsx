@@ -112,6 +112,10 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
                 <input type="checkbox" name="people_curve" defaultChecked={event.people_curve_enabled} className="h-4 w-4 accent-brand" />
                 The crowd in the People tab thins as the session runs (85% by 15 min, 80% at the pitch, 60% at 1:45, 40% at the end)
               </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="open_link_email" defaultChecked={event.open_link_field === "email"} className="h-4 w-4 accent-brand" />
+                The open link (Skool posts, old links) asks for an email instead of a name, so the client wall can recognise a client. The nightly report compares the card&rsquo;s conversion with the name-only nights before the switch.
+              </label>
             </div>
             <Field label="Belief phrases (comma-separated)" name="belief_phrases" rows={2} value={(event.belief_phrases ?? []).join(", ")} hint="A chat message containing any of these counts as a belief signal in the engagement score." />
             <Field label="Katherine's timed prompts" name="prompts" rows={8} value={(event.prompts ?? []).map((p) => `${p.minute} | ${p.text}`).join("\n")} hint="One per line: minute | what she says. Posted on the room's clock while the Katherine switch is on. The draft from the transcript is in docs/katherine-prompts-draft.md." />

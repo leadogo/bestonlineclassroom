@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { tellWallHit } from "@/lib/client-wall";
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { Room } from "@/components/room/Room";
@@ -49,7 +50,17 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
       </main>
     );
   }
-  if (r.blocked_at) return <Removed logoUrl={r.event.logo_url} />;
+  if (r.blocked_at) {
+    // A client on the wall (SPEC-phase7.md): a bland 404, logged, one Slack line; a moderator's block keeps the courteous page.
+    if (r.block_reason === "client") {
+      after(async () => {
+        await logClick({ path: "j", outcome: "walled", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src: typeof sp.src === "string" ? sp.src : null, userAgent: ua });
+        await tellWallHit(r, r.event.title, "join").catch(() => {});
+      });
+      notFound();
+    }
+    return <Removed logoUrl={r.event.logo_url} />;
+  }
   const team = sp.at ? Boolean(await getTeamMember().catch(() => null)) : false;
   const outcome = buildRoom(r.event, r, sp, new Date(), { team });
   const src = typeof sp.src === "string" ? sp.src : null;

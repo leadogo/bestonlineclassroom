@@ -34,6 +34,8 @@ export type EventRow = {
   /** "HH:MM:SS" local, or null = when the session ends. */
   replay_opens_at: string | null;
   katherine_enabled: boolean;
+  open_link_field: "name" | "email";
+  open_link_email_since: string | null;
   people_curve_enabled: boolean;
   belief_phrases: string[];
   prompts: Array<{ minute: number; text: string }>;

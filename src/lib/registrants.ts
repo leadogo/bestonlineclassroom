@@ -106,3 +106,10 @@ export function joinUrl(token: string, base = APP_URL): string {
 export function replayUrl(token: string, base = APP_URL): string {
   return `${base.replace(/\/+$/, "")}/replay/${token}`;
 }
+
+/** A first name to show for someone who gave only an email: "sarah.k@…" → "Sarah"; nothing usable → "Guest". */
+export function nameFromEmail(email: string | null | undefined): string {
+  const local = String(email ?? "").split("@")[0];
+  const part = local.split(/[._\-+\d]/).find((p) => /^[a-z]{2,}$/i.test(p)) ?? "";
+  return part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : "Guest";
+}

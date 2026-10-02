@@ -4,8 +4,9 @@ import { btnQuiet, Empty, PageHeader, td, th } from "../ui";
 import { assignedEventIds, getTeamMember } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-type Row = { id: string; first_name: string; email: string | null; source: string; session_date: string; blocked_at: string | null; ghosted_at: string | null; ip: string | null; event: { slug: string; title: string; timezone: string } };
+type Row = { id: string; first_name: string; email: string | null; source: string; session_date: string; blocked_at: string | null; ghosted_at: string | null; block_reason: string | null; ip: string | null; event: { slug: string; title: string; timezone: string } };
 
+const minutesAgo = (d: Date) => Math.round((Date.now() - d.getTime()) / 60_000);
 const when = (iso: string, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 
 /** Everyone the team has blocked or ghosted, and every blocked address, with a way back for each. */
@@ -13,12 +14,14 @@ export default async function Blocked({ searchParams }: { searchParams: Promise<
   const me = (await getTeamMember())!;
   const { event } = await searchParams;
   const ids = await assignedEventIds(me);
-  let q = db().from("registrants").select("id, first_name, email, source, session_date, blocked_at, ghosted_at, ip, event:events!inner(slug, title, timezone)").or("blocked_at.not.is.null,ghosted_at.not.is.null").order("blocked_at", { ascending: false, nullsFirst: false }).limit(500);
+  let q = db().from("registrants").select("id, first_name, email, source, session_date, blocked_at, ghosted_at, block_reason, ip, event:events!inner(slug, title, timezone)").or("blocked_at.not.is.null,ghosted_at.not.is.null").order("blocked_at", { ascending: false, nullsFirst: false }).limit(500);
   if (ids) q = q.in("event_id", ids);
   if (event) q = q.eq("event.slug", event);
-  const [{ data }, ipsRes] = await Promise.all([q, db().from("blocked_ips").select("ip, reason, at, edge_id").order("at", { ascending: false })]);
+  const [{ data }, ipsRes, wallRes] = await Promise.all([q, db().from("blocked_ips").select("ip, reason, at, edge_id").order("at", { ascending: false }), db().from("client_wall").select("seen_at", { count: "exact" }).is("released_at", null).order("seen_at", { ascending: false }).limit(1)]);
   const rows = (data ?? []) as unknown as Row[];
-  const blocked = rows.filter((r) => r.blocked_at);
+  const blocked = rows.filter((r) => r.blocked_at && r.block_reason !== "client");
+  const walled = rows.filter((r) => r.block_reason === "client").slice(0, 50);
+  const wallSynced = wallRes.data?.[0]?.seen_at ? new Date(wallRes.data[0].seen_at as string) : null;
   const ghosted = rows.filter((r) => r.ghosted_at && !r.blocked_at);
   const ips = ipsRes.data ?? [];
   const blockedIps = new Set(ips.map((i) => String(i.ip)));
@@ -88,6 +91,28 @@ export default async function Blocked({ searchParams }: { searchParams: Promise<
                     Unghost
                   </button>
                 </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold">Client wall</h2>
+        <p className="text-sm text-muted">
+          {wallSynced ? `${wallRes.count ?? 0} current and past clients from the BMS directory, synced ${minutesAgo(wallSynced)} min ago. ` : "The directory has not synced yet. "}
+          They see a plain 404 on their join and replay links. The directory is the source: add or remove people there, not here.
+        </p>
+        {walled.length === 0 ? (
+          <Empty>No client holds a link{event ? " here" : ""}.</Empty>
+        ) : (
+          <ul className="flex flex-col">
+            {walled.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-3 border-b border-line py-3 text-sm">
+                <span className="font-bold">{r.first_name}</span>
+                <span className="text-muted">{r.email ?? `guest (${r.source})`}</span>
+                <span className="text-muted">{r.event.title}, {r.session_date}</span>
+                <span className="text-muted tabular-nums">walled {when(r.blocked_at!, r.event.timezone)}</span>
               </li>
             ))}
           </ul>

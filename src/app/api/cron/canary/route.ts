@@ -56,6 +56,9 @@ export async function GET(request: Request) {
     checks.push({ name: "reminders cron", ok: (sends.count ?? 0) > 0, detail: `${sends.count ?? 0} reminders sent in the last 30 h` });
     checks.push({ name: "mail", ok: postmarkConfigured(), detail: postmarkConfigured() ? "Postmark configured" : "Postmark not configured" });
     checks.push({ name: "poster and icon", ok: Boolean(e.icon_url) && (e.poster_url ? (await head(e.poster_url)).ok : true), detail: e.poster_url ? "poster answers" : "no poster (button on black)" });
+    const wall = await db().from("client_wall").select("seen_at", { count: "exact" }).is("released_at", null).order("seen_at", { ascending: false }).limit(1);
+    const wallAt = wall.data?.[0]?.seen_at ? new Date(wall.data[0].seen_at as string).getTime() : 0;
+    checks.push({ name: "client wall", ok: now.getTime() - wallAt < 2 * 3_600_000, detail: wallAt ? `${wall.count ?? 0} clients on the wall, synced ${Math.round((now.getTime() - wallAt) / 60_000)} min ago` : "client wall never synced" });
     report.push({ event: e.slug, runs: true, checks });
   }
   const lines = report.map((r) => {

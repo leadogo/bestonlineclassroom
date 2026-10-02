@@ -111,7 +111,7 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
             </div>
             <p className="mt-4 text-sm text-muted">{when}</p>
             {!live && <WaitingCount startsAt={session.start.getTime()} crowd={crowd} realOpeners={realOpeners} names={(event.simulated_names ?? []).slice(0, 3)} />}
-            <GuestForm slug={slug} sessionDate={sessionDate} src={src} rid={rid ?? null} passthrough={passthrough} live={live} startLabel={startLabel} />
+            <GuestForm slug={slug} sessionDate={sessionDate} src={src} rid={rid ?? null} passthrough={passthrough} live={live} startLabel={startLabel} field={event.open_link_field === "email" ? "email" : "name"} />
             <ul className="mt-5 grid gap-1.5 text-xs text-muted">
               <li className="flex items-start gap-2"><span aria-hidden className="text-emerald-400">✓</span>Plays in your browser. Nothing to download, no account needed.</li>
               <li className="flex items-start gap-2"><span aria-hidden className="text-emerald-400">✓</span>Your name shows only in the chat. Your link is yours; keep it to come back in.</li>

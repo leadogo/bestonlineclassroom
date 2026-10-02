@@ -5,6 +5,9 @@ import { db } from "@/lib/db";
 import { cleanParams } from "@/lib/params";
 import { TOKEN_RE } from "@/lib/registrants";
 import { after } from "next/server";
+import { notFound } from "next/navigation";
+import { Removed } from "@/components/room/Removed";
+import { tellWallHit } from "@/lib/client-wall";
 import { replayCopy } from "@/lib/replay-content";
 import { tagNow } from "@/lib/tagging";
 import { logClick } from "@/lib/clicks";
@@ -42,6 +45,16 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
         </div>
       </main>
     );
+  }
+  if (r.blocked_at) {
+    if (r.block_reason === "client") {
+      after(async () => {
+        await logClick({ path: "replay", outcome: "walled", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua });
+        await tellWallHit(r, r.event.title, "replay").catch(() => {});
+      });
+      notFound();
+    }
+    return <Removed logoUrl={r.event.logo_url} />;
   }
   const e = r.event;
   const p = cleanParams(sp);

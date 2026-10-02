@@ -18,6 +18,7 @@ export type Registrant = {
   source: string;
   site_registration_id: string | null;
   blocked_at: string | null;
+  block_reason: string | null;
   replay_opened_at: string | null;
   confirmation_sent_at: string | null;
   room_join_reported_at: string | null;
@@ -25,7 +26,7 @@ export type Registrant = {
   skool_invited_at: string | null;
 };
 
-const COLS = "id, event_id, session_date, token, first_name, email, email_hash, phone, source, site_registration_id, blocked_at, replay_opened_at, confirmation_sent_at, room_join_reported_at, legacy_key, skool_invited_at";
+const COLS = "id, event_id, session_date, token, first_name, email, email_hash, phone, source, site_registration_id, blocked_at, block_reason, replay_opened_at, confirmation_sent_at, room_join_reported_at, legacy_key, skool_invited_at";
 
 export async function registrantByToken(token: string): Promise<(Registrant & { event: EventRow }) | null> {
   const { data, error } = await db().from("registrants").select(`${COLS}, event:events(*)`).eq("token", token).maybeSingle();

@@ -31,9 +31,9 @@ export async function GET(request: Request) {
     const offsets = real.map((a) => a.max_offset as number);
     const peak_live = peakConcurrent(real.map((a) => ({ from: new Date(a.joined_at as string).getTime(), to: new Date(a.last_seen_at as string).getTime() })));
     // Opt-ins: people who registered themselves for this session (site or Zap), not imports, Skool links or guests.
-    const opt = await db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", row.session_date).in("source", ["site", "zapier"]);
+    const opt = await db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", row.session_date).in("source", ["site", "zapier"]).or("block_reason.is.null,block_reason.neq.client");
     // Site opt-ins (the pages the ads send people to), and those whose attribution names an ad (Meta utm or fbclid).
-    const site = await db().from("registrants").select("attribution").eq("event_id", event.id).eq("session_date", row.session_date).eq("source", "site").limit(5000);
+    const site = await db().from("registrants").select("attribution").eq("event_id", event.id).eq("session_date", row.session_date).eq("source", "site").or("block_reason.is.null,block_reason.neq.client").limit(5000);
     const siteRows = site.data ?? [];
     const ad_optins = siteRows.filter((r) => { const a = (r.attribution ?? {}) as Record<string, string>; return a.utm_source === "facebook_ads" || Boolean(a.fbclid); }).length;
     // In the room at the pitch instant (what the tracker calls Pitch Live), not "watched past the pitch".

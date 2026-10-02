@@ -5,6 +5,7 @@ import { parseChapters, parseNames, parseSeconds } from "@/lib/admin";
 import { distinctNames, parseChatCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { forgetEvent, getEvent } from "@/lib/events";
+import { localDate, scheduleOf } from "@/lib/daily-schedule";
 import { mp4Info } from "@/lib/mp4";
 import { REPLAY_COPY } from "@/lib/replay-content";
 
@@ -49,6 +50,9 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     replay_opens_at: replay_opens_at ? `${replay_opens_at}:00` : null,
     katherine_enabled: fd.get("katherine") === "on",
     people_curve_enabled: fd.get("people_curve") === "on",
+    open_link_field: fd.get("open_link_email") === "on" ? "email" : "name",
+    // The monitor's baseline is the seven nights before this date; it is set the day the switch goes on and cleared when it goes off.
+    open_link_email_since: fd.get("open_link_email") === "on" ? (event.open_link_field === "email" && event.open_link_email_since ? event.open_link_email_since : localDate(scheduleOf(event), new Date())) : null,
     belief_phrases: str(fd, "belief_phrases", 2000).split(/[,\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 60),
     prompts: str(fd, "prompts", 8000).split("\n").map((line) => /^\s*(\d{1,3})\s*[|:]\s*(.+?)\s*$/.exec(line)).filter((m): m is RegExpExecArray => Boolean(m)).map((m) => ({ minute: Number(m[1]), text: m[2].slice(0, 500) })).slice(0, 60),
     cta_prompt_minutes: str(fd, "cta_prompt_minutes", 100).split(/[,\s]+/).map((x) => Number(x)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 120).slice(0, 12),
