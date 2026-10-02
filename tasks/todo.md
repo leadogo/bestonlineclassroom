@@ -117,3 +117,9 @@
 ## Phase 6 (2026-09-23)
 - [x] 6.0 counters/desk fixes shipped ~8:05 PM MT; test-run eight at 8:30 PM for William's walk.
 - [x] 6.1–6.4 shipped 2026-09-23 night; walk on test-run 8:30 AM Sep 24 (Test run nine). William added the iClosed webhook (created/rescheduled/cancelled). Still on him: old New BOOKED Zap off after the first post, QR → /qr. Join card redesigned Sep 23 late.
+
+## Phase 7 (2026-10-01 night): the client wall
+- [x] Shipped: migration 028, `client_wall` + trigger + `client_wall_apply`, `POST /api/client-wall`, bms-dashboard cron every 30 min (PR #596), 404 at join and replay for `block_reason = client`, open-link email field behind `events.open_link_field`, `open-link-report` cron 02:50 UTC, canary check, opt-ins exclude walled, `/admin/blocked` Client wall section. 912 on the wall, 49 walled.
+- [ ] William's walk on test-run (card asks for an email there): wall-test@example.com → 404; own email → room. Then flip Settings → "open link asks for an email" for ailg-r before 3:30 PM (Oct 2 or later).
+- [ ] Watch the 8:50 PM MT open-link line for three blast nights; 🔴 means flip the switch back.
+- [ ] Review after a week: should refunded / dispute statuses stay on the wall; any client appearing as a guest (then the IP layer).

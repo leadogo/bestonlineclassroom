@@ -1,6 +1,13 @@
 # Spec, phase 7: the client wall
 
-Status: **proposed 2026-10-01 ~8 PM MT, awaiting William's approval. No code until he approves this spec and the plan.**
+Status: **approved by William 2026-10-01 ~8:05 PM MT ("go ahead", reliability first); shipped the same night ~8:55 PM MT** (classroom
+commit 71246ef, migration 028_client_wall; bms-dashboard PR #596 squash-merged, `CLASSROOM_WALL_SECRET` in Doppler prd and in the
+Vercel project, redeployed). First sync: 992 clients sent, 912 usable (80 have no email or phone), 49 registrations walled
+(33 site, 11 SMS, 5 legacy), 0 team, 0 moderator blocks touched. Trigger proven on production with seven seeded cases.
+On production: a seeded test client (`client_wall` row `test:walk`, status `test`, email wall-test@example.com) gets HTTP 404
+"The video could not be loaded." at `/j` and `/replay`; a normal guest gets the room. The open-link email field is ON for
+`test-run` only; ailg-r stays name-only until William's walk. Dropped from the spec: the desk Attendees chip (the list is
+joined people only; a walled client never joins). The classroom's canonical host is www.bestonlineclassroom.com.
 Origin: William's note on Oct 1: current or past Book More Showings clients must never get into the room again; they
 should see a generic "404, video will not load", nothing that reads as a wall. Discussion settled on identity (email and
 phone from the BMS client directory) as the key, not IP; the open link asks for an email so the Skool blast path is
