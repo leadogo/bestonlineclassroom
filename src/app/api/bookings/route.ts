@@ -58,19 +58,29 @@ export async function POST(request: Request) {
     if (reg) matched += 1;
     // What the appointments post says about them: where they came from and what they did tonight.
     let detail: Record<string, unknown> = {};
+    // Already a client when they booked (SPEC-phase7.md wall; the directory's own dates): by email, else by phone.
+    const last10 = digits.slice(-10);
+    const wallRows = email ? (await db().from("client_wall").select("status, client_since").is("released_at", null).contains("emails", [email]).limit(1)).data : null;
+    const wall = wallRows?.[0] ?? (digits.length >= 10 ? (await db().from("client_wall").select("status, client_since").is("released_at", null).contains("phones", [last10]).limit(1)).data?.[0] : null) ?? null;
+    detail.client = wall && wall.status !== "test" && (!wall.client_since || new Date(wall.client_since as string).getTime() < at.getTime()) ? { status: wall.status ?? null, since: wall.client_since ?? null } : null;
     if (reg) {
-      const full = (await db().from("registrants").select("first_name, source, attribution, created_at, session_date").eq("id", reg.id).maybeSingle()).data;
+      const full = (await db().from("registrants").select("first_name, source, attribution, created_at, session_date, replay_opened_at").eq("id", reg.id).maybeSingle()).data;
       const a = (full?.attribution ?? {}) as Record<string, string>;
       const att = (await db().from("attendance").select("joined_at, seconds_watched, cta_clicked_at, last_seen_at").eq("registrant_id", reg.id).eq("session_date", session_date).eq("kind", "live").maybeSingle()).data;
+      const replay = (await db().from("attendance").select("seconds_watched").eq("registrant_id", reg.id).eq("kind", "replay").maybeSingle()).data;
       const sess = sessionFor(schedule, session_date);
       const pitchMs2 = sess ? sess.start.getTime() + pitchMs : null;
       detail = {
+        ...detail,
         source: full?.source ?? null, ad: a.utm_content ?? null, campaign: a.utm_campaign ?? null, medium: a.utm_medium ?? null,
         optin_days_ago: full?.created_at ? Math.floor((at.getTime() - new Date(full.created_at).getTime()) / 86_400_000) : null,
         minutes: att ? Math.round(((att.seconds_watched as number) ?? 0) / 60) : 0,
         at_pitch: Boolean(att && pitchMs2 !== null && new Date(att.joined_at as string).getTime() <= pitchMs2 && new Date(att.last_seen_at as string).getTime() + 120_000 >= pitchMs2),
         clicked_at: att?.cta_clicked_at ?? null,
         minutes_after_pitch: pitchMs2 !== null ? Math.round((at.getTime() - pitchMs2) / 60_000) : null,
+        days_after_session: sess ? Math.floor((at.getTime() - sess.start.getTime()) / 86_400_000) : null,
+        replay_opened_at: full?.replay_opened_at ?? null,
+        replay_minutes: replay ? Math.round(((replay.seconds_watched as number) ?? 0) / 60) : 0,
       };
     }
     results.push({ external_id: String(x.external_id), session_date, matched: Boolean(reg), status: x.status ?? "scheduled", ...detail });

@@ -60,7 +60,7 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   const p = cleanParams(sp);
   const now = new Date();
 
-  const cta = e.cta_href ? { label: e.cta_label ?? "Book your call", href: ctaHref(e.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, p), at: e.cta_at_seconds ?? 0 } : null;
+  const cta = e.cta_href ? { label: e.cta_label ?? "Book your call", href: ctaHref(e.cta_href, { first_name: r.first_name, email: r.email, phone: r.phone, rid: r.id }, { ...p, via: "replay" }), at: e.cta_at_seconds ?? 0 } : null;
 
   // The replay opens at the later of the session's end and the event's opening time (8 PM for ailg-r). Before that the
   // link explains, without the word "live" (Jeremy, 2026-09-21). Team members bypass the gate to check the page.

@@ -293,7 +293,7 @@ function Message({ m, mine, onReact, onReactLocal, onReply, ctaHref, ctaLabel, t
           )}
         </p>
         {m.kind === "cta" && ctaHref && (
-          <a href={ctaHref} target="_blank" rel="noopener" onClick={() => { fetch("/api/cta", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, kind: "live" }), keepalive: true }).catch(() => {}); }} className="mt-1.5 inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-cta px-4 text-[15px] font-bold text-cta-ink">
+          <a href={ctaHref.replace(/([?&])via=room(?=&|$)/, "$1via=chat")} target="_blank" rel="noopener" onClick={() => { fetch("/api/cta", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, kind: "live" }), keepalive: true }).catch(() => {}); }} className="mt-1.5 inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-cta px-4 text-[15px] font-bold text-cta-ink">
             {ctaLabel} →
           </a>
         )}
