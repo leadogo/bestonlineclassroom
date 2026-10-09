@@ -33,6 +33,8 @@ test("findMarkets: the place name whole, in any case or punctuation; longest pla
   assert.deepEqual(names(findMarkets("central new jersey", markets)), ["Central New Jersey, NJ", "Central, NJ"]);
   assert.deepEqual(names(findMarkets("Aurora", markets)), ["Aurora, CO", "Aurora, ON"]);
   assert.deepEqual(names(findMarkets("in Georgia how many agents here", markets)), []);
+  assert.deepEqual(names(findMarkets("Babcock Ranch charlotte county", [...markets, M("Charlotte, NC", 6)])), []);
+  assert.deepEqual(names(findMarkets("Alachua County FL", [M("Alachua County, FL", 1)])), ["Alachua County, FL"]);
   assert.deepEqual(names(findMarkets("", markets)), []);
 });
 

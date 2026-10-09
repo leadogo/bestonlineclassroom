@@ -34,7 +34,8 @@ export function findMarkets(text: string, markets: MarketCount[]): MarketCount[]
   return markets
     .filter((m) => {
       const p = norm(placeOf(m.name));
-      return p.length >= 3 && t.includes(` ${p} `);
+      // "charlotte county" (Florida) is not the city of Charlotte, NC; a market named "… County" still matches.
+      return p.length >= 3 && t.includes(` ${p} `) && (p.endsWith(" county") || !t.includes(` ${p} county `));
     })
     .sort((a, b) => Number(isStateMarket(a.name)) - Number(isStateMarket(b.name)) || norm(placeOf(b.name)).length - norm(placeOf(a.name)).length || b.clients - a.clients);
 }
