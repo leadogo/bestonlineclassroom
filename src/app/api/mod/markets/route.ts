@@ -10,5 +10,6 @@ export async function GET() {
   const { data, error } = await db().from("market_counts").select("name, clients, live, synced_at").order("name");
   if (error) return Response.json({ error: "Could not load markets." }, { status: 500 });
   const synced_at = (data ?? []).reduce<string | null>((latest, r) => (latest && latest > (r.synced_at as string) ? latest : (r.synced_at as string)), null);
-  return Response.json({ markets: (data ?? []).map((r) => ({ name: r.name, clients: r.clients, live: r.live })), synced_at }, { headers: { "cache-control": "private, max-age=600" } });
+  // Fetched once per desk visit; never cached, or a desk opened before the first sync would keep an empty list.
+  return Response.json({ markets: (data ?? []).map((r) => ({ name: r.name, clients: r.clients, live: r.live })), synced_at }, { headers: { "cache-control": "no-store" } });
 }
