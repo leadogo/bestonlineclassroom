@@ -1,12 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asksMarket, findMarkets, marketDraft, normalizeMarkets, placeOf } from "./market-answer.ts";
+import { asksMarket, findMarkets, isStateMarket, marketDraft, normalizeMarkets, pickTop, placeOf } from "./market-answer.ts";
 
 const M = (name: string, clients: number, live = clients) => ({ name, clients, live });
 const markets = [
   M("Calgary, AB", 42, 20), M("Chicago, IL", 5), M("Chicagoland, IL", 0), M("Bay Area, CA", 1), M("San Francisco, CA", 9, 8),
   M("Coquitlam, BC", 0), M("Central New Jersey, NJ", 2), M("Central, NJ", 0), M("Aurora, CO", 3), M("Aurora, ON", 1), M("Alabama, AL", 2),
+  M("Florida, FL", 8, 5), M("Ontario, ON", 5), M("Kitchener, ON", 6),
 ];
+
+test("state-level labels sort after cities and only answer a message that is just the state", () => {
+  assert.equal(isStateMarket("Florida, FL"), true);
+  assert.equal(isStateMarket("Kitchener, ON"), false);
+  assert.equal(isStateMarket("Washington, MO"), false);
+  assert.equal(isStateMarket("Washington, WA"), true);
+  assert.deepEqual(names(findMarkets("Kitchener ,ontario, canada?", markets)), ["Kitchener, ON", "Ontario, ON"]);
+  assert.equal(pickTop("Kitchener ,ontario, canada?", findMarkets("Kitchener ,ontario, canada?", markets))?.name, "Kitchener, ON");
+  assert.equal(pickTop("Cape Coral Florida?", findMarkets("Cape Coral Florida?", markets)), undefined);
+  assert.equal(pickTop("Florida", findMarkets("Florida", markets))?.name, "Florida, FL");
+  assert.equal(pickTop("how many in Ontario?", findMarkets("how many in Ontario?", markets))?.name, "Ontario, ON");
+  assert.equal(pickTop("Ohio", []), undefined);
+});
 const names = (hits: ReturnType<typeof findMarkets>) => hits.map((h) => h.name);
 
 test("findMarkets: the place name whole, in any case or punctuation; longest place first, then the busiest", () => {

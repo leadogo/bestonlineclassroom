@@ -10,7 +10,7 @@ import { mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, typ
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
-import { asksMarket, findMarkets, marketDraft, NO_MATCH_DRAFT, type MarketCount } from "@/lib/market-answer";
+import { asksMarket, findMarkets, marketDraft, NO_MATCH_DRAFT, pickTop, type MarketCount } from "@/lib/market-answer";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[]; belief?: boolean; is_question?: boolean; kind?: string; visible_to?: string | null };
 type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
@@ -584,8 +584,9 @@ function AnswerChip({ m, markets, pitchMs, onPick }: { m: Item; markets: MarketC
   if (m.role !== "attendee" || pitchMs === null || m.at < pitchMs || !markets.length) return null;
   const hits = findMarkets(m.body, markets);
   if (!hits.length && !asksMarket(m.body)) return null;
-  const top = hits[0];
-  const title = hits.length > 1 ? `Also: ${hits.slice(1, 4).map((h) => `${h.clients} in ${h.name}`).join(" · ")}` : top ? "The directory's count, every status; live = active, onboarding, renewal, paused" : "No market by that name in the directory";
+  const top = pickTop(m.body, hits);
+  const others = hits.filter((h) => h !== top).slice(0, 3);
+  const title = others.length ? `${top ? "Also" : "No city by that name; labeled at state level"}: ${others.map((h) => `${h.clients} in ${h.name}`).join(" · ")}` : top ? "The directory's count, every status; live = active, onboarding, renewal, paused" : "No market by that name in the directory";
   return (
     <button type="button" onClick={() => onPick(m, top ? marketDraft(top.name, top.clients) : NO_MATCH_DRAFT)} title={title} className={`min-h-8 rounded-full border px-2.5 text-sm font-bold ${top ? "border-brand text-brand hover:bg-brand/10" : "border-line text-muted hover:text-ink"}`}>
       {top ? `Answer · ${top.clients} in ${top.name} · ${top.live} live` : "Answer · no market match"}

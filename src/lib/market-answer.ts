@@ -13,7 +13,21 @@ export function placeOf(name: string): string {
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 
-/** Markets whose place name appears whole in the text; longest place first, then the busiest. Empty when none. */
+// Some directory labels are a whole state or province ("Florida, FL", "Ontario, ON"): clients nobody placed in a
+// city. "Cape Coral Florida?" must not read as "8 in Florida"; Kevin answers that one "none there".
+const STATES = new Set([
+  "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan", "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia", "wisconsin", "wyoming",
+  "alberta", "british columbia", "manitoba", "new brunswick", "newfoundland", "nova scotia", "ontario", "prince edward island", "quebec", "saskatchewan", "puerto rico",
+]);
+
+/** The market is a whole state or province, not a city ("Florida, FL" yes; "Washington, MO" is a town, so no). */
+export function isStateMarket(name: string): boolean {
+  const [place, code = ""] = name.split(",").map((s) => s.trim());
+  const p = norm(place);
+  return STATES.has(p) && code.length === 2 && code[0].toLowerCase() === p[0];
+}
+
+/** Markets whose place name appears whole in the text; cities before states, longest place first, then the busiest. */
 export function findMarkets(text: string, markets: MarketCount[]): MarketCount[] {
   const t = ` ${norm(text)} `;
   if (t.trim().length < 3) return [];
@@ -22,7 +36,21 @@ export function findMarkets(text: string, markets: MarketCount[]): MarketCount[]
       const p = norm(placeOf(m.name));
       return p.length >= 3 && t.includes(` ${p} `);
     })
-    .sort((a, b) => norm(placeOf(b.name)).length - norm(placeOf(a.name)).length || b.clients - a.clients);
+    .sort((a, b) => Number(isStateMarket(a.name)) - Number(isStateMarket(b.name)) || norm(placeOf(b.name)).length - norm(placeOf(a.name)).length || b.clients - a.clients);
+}
+
+const FILLER = /\b(in|the|any|anyone|anybody|agents?|here|there|how many|do you have|market|area|please|pls|check|can you)\b/g;
+
+/**
+ * The market the chip answers with: the first city hit, or a state-level label only when the message is just that
+ * state ("Ohio", "how many in Georgia?"). A city question that only hit a state label gets no top market, so the
+ * draft says none there and the state count sits on the hover.
+ */
+export function pickTop(text: string, hits: MarketCount[]): MarketCount | undefined {
+  const top = hits[0];
+  if (!top || !isStateMarket(top.name)) return top;
+  const rest = norm(text).replace(FILLER, " ").replace(/\s+/g, " ").trim();
+  return rest === norm(placeOf(top.name)) ? top : undefined;
 }
 
 const ASK = /\b(market|area|county|region|territory|how many|agents? (in|here|there)|anyone in|anybody in)\b/i;
