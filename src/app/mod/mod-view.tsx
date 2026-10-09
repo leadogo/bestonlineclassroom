@@ -10,6 +10,7 @@ import { mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, typ
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
+import { asksMarket, findMarkets, marketDraft, NO_MATCH_DRAFT, type MarketCount } from "@/lib/market-answer";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[]; belief?: boolean; is_question?: boolean; kind?: string; visible_to?: string | null };
 type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
@@ -37,6 +38,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const [picked, setPicked] = useState<Mentionable[]>([]);
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
+  const [markets, setMarkets] = useState<MarketCount[]>([]);
   const [teamText, setTeamText] = useState("");
   const [error, setError] = useState("");
   const [confirmBlock, setConfirmBlock] = useState<string | null>(null);
@@ -247,6 +249,19 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
     setPicked((l) => (l.some((x) => x.id === p.id) ? l : [...l, p]));
     input.current?.focus();
   }
+  // Reply puts "@Name " in the box with the mention attached (the room has the same on tap); the Answer chip adds
+  // Kevin's line for the market they named. Nothing sends until the moderator does.
+  function replyTo(m: Item, draft = "") {
+    setText((t) => `${t.trim() ? `${t.trimEnd()} ` : ""}@${m.name} ${draft}`.slice(0, 500));
+    if (m.registrantId) setPicked((l) => (l.some((x) => x.id === m.registrantId) ? l : [...l, { id: m.registrantId!, name: m.name }]));
+    input.current?.focus();
+  }
+  // The directory's count per market, once per desk visit (the sync refreshes it every 30 minutes).
+  useEffect(() => {
+    fetch("/api/mod/markets").then((r) => (r.ok ? r.json() : null)).then((j: { markets?: MarketCount[] } | null) => { if (j?.markets) setMarkets(j.markets); }).catch(() => {});
+  }, []);
+  // Answer chips only once the pitch has started: before it the room is saying where it is from, not asking.
+  const pitchMs = event.ctaAt !== null ? session.startsAt + event.ctaAt * 1000 : null;
 
   const chat = list.filter((m) => !m.team);
   const teamMsgs = list.filter((m) => m.team && !m.deleted);
@@ -384,6 +399,12 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                             {m.reactions[e] ? <span className="ml-1 text-xs text-muted tabular-nums">{m.reactions[e]}</span> : null}
                           </button>
                         ))}
+                        {m.role === "attendee" && m.registrantId && (
+                          <button type="button" onClick={() => replyTo(m)} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink">
+                            Reply
+                          </button>
+                        )}
+                        <AnswerChip m={m} markets={markets} pitchMs={pitchMs} onPick={replyTo} />
                         <button type="button" onClick={() => act({ action: "delete", id: m.id })} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink">
                           Delete
                         </button>
@@ -552,6 +573,23 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
       {left.map((p) => row(p, true))}
     </ul>
     </div>
+  );
+}
+
+/**
+ * The Answer chip: after the pitch, an attendee row that names a market (or asks a market question) gets the
+ * directory's count; clicking drafts Kevin's reply into the box. Other matching markets sit on the hover.
+ */
+function AnswerChip({ m, markets, pitchMs, onPick }: { m: Item; markets: MarketCount[]; pitchMs: number | null; onPick: (m: Item, draft: string) => void }) {
+  if (m.role !== "attendee" || pitchMs === null || m.at < pitchMs || !markets.length) return null;
+  const hits = findMarkets(m.body, markets);
+  if (!hits.length && !asksMarket(m.body)) return null;
+  const top = hits[0];
+  const title = hits.length > 1 ? `Also: ${hits.slice(1, 4).map((h) => `${h.clients} in ${h.name}`).join(" · ")}` : top ? "The directory's count, every status; live = active, onboarding, renewal, paused" : "No market by that name in the directory";
+  return (
+    <button type="button" onClick={() => onPick(m, top ? marketDraft(top.name, top.clients) : NO_MATCH_DRAFT)} title={title} className={`min-h-8 rounded-full border px-2.5 text-sm font-bold ${top ? "border-brand text-brand hover:bg-brand/10" : "border-line text-muted hover:text-ink"}`}>
+      {top ? `Answer · ${top.clients} in ${top.name} · ${top.live} live` : "Answer · no market match"}
+    </button>
   );
 }
 
