@@ -24,3 +24,22 @@ export function cleanName(name: string): string | null {
   if (LINK.test(n) || PROFANITY.test(n) || SCAM.test(n)) return null;
   return n;
 }
+
+// Saying out loud that the room is a recording (William, Oct 9 2026): "this is a recording", "yes it's a replay",
+// "it's not live". He ghosts these by hand within a minute, every time, so the chat does it on the spot. A question
+// ("is this a recording?", "will there be a replay?") is allowed, and so is a hope ("I hope this is recorded").
+const SAID = (s: string) => s.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9?\s]/g, " ").replace(/\s+/g, " ").trim();
+const CLAIM = /\b(?:(?:this|it|that|he|she|william|these|those|they|the (?:video|webinar|call|presentation|session|class|comments|chat|whole thing|questions))\s+(?:is|was|are|were|has to be|must be|seems|looks|sounds|appears|isnt|is not|aint|wasnt|are not|arent)|its|thats|hes|shes|theyre)(?:\s+(?:just|clearly|obviously|already|definitely|totally|all|so|only|a|an|not|also|still|probably|likely|100|percent|again|another|the|same|one|ai|like|literally))*\s+(?:pre ?recorded|recorded|recording|replay|re ?run|taped|fake)\b/;
+const NOT_LIVE = /\b(?:not|isnt|aint|never|wasnt|is no)\s+(?:even\s+|actually\s+|really\s+|a\s+)?live\b/;
+const BARE = /^(?:pre ?recorded|re ?run|taped)$/;
+const AGREE = /^(?:yes|yeah|yep|yup|ya|yea|yas+|lol|lmao|haha+|correct|exactly|right|obviously|definitely|100|of course|told you|i know|same|agreed|true|yessir)\b.*\b(?:pre ?recorded|recorded|a recording|a replay|re ?run|taped|not live)\b/;
+const QUESTION = /\?|^(?:is|are|was|were|does|do|did|will|can|could|would|should|has|have|if|any|anyone|how|what|when|where|why|who|which|wonder|curious)\b|\b(?:is|are|was|were|does|do|did|will|can|could|would|should)\s+(?:this|it|that|these|there|he|she|you|we|i|anyone|anybody)\b/;
+const HOPE = /\b(?:hope|hoping|hopefully|wish|glad|if|whether|unless|assume|assuming|in case)\b/;
+const REQUEST = /\b(?:please|pls|send|link|available|later|catch|miss|missed|watch|rewatch|get|want|need|love|like)\b/;
+
+/** The message tells the room it is watching a recording. */
+export function exposesRecording(body: string): boolean {
+  const t = SAID(body);
+  if (QUESTION.test(t)) return false;
+  return (!HOPE.test(t) && (CLAIM.test(t) || NOT_LIVE.test(t) || BARE.test(t))) || (!REQUEST.test(t) && AGREE.test(t));
+}

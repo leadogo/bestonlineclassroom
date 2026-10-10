@@ -4,13 +4,13 @@
 // the desk and what they are doing; and beside the chat the People, Team (private), Engagement and Stats tabs.
 // On a phone the tabs run across the top with Chat first.
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "../login/actions";
 import { mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
-import { asksMarket, findMarkets, marketDraft, NO_MATCH_DRAFT, pickTop, type MarketCount } from "@/lib/market-answer";
+import { asksMarket, findMarkets, findStates, marketDraft, NO_MATCH_DRAFT, onlyStates, placeOf, rollup, rollupDraft, type MarketCount } from "@/lib/market-answer";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[]; belief?: boolean; is_question?: boolean; kind?: string; visible_to?: string | null };
 type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
@@ -581,15 +581,29 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
  * directory's count; clicking drafts Kevin's reply into the box. Other matching markets sit on the hover.
  */
 function AnswerChip({ m, markets, pitchMs, onPick }: { m: Item; markets: MarketCount[]; pitchMs: number | null; onPick: (m: Item, draft: string) => void }) {
-  if (m.role !== "attendee" || pitchMs === null || m.at < pitchMs || !markets.length) return null;
-  const hits = findMarkets(m.body, markets);
-  if (!hits.length && !asksMarket(m.body)) return null;
-  const top = pickTop(m.body, hits);
-  const others = hits.filter((h) => h !== top).slice(0, 3);
-  const title = others.length ? `${top ? "Also" : "No city by that name; labeled at state level"}: ${others.map((h) => `${h.clients} in ${h.name}`).join(" · ")}` : top ? "The directory's count, every status; live = active, onboarding, renewal, paused" : "No market by that name in the directory";
+  const on = m.role === "attendee" && pitchMs !== null && m.at >= pitchMs && markets.length > 0;
+  const chip = useMemo(() => {
+    if (!on) return null;
+    const hits = findMarkets(m.body, markets);
+    const states = findStates(m.body);
+    if (!hits.length && !states.length && !asksMarket(m.body)) return null;
+    const top = hits[0];
+    const sums = states.map((c) => rollup(c, markets));
+    // A bare state ("Maryland", "PA & NJ") answers with every market in it summed; a city the directory lacks ("Cape Coral Florida") does not.
+    const whole = !top && sums.length && onlyStates(m.body, states) ? sums : [];
+    const label = top ? `${top.clients} in ${top.name} · ${top.live} live` : whole.length ? whole.map((s) => `${s.clients} across ${s.code}`).join(" + ") : "no market match";
+    const draft = top ? marketDraft(top.name, top.clients) : whole.length ? rollupDraft(whole) : NO_MATCH_DRAFT;
+    const notes = [
+      ...hits.slice(1, 4).map((h) => `${h.clients} in ${h.name}`),
+      ...sums.map((s) => `${s.code}: ${s.clients} across ${s.markets.length} (${s.markets.filter((x) => x.clients).slice(0, 6).map((x) => `${placeOf(x.name)} ${x.clients}`).join(", ") || "none"})`),
+    ];
+    const title = notes.length ? notes.join(" · ") : top ? "The directory's count, every status; live = active, onboarding, renewal, paused" : "No market by that name in the directory";
+    return { label, draft, title, strong: Boolean(top || whole.length) };
+  }, [on, m.body, markets]);
+  if (!chip) return null;
   return (
-    <button type="button" onClick={() => onPick(m, top ? marketDraft(top.name, top.clients) : NO_MATCH_DRAFT)} title={title} className={`min-h-8 rounded-full border px-2.5 text-sm font-bold ${top ? "border-brand text-brand hover:bg-brand/10" : "border-line text-muted hover:text-ink"}`}>
-      {top ? `Answer · ${top.clients} in ${top.name} · ${top.live} live` : "Answer · no market match"}
+    <button type="button" onClick={() => onPick(m, chip.draft)} title={chip.title} className={`min-h-8 rounded-full border px-2.5 text-sm font-bold ${chip.strong ? "border-brand text-brand hover:bg-brand/10" : "border-line text-muted hover:text-ink"}`}>
+      Answer · {chip.label}
     </button>
   );
 }

@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { MAX_BODY, POST_GAP_MS, slackLine } from "@/lib/chat";
-import { checkMessage } from "@/lib/chat-filter";
+import { checkMessage, exposesRecording } from "@/lib/chat-filter";
 import { db } from "@/lib/db";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { mine } from "@/lib/reactions";
@@ -82,6 +82,14 @@ export async function POST(request: Request) {
   if (last.data && Date.now() - new Date(last.data.created_at).getTime() < POST_GAP_MS) {
     return Response.json({ error: "One message at a time." }, { status: 429 });
   }
+  // Telling the room it is a recording ghosts you on the spot (William ghosts these by hand within a minute, every time):
+  // the line never shows, you still see your own rows, and the desk shows why. A question about a replay is fine.
+  const exposes = !r.ghosted_at && exposesRecording(body);
+  if (exposes) {
+    const g = await db().from("registrants").update({ ghosted_at: new Date().toISOString(), auto_ghost_reason: "said it's a recording" }).eq("id", r.id).is("ghosted_at", null);
+    if (g.error) console.error("[chat] auto-ghost failed", { code: g.error.code });
+  }
+  const ghosted = Boolean(r.ghosted_at) || exposes;
   const offset = typeof b.offset === "number" && Number.isFinite(b.offset) ? Math.max(0, Math.floor(b.offset)) : 0;
   // Mentions: registrant ids in this session, or m:<team member id>; anything else is dropped.
   const wanted = Array.isArray(b.mentions) ? b.mentions.map(String).slice(0, 10) : [];
@@ -95,17 +103,17 @@ export async function POST(request: Request) {
   }
   const ins = await db()
     .from("chat_messages")
-    .insert({ event_id: r.event_id, session_date: r.session_date, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: r.ghosted_at ? "author" : "all", mentions, mention_names, is_question: isQuestion(body), belief: isBelief(body, r.beliefPhrases) })
+    .insert({ event_id: r.event_id, session_date: r.session_date, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: ghosted ? "author" : "all", mentions, mention_names, is_question: isQuestion(body), belief: isBelief(body, r.beliefPhrases) })
     .select(SELECT)
     .single();
   if (ins.error) {
     console.error("[chat] insert failed", { code: ins.error.code });
     return Response.json({ error: "Please try again." }, { status: 500 });
   }
-  if (r.source !== "test" && !r.ghosted_at) after(() => postToChatChannel(slackLine(r.first_name, r.email, body)));
+  if (r.source !== "test" && !ghosted) after(() => postToChatChannel(slackLine(r.first_name, r.email, body)));
   if (callMe && phone) after(() => forwardCallRequest({ registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, firstName: r.first_name, email: r.email, phone, message: String(b.body ?? "").slice(0, 500), offset }));
   after(() => tagNow(r.id, "asked_question"));
   // Katherine answers the replay question (switch per event), a few seconds later, once per person.
-  if (r.katherine && !r.ghosted_at) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name }, body, offset));
+  if (r.katherine && !ghosted) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name }, body, offset));
   return Response.json({ message: ins.data });
 }
