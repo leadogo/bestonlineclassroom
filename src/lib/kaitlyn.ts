@@ -158,17 +158,18 @@ export async function decide(system: string, turn: string): Promise<{ decision: 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 300, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], messages: [{ role: "user", content: turn }] }),
+      // The model thinks before it answers and the thinking counts against max_tokens: 300 cut the JSON off on one line in four.
+      body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], messages: [{ role: "user", content: turn }] }),
       signal: AbortSignal.timeout(25_000),
     });
     if (!res.ok) {
       console.error("[kaitlyn] model call failed", { status: res.status, body: (await res.text().catch(() => "")).slice(0, 200) });
       return null;
     }
-    const j = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+    const j = (await res.json()) as { content?: Array<{ type: string; text?: string }>; stop_reason?: string };
     const parsed = extractJson((j.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join(""));
     if (!parsed) {
-      console.error("[kaitlyn] no JSON in the answer");
+      console.error("[kaitlyn] no JSON in the answer", { stop_reason: j.stop_reason });
       return null;
     }
     return { decision: parseDecision(parsed), ms: Date.now() - t0 };
