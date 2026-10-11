@@ -118,6 +118,11 @@
 - [x] 6.0 counters/desk fixes shipped ~8:05 PM MT; test-run eight at 8:30 PM for William's walk.
 - [x] 6.1–6.4 shipped 2026-09-23 night; walk on test-run 8:30 AM Sep 24 (Test run nine). William added the iClosed webhook (created/rescheduled/cancelled). Still on him: old New BOOKED Zap off after the first post, QR → /qr. Join card redesigned Sep 23 late.
 
+## Kaitlyn from William's Team (2026-10-11 night): the AI moderator
+- [x] Shipped: migration 030 (`events.kaitlyn_mode` off|shadow|assisted|auto, `events.kaitlyn_facts`, `kaitlyn_decisions`), `src/lib/kaitlyn.ts` (one Claude call per attendee message → reply | skip | ghost | ask_william + a reaction; fact sheet is the only product source; price/guarantee/live/date guard), desk rows "Kaitlyn · reply/ghost?/react?/needs you" with Send as Kaitlyn / Skip / Ghost / React, her link line at the pitch minute (`prompts.ts`), admin switch + fact sheet, `ANTHROPIC_API_KEY` in Doppler. ailg-r and test-run in shadow.
+- [ ] Shadow for three nights: William sends, edits or skips; then the categories with ≥90% sent-as-is go assisted (markets, booking, replay, tech, greetings, thanks post themselves), then auto. Report weekly: booking % among pitch reachers (baseline 32.6%), pitch reach (69%), share of chatters answered (37%).
+- [ ] William corrects the fact sheet (first draft `docs/kaitlyn-facts.md`, live copy on the event).
+
 ## Phase 7 (2026-10-01 night): the client wall
 - [x] Shipped: migration 028, `client_wall` + trigger + `client_wall_apply`, `POST /api/client-wall`, bms-dashboard cron every 30 min (PR #596), 404 at join and replay for `block_reason = client`, open-link email field behind `events.open_link_field`, `open-link-report` cron 02:50 UTC, canary check, opt-ins exclude walled, `/admin/blocked` Client wall section. 912 on the wall, 49 walled.
 - [ ] William's walk on test-run (card asks for an email there): wall-test@example.com → 404; own email → room. Then flip Settings → "open link asks for an email" for ailg-r before 3:30 PM (Oct 2 or later).

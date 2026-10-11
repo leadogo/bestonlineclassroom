@@ -6,7 +6,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "../login/actions";
-import { mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, type ChatUpdate, type SimulatedRow } from "@/lib/chat";
+import { KAITLYN, mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, type ChatUpdate, type KaitlynMode, type SimulatedRow } from "@/lib/chat";
 import { EMOJIS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
@@ -18,6 +18,9 @@ type Desk = { member_id: string; name: string; tab: string | null; replying_to: 
 type Stats = { registered: number; joined: number; in_room: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
 type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
 type Mentionable = { id: string; name: string; sub?: string };
+/** One of Kaitlyn's open suggestions (kaitlyn_decisions, status pending): a draft to send, a ghost or a reaction to approve, or a line she wants a human on. */
+type KPending = { id: number; message_id: number; registrant_id: string; action: "reply" | "skip" | "ghost" | "ask_william"; category: string; text: string; react: string; why: string };
+type KDecision = "send" | "skip" | "ghost" | "react";
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean; belief?: boolean; question?: boolean; ghostReply?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
 
@@ -26,7 +29,7 @@ const SHORT: Record<string, string> = { "Mod Chat": "Mods", Engagement: "Engage"
 const clock = (iso: string | number) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const mmss = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}:${String(m).padStart(2, "0")}` : `${m} min`; };
 
-export function ModView({ member, event, session, serverNow, backHref }: { member: { id: string; display_name: string; email: string }; event: { slug: string; title: string; iconUrl: string | null; hostName: string; videoUrl: string | null; ctaAt: number | null; katherine: boolean }; session: { date: string; startsAt: number; endsAt: number }; serverNow: number; backHref: string }) {
+export function ModView({ member, event, session, serverNow, backHref }: { member: { id: string; display_name: string; email: string }; event: { slug: string; title: string; iconUrl: string | null; hostName: string; videoUrl: string | null; ctaAt: number | null; katherine: boolean; kaitlyn: KaitlynMode }; session: { date: string; startsAt: number; endsAt: number }; serverNow: number; backHref: string }) {
   const skew = useRef(0);
   const router = useRouter();
   const [list, setList] = useState<Item[]>([]);
@@ -39,6 +42,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [markets, setMarkets] = useState<MarketCount[]>([]);
+  const [kaitlyn, setKaitlyn] = useState<KPending[]>([]);
   const [teamText, setTeamText] = useState("");
   const [error, setError] = useState("");
   const [confirmBlock, setConfirmBlock] = useState<string | null>(null);
@@ -97,7 +101,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
           router.push("/login");
           return;
         }
-        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; team?: Mentionable[]; desk?: Desk[]; stats?: Stats; now: string; edge?: boolean; session_start?: number; session_date?: string; booking_href?: string | null };
+        const j = (await res.json()) as { new: Wire[]; updated: ChatUpdate[]; people: Person[]; team?: Mentionable[]; desk?: Desk[]; stats?: Stats; now: string; edge?: boolean; session_start?: number; session_date?: string; booking_href?: string | null; kaitlyn?: { mode: string; pending: KPending[] } };
         // The session moved (a restart, or the day turned): start over with the right clock.
         if (j.session_start && j.session_start !== session.startsAt && j.session_date === session.date) {
           window.location.reload();
@@ -118,6 +122,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         if (j.team) setTeam(j.team);
         if (j.desk) setDesk(j.desk);
         if (j.stats) setStats(j.stats);
+        if (j.kaitlyn) setKaitlyn(j.kaitlyn.pending);
       } catch {
         /* next poll */
       }
@@ -194,6 +199,22 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
     setError("");
     const m = j.message;
     setList((l) => (l.some((x) => x.id === m.id) ? l : trimCrowd([...l, { key: `r${m.id}`, id: m.id, registrantId: null, name: m.author_name, role: "moderator" as const, body: m.body, at: Date.now(), reactions: {}, mentionNames: m.mention_names ?? [], team: m.visibility === "team" }], 300) as Item[]));
+    return true;
+  }
+  // Acting on one of Kaitlyn's suggestions: the row leaves the desk at once and her reply (if any) shows as hers.
+  async function kaitlynAct(k: KPending, decision: KDecision, body?: string): Promise<boolean> {
+    const res = await fetch("/api/mod", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: event.slug, date: session.date, action: "kaitlyn", id: k.id, decision, body }) });
+    const j = (await res.json().catch(() => ({}))) as { error?: string; message?: Wire | null };
+    if (!res.ok) {
+      setError(j.error ?? "That didn't work.");
+      return false;
+    }
+    setError("");
+    if (decision === "react") setKaitlyn((l) => (k.action === "skip" ? l.filter((x) => x.id !== k.id) : l.map((x) => (x.id === k.id ? { ...x, react: "" } : x))));
+    else setKaitlyn((l) => l.filter((x) => x.id !== k.id));
+    if (decision === "ghost") setPeople((p) => p.map((x) => (x.registrant_id === k.registrant_id ? { ...x, ghosted: true } : x)));
+    const m = j.message;
+    if (m) setList((l) => (l.some((x) => x.id === m.id) ? l : trimCrowd([...l, { key: `r${m.id}`, id: m.id, registrantId: null, name: m.author_name, role: "moderator" as const, body: m.body, at: Date.now(), reactions: {}, mentionNames: m.mention_names ?? [], kind: m.kind }], 300) as Item[]));
     return true;
   }
   async function reply(e: React.FormEvent) {
@@ -326,9 +347,15 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
         </form>
       </header>
 
-      {(desk.length > 0 || event.katherine) && (
+      {(desk.length > 0 || event.katherine || event.kaitlyn !== "off") && (
         <div className="flex items-center gap-2 overflow-x-auto border-b border-line px-4 py-1.5 text-[13px] text-muted">
           <span className="shrink-0">On the desk:</span>
+          {event.kaitlyn !== "off" && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-cta/60 py-0.5 pl-1 pr-2.5 text-ink" title="The AI moderator. Her suggestions show under the message they answer.">
+              <Avatar name={KAITLYN} size="h-5 w-5 text-[9px]" />
+              Kaitlyn<span className="text-muted">{event.kaitlyn === "shadow" ? "shadow · drafts for you" : event.kaitlyn === "assisted" ? "assisted · routine replies post themselves" : "auto · replies post themselves"}{kaitlyn.length ? ` · ${kaitlyn.length} waiting` : ""}</span>
+            </span>
+          )}
           {event.katherine && (
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-cta/60 py-0.5 pl-1 pr-2.5 text-ink" title="Answers the replay question once per person">
               <Avatar name="Katherine AI" size="h-5 w-5 text-[9px]" />
@@ -376,6 +403,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                       <span className={`font-bold ${m.role === "moderator" ? "text-brand" : m.role === "simulated" ? "text-muted" : ""}`}>{m.name}</span>
                       {m.role === "simulated" && <span className="text-xs text-muted">simulated</span>}
                       {m.name === "Katherine AI" && <span className="rounded bg-cta/20 px-1.5 text-[11px] font-bold text-cta">{m.kind === "cta" ? "book-now row" : "auto"}</span>}
+                      {m.name === KAITLYN && <span className="rounded bg-cta/20 px-1.5 text-[11px] font-bold text-cta" title={m.kind === "kaitlyn" ? "Posted by Kaitlyn herself" : "Kaitlyn's draft, sent by a moderator"}>{m.kind === "kaitlyn" ? "auto" : "approved"}</span>}
                       {m.ghostReply && <span className="rounded bg-panel px-1.5 text-[11px] text-muted" title="Only the ghost and the desk see this">ghost reply</span>}
                       {m.belief && <span className="rounded bg-emerald-500/15 px-1.5 text-[11px] font-bold text-emerald-400" title="Counts toward their score">belief</span>}
                       {m.question && <span className="rounded bg-panel px-1.5 text-[11px] text-muted">question</span>}
@@ -439,6 +467,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                         )}
                       </div>
                     )}
+                    {m.role === "attendee" && m.id !== undefined && kaitlyn.filter((k) => k.message_id === m.id).map((k) => <KaitlynRow key={k.id} k={k} onAct={kaitlynAct} />)}
                   </div>
                 </div>
               ))}
@@ -572,6 +601,43 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
       {left.length > 0 && <li className="px-4 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-muted">Left the room · {left.length}</li>}
       {left.map((p) => row(p, true))}
     </ul>
+    </div>
+  );
+}
+
+/**
+ * One of Kaitlyn's suggestions under the message it is about: her draft in a box you can edit before it posts as her,
+ * a ghost or a reaction to approve with one tap, or a line she wants a human on. Skip drops it; nothing posts on its own.
+ */
+function KaitlynRow({ k, onAct }: { k: KPending; onAct: (k: KPending, decision: KDecision, body?: string) => Promise<boolean> }) {
+  const [draft, setDraft] = useState(k.text);
+  const [busy, setBusy] = useState(false);
+  const go = async (decision: KDecision, body?: string) => { setBusy(true); await onAct(k, decision, body); setBusy(false); };
+  const label = k.action === "reply" ? "reply" : k.action === "ghost" ? "ghost?" : k.action === "ask_william" ? "needs you" : "react?";
+  const editable = k.action === "reply" || (k.action === "ask_william" && k.text);
+  return (
+    <div className="mt-2 rounded-xl border border-dashed border-cta/60 bg-cta/5 p-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
+        <Avatar name={KAITLYN} size="h-5 w-5 text-[9px]" />
+        <span className="font-bold text-cta">Kaitlyn · {label}</span>
+        <span className="rounded bg-panel px-1.5">{k.category}</span>
+        <span className="min-w-0 truncate" title={k.why}>{k.why}</span>
+      </div>
+      {editable ? (
+        <div className="mt-1.5 flex items-end gap-2">
+          <input value={draft} onChange={(e) => setDraft(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (draft.trim()) go("send", draft); } }} aria-label="Kaitlyn's draft" className="min-h-9 min-w-0 flex-1 rounded-lg border border-line bg-panel px-2.5 text-[15px] focus:border-brand focus:outline-none" />
+          <button type="button" disabled={busy || !draft.trim()} onClick={() => go("send", draft)} className="min-h-9 shrink-0 rounded-lg bg-cta px-3 text-sm font-bold text-white disabled:opacity-40">Send as Kaitlyn</button>
+        </div>
+      ) : null}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {k.action === "ghost" && (
+          <button type="button" disabled={busy} onClick={() => go("ghost")} className="min-h-8 rounded-full bg-live px-3 text-sm font-bold text-white disabled:opacity-40" title="They keep chatting; only they see it. The line above hides from the room.">Ghost them</button>
+        )}
+        {k.react && (
+          <button type="button" disabled={busy} onClick={() => go("react")} className="min-h-8 rounded-full border border-line bg-panel px-2.5 text-sm disabled:opacity-40" title="React as Kaitlyn">React {k.react}</button>
+        )}
+        <button type="button" disabled={busy} onClick={() => go("skip")} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink disabled:opacity-40">{k.action === "ask_william" ? "Dismiss" : "Skip"}</button>
+      </div>
     </div>
   );
 }

@@ -39,6 +39,9 @@ export type EventRow = {
   people_curve_enabled: boolean;
   belief_phrases: string[];
   prompts: Array<{ minute: number; text: string }>;
+  /** Kaitlyn from William's Team (kaitlyn.ts): off | shadow | assisted | auto, and the fact sheet she may quote. */
+  kaitlyn_mode: "off" | "shadow" | "assisted" | "auto";
+  kaitlyn_facts: string | null;
   cta_prompt_minutes: number[];
   testimonials_from_seconds: number | null;
   replay_copy: Record<string, unknown>;

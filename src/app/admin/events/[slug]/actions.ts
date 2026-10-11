@@ -5,6 +5,7 @@ import { parseChapters, parseNames, parseSeconds } from "@/lib/admin";
 import { distinctNames, parseChatCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { forgetEvent, getEvent } from "@/lib/events";
+import { asMode } from "@/lib/kaitlyn";
 import { localDate, scheduleOf } from "@/lib/daily-schedule";
 import { mp4Info } from "@/lib/mp4";
 import { REPLAY_COPY } from "@/lib/replay-content";
@@ -49,6 +50,8 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     replay_hours: Number.isFinite(replay_hours) && replay_hours >= 0 ? Math.floor(replay_hours) : 72,
     replay_opens_at: replay_opens_at ? `${replay_opens_at}:00` : null,
     katherine_enabled: fd.get("katherine") === "on",
+    kaitlyn_mode: asMode(fd.get("kaitlyn_mode")),
+    kaitlyn_facts: str(fd, "kaitlyn_facts", 12000) || null,
     people_curve_enabled: fd.get("people_curve") === "on",
     open_link_field: fd.get("open_link_email") === "on" ? "email" : "name",
     // The monitor's baseline is the seven nights before this date; it is set the day the switch goes on and cleared when it goes off.

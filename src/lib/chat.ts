@@ -44,6 +44,11 @@ export function mergeUpdates(list: ChatItem[], updates: ChatUpdate[]): ChatItem[
 
 export const MAX_BODY = 500;
 
+/** Kaitlyn from William's Team, the AI moderator (kaitlyn.ts); the name and modes live here so the desk can read them without the server code. */
+export const KAITLYN = "Kaitlyn from William's Team";
+export const KAITLYN_MODES = ["off", "shadow", "assisted", "auto"] as const;
+export type KaitlynMode = (typeof KAITLYN_MODES)[number];
+
 /** A North American phone number in the usual shapes; prices, years and deal counts do not match. */
 export const PHONE_RE = /(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/;
 export const POST_GAP_MS = 2000;

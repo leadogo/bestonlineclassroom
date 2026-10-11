@@ -5,6 +5,7 @@ import { getEvent } from "@/lib/events";
 import { blockAtEdge, edgeConfigured, unblockAtEdge } from "@/lib/edge-block";
 import { forgetBlockedIps } from "@/lib/ip";
 import { toggleReaction } from "@/lib/reactions";
+import { asMode, postAsKaitlyn, reactAsKaitlyn } from "@/lib/kaitlyn";
 import { withQuery } from "@/lib/params";
 import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
 
@@ -96,7 +97,10 @@ export async function GET(request: Request) {
   const team = ((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => ({ id: `m:${m.id}`, name: m.display_name as string }));
   const presence = await db().from("team_presence").select("member_id, tab, replying_to, last_seen_at").eq("event_id", s.event.id).eq("session_date", s.session.date).gte("last_seen_at", new Date(nowMs - 60_000).toISOString());
   const desk = (presence.data ?? []).map((p) => ({ member_id: p.member_id, name: team.find((t) => t.id === `m:${p.member_id}`)?.name ?? "Team", tab: p.tab, replying_to: p.replying_to, last_seen_at: p.last_seen_at }));
-  return Response.json({ new: news, updated, people, team, desk, stats, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date, booking_href: bookingLink(s.event.cta_href) }, { headers: { "cache-control": "no-store" } });
+  // Kaitlyn's open suggestions for this session: drafts, ghost and react proposals, and the lines she wants a human on.
+  const kmode = asMode(s.event.kaitlyn_mode);
+  const kp = kmode === "off" ? [] : ((await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, action, category, text, react, why, created_at").eq("event_id", s.event.id).eq("session_date", s.session.date).eq("status", "pending").order("id").limit(100)).data ?? []);
+  return Response.json({ new: news, updated, people, team, desk, stats, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date, booking_href: bookingLink(s.event.cta_href), kaitlyn: { mode: kmode, pending: kp } }, { headers: { "cache-control": "no-store" } });
 }
 
 /** POST { event, date, action: reply | delete | block | react, ... } */
@@ -163,6 +167,45 @@ export async function POST(request: Request) {
       const res = await toggleReaction(id, `m:${member.id}`, String(b.emoji ?? ""));
       if (!res) return Response.json({ error: "Not one of the reactions." }, { status: 422 });
       return Response.json(res);
+    }
+    case "kaitlyn": {
+      // A moderator acting on one of Kaitlyn's suggestions: send (as typed or edited), skip, ghost, or apply her reaction.
+      const id = Number(b.id);
+      const row = await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, action, text, react, status").eq("id", id).eq("event_id", s.event.id).maybeSingle();
+      if (!row.data) return Response.json({ error: "Which suggestion?" }, { status: 422 });
+      const d = row.data;
+      const mark = (patch: object) => db().from("kaitlyn_decisions").update({ decided_by: member.id, decided_at: now, ...patch }).eq("id", id);
+      const what = String(b.decision ?? "");
+      if (what === "skip") {
+        await mark({ status: "skipped" });
+        return Response.json({ ok: true });
+      }
+      if (what === "react") {
+        if (!d.react) return Response.json({ error: "No reaction suggested." }, { status: 422 });
+        await reactAsKaitlyn(d.message_id as number, d.react as string);
+        await db().from("kaitlyn_decisions").update({ reacted_at: now, ...(d.action === "skip" ? { status: "skipped", decided_by: member.id, decided_at: now } : {}) }).eq("id", id);
+        return Response.json({ ok: true });
+      }
+      if (what === "ghost") {
+        await db().from("registrants").update({ ghosted_at: now, auto_ghost_reason: `kaitlyn, approved by ${member.display_name}`.slice(0, 200) }).eq("id", d.registrant_id).eq("event_id", s.event.id).is("ghosted_at", null);
+        await db().from("chat_messages").update({ visibility: "author", updated_at: now }).eq("id", d.message_id);
+        await mark({ status: "ghosted" });
+        return Response.json({ ok: true });
+      }
+      if (what === "send") {
+        const body = String(b.body ?? "").trim().slice(0, 500);
+        if (!body) return Response.json({ error: "Type a reply first." }, { status: 422 });
+        const reg = await db().from("registrants").select("id, event_id, session_date, first_name, source").eq("id", d.registrant_id).maybeSingle();
+        if (!reg.data) return Response.json({ error: "Who was that?" }, { status: 422 });
+        const offset = Math.max(0, Math.floor((Date.now() - s.session.start.getTime()) / 1000));
+        const full = body.startsWith("@") ? body : `@${reg.data.first_name} ${body}`;
+        const mid = await postAsKaitlyn({ id: reg.data.id as string, event_id: reg.data.event_id as string, session_date: reg.data.session_date as string, first_name: reg.data.first_name as string, source: String(reg.data.source ?? "") }, full, offset, "text");
+        if (!mid) return Response.json({ error: "Could not send." }, { status: 500 });
+        await mark({ status: body === String(d.text) ? "sent" : "edited", sent_body: full, sent_message_id: mid });
+        const msg = await db().from("chat_messages").select(SELECT).eq("id", mid).maybeSingle();
+        return Response.json({ ok: true, message: msg.data });
+      }
+      return Response.json({ error: "Unknown decision." }, { status: 422 });
     }
     case "ghost":
     case "unghost": {

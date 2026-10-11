@@ -116,7 +116,18 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
                 <input type="checkbox" name="open_link_email" defaultChecked={event.open_link_field === "email"} className="h-4 w-4 accent-brand" />
                 The open link (Skool posts, old links) asks for an email instead of a name, so the client wall can recognise a client. The nightly report compares the card&rsquo;s conversion with the name-only nights before the switch.
               </label>
+              <label className="flex flex-wrap items-center gap-2 text-sm">
+                <span>Kaitlyn from William&rsquo;s Team</span>
+                <select name="kaitlyn_mode" defaultValue={event.kaitlyn_mode ?? "off"} className="min-h-9 rounded-lg border border-line bg-panel px-2 text-sm">
+                  <option value="off">off</option>
+                  <option value="shadow">shadow: she drafts on the desk, you send, edit or skip</option>
+                  <option value="assisted">assisted: markets, booking, replay, tech, greetings and thanks post themselves</option>
+                  <option value="auto">auto: every reply posts itself</option>
+                </select>
+                <span className="text-muted">Her link line at the pitch minute posts in every mode but off. Ghosts post themselves only in auto; everything she is unsure of waits for you on the desk (and pings Slack in assisted and auto).</span>
+              </label>
             </div>
+            <Field label="Kaitlyn's fact sheet" name="kaitlyn_facts" rows={16} value={event.kaitlyn_facts ?? ""} hint="The only product claims she may make; never a price. Blank keeps her to markets, booking, the replay email and tech trouble. The first draft from Kevin's answers is docs/kaitlyn-facts.md." />
             <Field label="Belief phrases (comma-separated)" name="belief_phrases" rows={2} value={(event.belief_phrases ?? []).join(", ")} hint="A chat message containing any of these counts as a belief signal in the engagement score." />
             <Field label="Katherine's timed prompts" name="prompts" rows={8} value={(event.prompts ?? []).map((p) => `${p.minute} | ${p.text}`).join("\n")} hint="One per line: minute | what she says. Posted on the room's clock while the Katherine switch is on. The draft from the transcript is in docs/katherine-prompts-draft.md." />
             <Field label="Book-now rows (minutes after the pitch)" name="cta_prompt_minutes" value={(event.cta_prompt_minutes ?? [0, 3, 8, 15]).join(", ")} hint="Katherine posts a row each viewer sees with their own booking button. Blank turns them off." />
