@@ -96,7 +96,7 @@ export function marketLine(body: string, markets: MarketCount[]): string | null 
   const states = findStates(body);
   if (!hits.length && !states.length && !asksMarket(body)) return null;
   const top = hits[0];
-  if (top) return `directory says ${top.clients} client${top.clients === 1 ? "" : "s"} in ${top.name} (${top.live} live)${hits.length > 1 ? `; also ${hits.slice(1, 3).map((h) => `${h.clients} in ${h.name}`).join(", ")}` : ""}`;
+  if (top) return `directory says ${top.clients} client${top.clients === 1 ? "" : "s"} in ${top.name}${hits.length > 1 ? `; also ${hits.slice(1, 3).map((h) => `${h.clients} in ${h.name}`).join(", ")}` : ""}`;
   const sums = states.map((c) => rollup(c, markets));
   if (sums.length && onlyStates(body, states)) return sums.map((s) => `directory says ${s.clients} across ${s.name} (${s.markets.filter((m) => m.clients).slice(0, 6).map((m) => `${placeOf(m.name)} ${m.clients}`).join(", ") || "no markets yet"})`).join("; ");
   if (sums.length) return `directory has no market by that name; the state has ${sums.map((s) => `${s.clients} across ${s.name}`).join(", ")}`;

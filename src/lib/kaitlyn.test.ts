@@ -46,7 +46,7 @@ test("postsItself and delayMs: shadow never posts, assisted posts the routine ca
 
 test("marketLine: the directory's answer worded for the model, or null when no place is named", () => {
   const markets = [{ name: "Los Angeles, CA", clients: 10, live: 7 }, { name: "Hoboken, NJ", clients: 1, live: 1 }, { name: "Central New Jersey, NJ", clients: 2, live: 2 }];
-  assert.equal(marketLine("LA", markets), "directory says 10 clients in Los Angeles, CA (7 live)");
+  assert.equal(marketLine("LA", markets), "directory says 10 clients in Los Angeles, CA ");
   assert.equal(marketLine("New Jersey", markets), "directory says 3 across New Jersey (Central New Jersey 2, Hoboken 1)");
   assert.equal(marketLine("Cape Coral Florida?", markets), "directory has no market by that name; the state has 0 across Florida");
   assert.equal(marketLine("how many agents in Nashville", markets), "directory has no market by that name (none there yet)");
@@ -61,7 +61,7 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.ok(EXAMPLES.qa.length > 150 && EXAMPLES.ghosts.length > 15);
   assert.ok(s.includes(EXAMPLES.qa[0].a) && s.includes(EXAMPLES.ghosts[0]));
   assert.ok(systemPrompt(null).includes("No fact sheet"));
-  const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA (7 live)", katherine: false });
+  const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
   assert.match(t, /minute 82, the pitch started at minute 75/);
   assert.match(t, /PERSON: Ana, earlier tonight: "hi from LA"/);
   assert.match(t, /MODERATORS TO THEM TONIGHT: nothing yet/);
