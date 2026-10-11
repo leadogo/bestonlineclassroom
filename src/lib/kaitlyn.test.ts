@@ -46,7 +46,7 @@ test("postsItself and delayMs: shadow never posts, assisted posts the routine ca
 
 test("marketLine: the directory's answer worded for the model, or null when no place is named", () => {
   const markets = [{ name: "Los Angeles, CA", clients: 10, live: 7 }, { name: "Hoboken, NJ", clients: 1, live: 1 }, { name: "Central New Jersey, NJ", clients: 2, live: 2 }];
-  assert.equal(marketLine("LA", markets), "directory says 10 clients in Los Angeles, CA ");
+  assert.equal(marketLine("LA", markets), "directory says 10 clients in Los Angeles, CA");
   assert.equal(marketLine("New Jersey", markets), "directory says 3 across New Jersey (Central New Jersey 2, Hoboken 1)");
   assert.equal(marketLine("Cape Coral Florida?", markets), "directory has no market by that name; the state has 0 across Florida");
   assert.equal(marketLine("how many agents in Nashville", markets), "directory has no market by that name (none there yet)");
