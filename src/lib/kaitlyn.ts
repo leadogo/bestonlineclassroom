@@ -51,7 +51,7 @@ ACTIONS
 - ask_william: an unhappy existing client or a support issue, a booking problem you cannot fix, a complaint, a legal or compliance question with specifics, anything you are unsure should be ghosted, a question FACTS does not cover that matters to their decision. Put a draft in text if you have one.
 - react: on a clearly positive, excited or funny line (a win, "love this", "let's go") pick one of ${EMOJIS.join(" ")}, about one such line in four, with or without a reply. Never on a question, never on a negative line. Otherwise empty.
 
-Fill why with ten words for the desk (why this action).`;
+OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "why": ten words for the desk}.`;
 
 /** The system prompt: persona and rules, the event's fact sheet, Kevin's real answers, and the lines the team ghosted. Cached by the API. */
 export function systemPrompt(facts: string | null): string {
@@ -138,23 +138,19 @@ export function delayMs(mode: Mode, pick = Math.random): number {
   return mode === "shadow" || mode === "off" ? 0 : 15_000 + Math.floor(pick() * 25_000);
 }
 
-const TOOL = {
-  name: "decide",
-  description: "Your decision about the one message under MESSAGE TO DECIDE ON.",
-  input_schema: {
-    type: "object",
-    properties: {
-      action: { type: "string", enum: [...ACTIONS] },
-      category: { type: "string", enum: [...CATEGORIES] },
-      text: { type: "string", description: "The reply to post; empty unless action is reply (a draft is welcome with ask_william)." },
-      react: { type: "string", description: `One of ${EMOJIS.join(" ")}, or empty.` },
-      why: { type: "string", description: "Ten words for the desk." },
-    },
-    required: ["action", "category", "text", "react", "why"],
-  },
-};
+/** The one JSON object in the model's text, code fence or stray words around it ignored; null when there is none. */
+export function extractJson(text: string): unknown {
+  const a = text.indexOf("{");
+  const b = text.lastIndexOf("}");
+  if (a < 0 || b <= a) return null;
+  try {
+    return JSON.parse(text.slice(a, b + 1));
+  } catch {
+    return null;
+  }
+}
 
-/** One Messages API call, the system prompt cached. Null on any failure. */
+/** One Messages API call, the system prompt cached, the answer a JSON object. Null on any failure. */
 export async function decide(system: string, turn: string): Promise<{ decision: Decision; ms: number } | null> {
   if (!KEY) return null;
   const t0 = Date.now();
@@ -162,17 +158,20 @@ export async function decide(system: string, turn: string): Promise<{ decision: 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 300, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: [TOOL], tool_choice: { type: "tool", name: "decide" }, messages: [{ role: "user", content: turn }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 300, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], messages: [{ role: "user", content: turn }] }),
       signal: AbortSignal.timeout(25_000),
     });
     if (!res.ok) {
       console.error("[kaitlyn] model call failed", { status: res.status, body: (await res.text().catch(() => "")).slice(0, 200) });
       return null;
     }
-    const j = (await res.json()) as { content?: Array<{ type: string; input?: unknown }> };
-    const block = j.content?.find((c) => c.type === "tool_use");
-    if (!block) return null;
-    return { decision: parseDecision(block.input), ms: Date.now() - t0 };
+    const j = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+    const parsed = extractJson((j.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join(""));
+    if (!parsed) {
+      console.error("[kaitlyn] no JSON in the answer");
+      return null;
+    }
+    return { decision: parseDecision(parsed), ms: Date.now() - t0 };
   } catch (err) {
     console.error("[kaitlyn] model call threw", { err: String(err) });
     return null;

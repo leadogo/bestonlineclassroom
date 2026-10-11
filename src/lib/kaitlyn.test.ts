@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asMode, delayMs, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn } from "./kaitlyn.ts";
+import { ASSISTED, asMode, delayMs, extractJson, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn } from "./kaitlyn.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
 test("parseDecision: the tool input checked; a wordless reply skips, a guarded reply becomes ask_william with the draft kept", () => {
@@ -16,6 +16,13 @@ test("parseDecision: the tool input checked; a wordless reply skips, a guarded r
   assert.match(priced.why, /^draft mentions a price; asked the price/);
   assert.equal(parseDecision(null).action, "skip");
   assert.equal(parseDecision({ action: "reply", category: "other", text: "a".repeat(400), react: "", why: "" }).text.length, 300);
+});
+
+test("extractJson: the object inside a fence or prose, null when there is none or it is broken", () => {
+  assert.deepEqual(extractJson('```json\n{"action":"skip","why":"chatter"}\n```'), { action: "skip", why: "chatter" });
+  assert.deepEqual(extractJson('{"action":"reply","text":"hey {you} :)"} trailing words'), { action: "reply", text: "hey {you} :)" });
+  assert.equal(extractJson("no json here"), null);
+  assert.equal(extractJson('{"action": '), null);
 });
 
 test("guard: prices, guarantees, live or recorded, dates and bot talk never reach the room", () => {
