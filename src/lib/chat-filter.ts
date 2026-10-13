@@ -43,3 +43,17 @@ export function exposesRecording(body: string): boolean {
   if (QUESTION.test(t)) return false;
   return (!HOPE.test(t) && (CLAIM.test(t) || NOT_LIVE.test(t) || BARE.test(t))) || (!REQUEST.test(t) && AGREE.test(t));
 }
+
+// William, Oct 13 2026, after the Oct 12 room: the word "scam" in any form ("too much scam there" was ghosted by hand 20 s
+// later) and a crude emoji (a lone 🍆 waited twelve minutes for the recording rule) ghost on the spot too. Questions
+// included: the word itself is the rule.
+const SCAM_WORD = /\bscam(?:s|my|mer|mers|med|ming)?\b/i;
+const CRUDE = /[🍆🍑💦🖕]/u;
+
+/** Why this line ghosts its author the moment it is posted, or null when it does not. */
+export function autoGhostReason(body: string): string | null {
+  if (exposesRecording(body)) return "said it's a recording";
+  if (SCAM_WORD.test(body)) return "said scam";
+  if (CRUDE.test(body)) return "crude emoji";
+  return null;
+}

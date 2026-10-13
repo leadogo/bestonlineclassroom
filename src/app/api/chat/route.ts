@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { MAX_BODY, POST_GAP_MS, slackLine } from "@/lib/chat";
-import { checkMessage, exposesRecording } from "@/lib/chat-filter";
+import { autoGhostReason, checkMessage } from "@/lib/chat-filter";
 import { db } from "@/lib/db";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { mine } from "@/lib/reactions";
@@ -76,6 +76,15 @@ export async function POST(request: Request) {
   const callMe = phone !== null && b.call_me === true;
   if (phone) body = body.replace(PHONE_RE, callMe ? "(phone number sent to the team)" : "").replace(/\s{2,}/g, " ").trim() || (callMe ? "(phone number sent to the team)" : "");
   if (!body) return Response.json({ error: "Type a message first." }, { status: 422 });
+  // Telling the room it is a recording, saying "scam" or posting a crude emoji ghosts you on the spot (William ghosts
+  // these by hand within a minute, every time): the line never shows, you still see your own rows, and the desk shows
+  // why, before the filter can refuse the line. A question about a replay is fine.
+  const ghostWhy = r.ghosted_at ? null : autoGhostReason(body);
+  if (ghostWhy) {
+    const g = await db().from("registrants").update({ ghosted_at: new Date().toISOString(), auto_ghost_reason: ghostWhy }).eq("id", r.id).is("ghosted_at", null);
+    if (g.error) console.error("[chat] auto-ghost failed", { code: g.error.code });
+  }
+  const ghosted = Boolean(r.ghosted_at) || ghostWhy !== null;
   const verdict = checkMessage(body);
   if (!verdict.ok) return Response.json({ error: verdict.reason }, { status: 422 });
 
@@ -83,14 +92,6 @@ export async function POST(request: Request) {
   if (last.data && Date.now() - new Date(last.data.created_at).getTime() < POST_GAP_MS) {
     return Response.json({ error: "One message at a time." }, { status: 429 });
   }
-  // Telling the room it is a recording ghosts you on the spot (William ghosts these by hand within a minute, every time):
-  // the line never shows, you still see your own rows, and the desk shows why. A question about a replay is fine.
-  const exposes = !r.ghosted_at && exposesRecording(body);
-  if (exposes) {
-    const g = await db().from("registrants").update({ ghosted_at: new Date().toISOString(), auto_ghost_reason: "said it's a recording" }).eq("id", r.id).is("ghosted_at", null);
-    if (g.error) console.error("[chat] auto-ghost failed", { code: g.error.code });
-  }
-  const ghosted = Boolean(r.ghosted_at) || exposes;
   const offset = typeof b.offset === "number" && Number.isFinite(b.offset) ? Math.max(0, Math.floor(b.offset)) : 0;
   // Mentions: registrant ids in this session, or m:<team member id>; anything else is dropped.
   const wanted = Array.isArray(b.mentions) ? b.mentions.map(String).slice(0, 10) : [];

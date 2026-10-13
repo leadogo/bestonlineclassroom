@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkMessage, cleanName, exposesRecording } from "./chat-filter.ts";
+import { autoGhostReason, checkMessage, cleanName, exposesRecording } from "./chat-filter.ts";
 
 test("chat filter: links, swearing, scam lines and shouting are refused; ordinary questions pass", () => {
   assert.equal(checkMessage("Great session, thanks William!").ok, true);
@@ -29,4 +29,17 @@ test("exposesRecording: claims and agreements that the room is a recording; ques
     assert.equal(exposesRecording(s), true, s);
   for (const s of ["Is this a recording?", "is this live", "Is this live or a pre-recorded video?", "Are these sessions recorded?", "Do you have recording of this", "can i get the recording please", "Will there be a replay as I need to step out", "Can replay be available?", "I hope this is recorded", "if this is recorded can you send it", "yes please send the recording", "yes I'd love the replay", "replay", "recording", "Will there be a recording sent later?", "I use AI for making video and creating content", "this is a reply lol", "I'll watch the replay later", "it will be recorded right", "the call is automated"])
     assert.equal(exposesRecording(s), false, s);
+});
+
+test("autoGhostReason: a recording claim, the word scam in any form, or a crude emoji ghosts on the spot; asking for the replay does not", () => {
+  for (const [s, why] of [
+    ["This is a pre recorded live", "said it's a recording"],
+    ["this is already a replay...", "said it's a recording"],
+    ["too much scam there", "said scam"],
+    ["is this a scam?", "said scam"],
+    ["SCAMMERS", "said scam"],
+    ["🍆", "crude emoji"],
+    ["nice 🍆🍆🍆", "crude emoji"],
+  ] as const) assert.equal(autoGhostReason(s), why, s);
+  for (const s of ["Will there be a recording sent later?", "Are you recording?", "can I get the replay please", "love this 🔥", "Chicago", "scambled eggs"]) assert.equal(autoGhostReason(s), null, s);
 });
