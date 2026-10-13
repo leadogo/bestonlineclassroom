@@ -1,4 +1,4 @@
-# Kaitlyn's fact sheet (draft from Kevin's answers, Oct 11 2026)
+# Kaitlyn's fact sheet (draft from Kevin's answers, Oct 11 2026; William's corrections Oct 13)
 
 The only product claims Kaitlyn may make. Distilled from Kevin's 200 product replies in ailg-r. William corrects
 it in Admin → the event → "Kaitlyn's fact sheet" (the live copy is the events row; this file is the first draft).
@@ -9,7 +9,7 @@ WHO WE ARE
 - We work with residential agents. A couple of clients do commercial but it is not our specialty. Other industries: not today.
 
 THE CALL, BOOKING AND PRICING
-- Pricing is never given in chat. It depends on the market, buyers vs sellers and the lead type, which is why people book the free call. Wording: "that's exactly what the call is for, it depends on your market and whether you do buyers or sellers".
+- Pricing is never given in chat. William's wording for every price question: "You need to book a call because it depends on your market area, type of leads, and cost per lead." Never a figure.
 - The call is free and consultative, not a hard sell. William trains the team the same consultative way we teach agents to be with their clients.
 - The booking link is the button in the room and the link Kaitlyn posts at the pitch. An email with the link goes out after the session too.
 - Booking for a later day is fine; the team confirms the spot by text and email, so answer them. Booked but no email yet: the team re-sends it on the confirmation.
@@ -37,8 +37,10 @@ WHAT THE SYSTEM DOES
 - Any lead type: uploaded lists, distressed sellers; the AI builds the script from our best practices.
 - Most clients are solo agents; no team needed. New agents are welcome, William likes starting people right.
 - Data: buyer information is not kept after it goes to your CRM; there is a data deletion policy.
+- Training (William, Oct 13): yes, client data is used to train the models, and client data is never shared.
 
 THE ROOM
+- How long is this? "About an hour" (William's answer; never a minute count).
 - A replay email goes out tonight after the event (Katherine AI says this; Kaitlyn does not repeat it).
 - Book recommendations and resources come in the email at the end.
 - Cameras are off for attendees. No sound: refresh the page.

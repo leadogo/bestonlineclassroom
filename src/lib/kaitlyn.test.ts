@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asMode, delayMs, extractJson, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn } from "./kaitlyn.ts";
+import { ASSISTED, asMode, delayMs, extractJson, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
 test("parseDecision: the tool input checked; a wordless reply skips, a guarded reply becomes ask_william with the draft kept", () => {
@@ -35,6 +35,7 @@ test("postsItself and delayMs: shadow never posts, assisted posts the routine ca
   assert.equal(postsItself("shadow", reply("market")), false);
   assert.equal(postsItself("assisted", reply("market")), true);
   assert.equal(postsItself("assisted", reply("product")), false);
+  assert.equal(postsItself("assisted", reply("price")), true);
   assert.equal(postsItself("auto", reply("product")), true);
   assert.equal(postsItself("auto", { action: "ghost", category: "negative", text: "", react: "", why: "" }), false);
   assert.equal(delayMs("shadow"), 0);
@@ -42,6 +43,15 @@ test("postsItself and delayMs: shadow never posts, assisted posts the routine ca
   assert.equal(delayMs("auto", () => 0.999), 39_975);
   assert.equal(asMode("assisted"), "assisted");
   assert.equal(asMode("sideways"), "off");
+});
+
+test("withoutMention: the model's own leading @Name goes, anything else stays", () => {
+  assert.equal(withoutMention("@Lovia Starry Publico Lovia, none in Hilo yet", "Lovia Starry Publico"), "Lovia, none in Hilo yet");
+  assert.equal(withoutMention("@lovia starry publico: none in Hilo yet", "Lovia Starry Publico"), "none in Hilo yet");
+  assert.equal(withoutMention("Lovia, none in Hilo yet", "Lovia Starry Publico"), "Lovia, none in Hilo yet");
+  assert.equal(withoutMention("@Lovia none yet", "Ana"), "@Lovia none yet");
+  assert.equal(withoutMention("@Ana", "Ana"), "@Ana");
+  assert.equal(withoutMention("@J.R. (Bo) hi there", "J.R. (Bo)"), "hi there");
 });
 
 test("marketLine: the directory's answer worded for the model, or null when no place is named", () => {
@@ -61,6 +71,7 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.ok(EXAMPLES.qa.length > 150 && EXAMPLES.ghosts.length > 15);
   assert.ok(s.includes(EXAMPLES.qa[0].a) && s.includes(EXAMPLES.ghosts[0]));
   assert.ok(systemPrompt(null).includes("No fact sheet"));
+  assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
   const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
   assert.match(t, /minute 82, the pitch started at minute 75/);
   assert.match(t, /PERSON: Ana, earlier tonight: "hi from LA"/);

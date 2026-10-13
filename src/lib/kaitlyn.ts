@@ -20,8 +20,8 @@ export type Action = (typeof ACTIONS)[number];
 export const CATEGORIES = ["market", "booking", "price", "product", "integration", "compliance", "replay", "tech", "greeting", "thanks", "chatter", "negative", "support", "other"] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type Decision = { action: Action; category: Category; text: string; react: string; why: string };
-/** In assisted mode these post without a moderator: the categories Kevin's history shows are routine. */
-export const ASSISTED = new Set<Category>(["market", "booking", "replay", "tech", "greeting", "thanks"]);
+/** In assisted mode these post without a moderator: the categories Kevin's history shows are routine (price: William's fixed wording, never a figure; the guard still catches one). */
+export const ASSISTED = new Set<Category>(["market", "booking", "price", "replay", "tech", "greeting", "thanks"]);
 export const MAX_TEXT = 300;
 /** No second Kaitlyn reply to the same person inside this window. */
 export const PER_PERSON_MS = 120_000;
@@ -45,8 +45,9 @@ HARD RULES
 - Do not repeat what a moderator already told this person tonight, and do not answer what a moderator just answered.
 
 ACTIONS
-- reply: a question about the product, the call, booking, markets, integrations, compliance, the replay email, tech trouble, where the link is; "booked" (celebrate, the team confirms by text and email); a market, city or state (use MARKET DATA exactly; nothing in the directory → "none in X yet, you'd be the first!"; no place named → ask which market); a greeting that asks the room something.
-- skip: one-word agreement ("yes", "ok", "lol"), chatter between attendees, statements that need no answer, "hi" on its own, anything you would only answer to look busy. The team answers about one message in nine. A quiet room is better than a robotic one.
+- reply: a question about the product, the call, booking, markets, integrations, compliance, the replay email, tech trouble, where the link is; "booked" (celebrate, the team confirms by text and email); a price question (the FACTS wording, never a figure); a market question (use MARKET DATA exactly; nothing in the directory → "none in X yet, you'd be the first!"; no place named → ask which market); a greeting that asks the room something.
+- markets and the clock: before the pitch, a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") is them answering William on screen, who asks where people are from: skip it, no count. A direct market question ("how many in X?", "anyone in X?") gets the count at any minute, and once booking is open every market line does.
+- skip: one-word agreement ("yes", "ok", "lol"), answers to Katherine AI's polls (what they use AI for, sellers or buyers, S/B/SB, yes/no), chatter between attendees, statements that need no answer, "hi" on its own, anything you would only answer to look busy. The team answers about one message in nine. A quiet room is better than a robotic one.
 - ghost: the line would hurt the room and the person is not asking in good faith: soliciting or recruiting, links to other services, profanity or heckling ("booooo", "scam", "this is BS"), telling the room it is a recording or fake (claims, not questions), repeated spam. Ghosting is invisible to them; they keep chatting and only they see it.
 - ask_william: an unhappy existing client or a support issue, a booking problem you cannot fix, a complaint, a legal or compliance question with specifics, anything you are unsure should be ghosted, a question FACTS does not cover that matters to their decision. Put a draft in text if you have one.
 - react: on a clearly positive, excited or funny line (a win, "love this", "let's go") pick one of ${EMOJIS.join(" ")}, about one such line in four, with or without a reply. Never on a question, never on a negative line. Otherwise empty.
@@ -111,6 +112,14 @@ export function guard(text: string): string | null {
   if (/\b(?:jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? \d{1,2}\b|\b20\d\d\b/i.test(text)) return "a date";
   if (/\b(?:i'?m|i am) (?:an? )?(?:ai|bot|human|real person)\b/i.test(text)) return "bot or human";
   return null;
+}
+
+/** The draft without a leading "@Name" the model sometimes writes itself; the poster adds the one mention. */
+export function withoutMention(text: string, firstName: string): string {
+  const name = firstName.trim();
+  if (!name) return text;
+  const re = new RegExp(`^@${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[,:]?\\s*`, "i");
+  return text.replace(re, "").trim() || text;
 }
 
 /** The model's tool input, checked: unknown actions skip, a reply without words skips, reactions only from the fixed set. */
@@ -220,7 +229,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     };
     const out = await decide(systemPrompt(a.event.kaitlyn_facts), userTurn(ctx));
     if (!out) return;
-    const d = out.decision;
+    const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
     const itself = postsItself(mode, d);
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.
     const pending = mode === "shadow" ? d.action !== "skip" || Boolean(d.react) : (d.action === "reply" && !itself) || d.action === "ask_william" || (d.action === "ghost" && mode !== "auto");
