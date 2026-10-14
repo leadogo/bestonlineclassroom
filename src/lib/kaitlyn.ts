@@ -277,7 +277,9 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     }
     if (!itself) return;
     const t0 = Date.now();
-    await new Promise((r) => setTimeout(r, delayMs(mode)));
+    // The pause counts from their message, so the model's own thinking time (out.ms) comes off it.
+    const wait = delayMs(mode) - out.ms;
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     // Still hers to answer? A moderator may have replied meanwhile, or she replied to them a moment ago.
     const [human, hers] = await Promise.all([
       db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", message.id).limit(1),
