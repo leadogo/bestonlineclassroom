@@ -1,12 +1,12 @@
-# Kaitlyn's fact sheet (draft from Kevin's answers, Oct 11 2026; William's corrections Oct 13)
+# Kaitlyn's fact sheet (draft from Kevin's answers, Oct 11 2026; William's corrections Oct 13; his Oct 13 room answers added Oct 14)
 
 The only product claims Kaitlyn may make. Distilled from Kevin's 200 product replies in ailg-r. William corrects
 it in Admin → the event → "Kaitlyn's fact sheet" (the live copy is the events row; this file is the first draft).
 Anything not here, she sends to the call and flags for William.
 
 WHO WE ARE
-- Book More Showings (BMS) is William's company, based in Edmonton, Alberta. The team, William included, is in Canada. William still runs a real estate team in Edmonton; he has not left the business.
-- We work with residential agents. A couple of clients do commercial but it is not our specialty. Other industries: not today.
+- Book More Showings (BMS) is William's company, based in Edmonton, Alberta. The team, William included, is in Canada. William still runs a real estate team in Edmonton; he has not left the business. He is not a broker; he has a small team.
+- We work with residential agents. A couple of clients do commercial but it is not our specialty. A few mortgage lenders use the system and hand the leads to partner agents. Other industries: not today.
 
 THE CALL, BOOKING AND PRICING
 - Pricing is never given in chat. William's wording for every price question: "You need to book a call because it depends on your market area, type of leads, and cost per lead." Never a figure.
@@ -22,13 +22,16 @@ THE CALL, BOOKING AND PRICING
 
 MARKETS
 - Every campaign is exclusive to one client; no lead sharing, ever. No saturation issues, even in markets with 50+ clients (the GTA, Calgary); there is more than enough business in any city.
-- The desk's directory count is the number to quote ("we've got 10 in Los Angeles, you're good"). Nothing in the directory: "none there yet, you'd be the first".
+- The desk's directory count is the number to quote; the wording is Kaitlyn's and changes every time. Nothing in the directory: nobody there yet, they'd be first.
 - Anyone can check their market at https://www.bookmoreshowings.com/market-transparency
 - Buyers vs sellers: both work; tell the team on the call. Two areas can be split buyers/sellers; say so on the onboarding call. Buyers are the easier start for a beginner.
 
 WHAT THE SYSTEM DOES
 - Facebook and Instagram ads are one thing (Meta); Google ads too. The Qualifunnel collects name and contact first (from the ad), adds them to your CRM, then asks the 14 qualifying questions; the answers go to your CRM.
 - Katherine AI calls the leads (cold and warm transfer), texts (just released), email next. Speaks 35+ languages (French, Spanish, Mandarin, Cantonese, Haitian Creole…), prompt customisation built in, can be used as a CRM if you have none. Contracts and paperwork: planned, not today.
+- Her tone is yours to set: she can be upbeat, nothing is locked, and you can clone your own voice for her.
+- The pixel: Facebook watches everything on a personal account too and uses it to profile people for advertisers. Setting the pixel up properly is the Conversions API; learn it or hire someone trusted. The call covers it.
+- Many clients sign up right before they go live, so a new or not-yet-licensed agent can get set up now and start the day they are ready.
 - Cost per AI call is very low; the voice models come from ElevenLabs (partner).
 - Conversion is similar to a human caller, sometimes better; the real win is it works all day, every day.
 - Tested with 89k+ hours of synthetic testing.

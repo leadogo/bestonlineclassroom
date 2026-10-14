@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { setKaitlynAssist } from "./actions";
 import { DeleteWebinar, NewWebinar } from "./dash-forms";
 import { LiveStrip } from "./live-strip";
 import { btn, btnQuiet, Empty, PageHeader, Stat } from "./ui";
@@ -64,6 +65,19 @@ export default async function AdminHome() {
                 <Stat label="clicked the offer" value={last ? last.clicked_offer : "—"} tone={last && last.clicked_offer ? "cta" : undefined} />
               </div>
               <p className="text-sm text-muted">Moderating: {mods.join(", ") || "nobody assigned"}</p>
+              {me.role === "admin" && e.kaitlyn_mode !== "off" && (
+                <form action={setKaitlynAssist} className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                  <input type="hidden" name="slug" value={e.slug} />
+                  <input type="hidden" name="on" value={e.kaitlyn_mode === "shadow" ? "1" : "0"} />
+                  <span>
+                    Kaitlyn assist <span className={`font-bold ${e.kaitlyn_mode === "shadow" ? "text-muted" : "text-cta"}`}>{e.kaitlyn_mode === "shadow" ? "off" : "on"}</span>
+                    <span className="text-muted">{e.kaitlyn_mode === "shadow" ? " · her drafts wait for you on the desk" : e.kaitlyn_mode === "auto" ? " · auto: every reply and sure ghost happens on its own" : " · markets, booking, price, replay, tech, thanks and sure ghosts happen on their own"}</span>
+                  </span>
+                  <button type="submit" className={`${btnQuiet} min-h-8 px-3`}>
+                    {e.kaitlyn_mode === "shadow" ? "Turn on" : "Turn off"}
+                  </button>
+                </form>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Link href={`/mod/${e.slug}`} className={btn}>
                   Moderate

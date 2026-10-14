@@ -1,6 +1,7 @@
 // Kaitlyn from William's Team (William, Oct 11 2026): the room's AI moderator. One Claude call per attendee message
-// decides reply / skip / ghost / ask William in a warm customer-service voice, with the event's fact sheet as the only
-// source of product claims and Kevin's real replies as examples. Modes per event: off | shadow (drafts on the desk, a
+// decides reply / skip / ghost / ask William in Kevin's register (William, Oct 14: short, plain, varied; she sees her own
+// lines from tonight so she never repeats a shape), with the event's fact sheet as the only source of product claims and
+// Kevin's real replies as the voice to match. Modes per event: off | shadow (drafts on the desk, a
 // moderator sends) | assisted (the routine categories post themselves) | auto (every reply posts itself).
 // Best-effort everywhere: a model outage or a bad answer is silence, never an error in the room.
 import { KAITLYN, KAITLYN_MODES, type KaitlynMode } from "./chat.ts";
@@ -30,25 +31,37 @@ const KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
 export const asMode = (v: unknown): Mode => (MODES as readonly string[]).includes(String(v)) ? (v as Mode) : "off";
 
-const PERSONA = `You are Kaitlyn, a moderator in the live chat of William's "AI For Agents Masterclass" (Book More Showings, Edmonton). You post as "${KAITLYN}". Real estate agents are watching William present on screen; you help them the way a warm, upbeat customer-service teammate would.
+const PERSONA = `You are Kaitlyn, a moderator in the live chat of William's "AI For Agents Masterclass" (Book More Showings, Edmonton). You post as "${KAITLYN}". Real estate agents are watching William present on screen; you answer the way a teammate who knows the product does: short, plain, friendly, never salesy.
 
 VOICE
-- Bubbly, warm, short: one or two sentences, under 160 characters when you can. Use their first name sometimes, not every time.
-- At most one exclamation mark per reply, an emoji in about one reply in three (🙌 💛 🔥 😊 ✨), casual punctuation like the team. Never sarcastic, never argue, never lecture, never apologise for the product.
-- Speak for the team ("we", "our team"), never for William ("William says…"). "William goes over that shortly" is fine when the fact sheet says the presentation covers it.
+- Kevin's register with a little more warmth. His real replies are below: match their length and plainness. One sentence, 8 to 15 words most of the time, under 120 characters. Contractions, lowercase is fine, no greeting.
+- Their name is already on the line as the mention: never write it inside the text.
+- No customer-service phrases, ever: "great question", "good question", "totally fair", "love that energy", "thanks for the honest feedback", "so glad you're here", "our team will walk you through", "happy to help". Say the thing.
+- An exclamation mark in one reply in five at most. An emoji in one reply in four at most (🙌 💛 🔥 😊 ✨), never on two replies in a row. Never sarcastic, never argue, never lecture, never apologise for the product.
+- Speak for the team ("we"), never for William ("William says…"). "William gets to that in a bit" is fine when FACTS say the presentation covers it.
 - Never claim to be a bot or an AI, never claim to be human. If asked, skip.
 
+VARIETY
+- YOU ALREADY SAID TONIGHT is in every turn. Do not open the way any of the last three did, do not close the way any of the last three did, do not reuse a phrase from that list tonight, and no emoji if the last one had one. When the fact is the same as before (a market count, a booking, the price line), give it a new shape: a fragment ("3 in Boston"), a plain statement, a short aside, a question back.
+- Shapes to draw on, never the same one twice in a night:
+  market with a count: "7 in Massachusetts so you're good" · "we've got 3 in Boston" · "Boston's at 3 right now, lots of room" · "yep, 5 in Chicago already" · "LA has 10, biggest one we've got" · "3 in Boston, 7 across the state"
+  nothing in the directory: "nobody in Chelan yet, you'd be first" · "Irvine's wide open" · "none in DC so far" · "Waukesha County is open, nobody in Wisconsin yet" · "no one there yet" · "Hollywood's empty, 60 across Florida though"
+  booked: "nice, the team texts and emails to confirm" · "got it 🙌 watch your phone for the confirmation" · "booked, see you on the call" · "love it, confirmation's on its way" · "awesome, keep an eye on your email" · "that's the move 🔥"
+  price: the FACTS sentence word for word, with at most a two-word lead-in that changes each time ("short answer:", "depends,", "honestly,", or nothing).
+  not in FACTS: "that one's for the call" · "the call covers setup step by step" · "they go through that on the call for your market" · "best asked on the call, it depends on your setup" · "William gets to that in a bit" (only when FACTS say so) · "can't answer that one here, the call can"
+  thanks: "anytime" · "of course" · "💛" · "glad it helped" · "you got it" · "no problem at all"
+
 HARD RULES
-- Product facts come only from FACTS below. Not there → say the call covers it ("great question, that's exactly what the call is for") and use ask_william when it matters to their decision.
+- Product facts come only from FACTS below. Not there → the call covers it, said in your own words each time, and ask_william when it matters to their decision.
 - Never a price or dollar figure, never a guarantee, never a date, the weather or the news, never whether this is live or a recording. Questions about live/recorded/replay: skip (Katherine AI answers replay questions).
 - Never promise that William will see or answer something.
 - Do not repeat what a moderator already told this person tonight, and do not answer what a moderator just answered.
 
 ACTIONS
-- reply: a question about the product, the call, booking, markets, integrations, compliance, the replay email, tech trouble, where the link is; "booked" (celebrate, the team confirms by text and email); a price question (the FACTS wording, never a figure); a market question (use MARKET DATA exactly; nothing in the directory → "none in X yet, you'd be the first!"; no place named → ask which market); a greeting that asks the room something.
+- reply: a question about the product, the call, booking, markets, integrations, compliance, the replay email, tech trouble, where the link is; "booked" (celebrate briefly; the team confirms by text and email); a price question (the FACTS sentence, never a figure); a market question (MARKET DATA has the number, the wording is yours; nothing in the directory → nobody there yet and they'd be first; say "exclusive" only when they ask about sharing or competition; no place named → ask which market); a greeting that asks the room something.
 - markets and the clock: before the pitch, a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") is them answering William on screen, who asks where people are from: skip it, no count. A direct market question ("how many in X?", "anyone in X?") gets the count at any minute, and once booking is open every market line does.
 - skip: one-word agreement ("yes", "ok", "lol"), answers to Katherine AI's polls (what they use AI for, sellers or buyers, S/B/SB, yes/no), chatter between attendees, statements that need no answer, "hi" on its own, anything you would only answer to look busy. The team answers about one message in nine. A quiet room is better than a robotic one.
-- ghost: the line would hurt the room and the person is not asking in good faith: soliciting or recruiting, links to other services, profanity or heckling ("booooo", "scam", "this is BS"), telling the room it is a recording or fake (claims, not questions), repeated spam. Ghosting is invisible to them; they keep chatting and only they see it.
+- ghost: the line would hurt the room and the person is not asking in good faith: soliciting or recruiting, links to other services, profanity or heckling ("booooo", "scam", "this is BS"), telling the room it is a recording or fake (claims, not questions), repeated spam. Category "negative" when you are sure; in assisted and auto that ghosts them on the spot, any other category waits for a moderator. Ghosting is invisible to them; they keep chatting and only they see it.
 - ask_william: an unhappy existing client or a support issue, a booking problem you cannot fix, a complaint, a legal or compliance question with specifics, anything you are unsure should be ghosted, a question FACTS does not cover that matters to their decision. Put a draft in text if you have one.
 - react: on a clearly positive, excited or funny line (a win, "love this", "let's go") pick one of ${EMOJIS.join(" ")}, about one such line in four, with or without a reply. Never on a question, never on a negative line. Otherwise empty.
 
@@ -58,7 +71,7 @@ OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "r
 export function systemPrompt(facts: string | null): string {
   const f = facts?.trim() ? facts.trim() : "(No fact sheet for this event: answer only about markets, booking, the replay email and tech trouble; everything else is ask_william.)";
   const qa = EXAMPLES.qa.map((x) => `[${x.m}m] Q: ${x.q}\n   A: ${x.a}`).join("\n");
-  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first; borrow the substance, not the voice: you are warmer and bubblier)\n${qa}\n\nLINES THE TEAM GHOSTED ON THE SPOT\n${EXAMPLES.ghosts.map((g) => `- ${g}`).join("\n")}`;
+  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first: this is the voice to match, its length and plainness; the substance where FACTS agree)\n${qa}\n\nLINES THE TEAM GHOSTED ON THE SPOT\n${EXAMPLES.ghosts.map((g) => `- ${g}`).join("\n")}`;
 }
 
 export type Context = {
@@ -70,6 +83,8 @@ export type Context = {
   priorOwn: string[];
   /** What moderators said to them tonight, oldest first. */
   modReplies: string[];
+  /** Her own last lines tonight (drafts included), oldest first: what she must not echo. */
+  said: string[];
   /** The room's last lines, oldest first, "[attendee] Name: …" / "[team] Name: …". */
   recent: string[];
   market: string | null;
@@ -84,6 +99,7 @@ export function userTurn(c: Context): string {
     `KATHERINE AI: ${c.katherine ? "will answer this one (replay question)" : "not involved"}`,
     `PERSON: ${c.name}${c.priorOwn.length ? `, earlier tonight: ${c.priorOwn.map((s) => JSON.stringify(s)).join(" | ")}` : ", first message tonight"}`,
     `MODERATORS TO THEM TONIGHT: ${c.modReplies.length ? c.modReplies.map((s) => JSON.stringify(s)).join(" | ") : "nothing yet"}`,
+    `YOU ALREADY SAID TONIGHT (oldest first): ${c.said.length ? c.said.map((s) => JSON.stringify(s)).join(" | ") : "nothing yet"}`,
     `RECENT ROOM (oldest first):\n${c.recent.length ? c.recent.join("\n") : "(quiet)"}`,
     `MESSAGE TO DECIDE ON: ${c.name}: ${JSON.stringify(c.body)}`,
   ];
@@ -142,9 +158,22 @@ export function postsItself(mode: Mode, d: Decision): boolean {
   return mode === "auto" || (mode === "assisted" && ASSISTED.has(d.category));
 }
 
-/** A human pause before a reply posts itself (Kevin's median is 36 s); none in shadow, where nothing posts. */
-export function delayMs(mode: Mode, pick = Math.random): number {
-  return mode === "shadow" || mode === "off" ? 0 : 15_000 + Math.floor(pick() * 25_000);
+/**
+ * A human pause before a reply posts itself: reading the line (5 to 20 s), typing it (4 to 7 characters a second) and,
+ * one time in four, being busy with something else (20 to 60 s more). William's own desk tonight (Oct 13) ran 9 to 65 s,
+ * median 27 s; a fixed window read as a bot. Capped at two minutes; none in shadow, where nothing posts.
+ */
+export function delayMs(mode: Mode, chars = 80, pick = Math.random): number {
+  if (mode === "shadow" || mode === "off") return 0;
+  const read = 5_000 + pick() * 15_000;
+  const type = (Math.max(1, chars) * 1_000) / (4 + pick() * 3);
+  const busy = pick() > 0.75 ? 20_000 + pick() * 40_000 : 0;
+  return Math.min(120_000, Math.floor(read + type + busy));
+}
+
+/** Whether a ghost decision acts without a moderator: assisted and auto ghost on the spot when she is sure (category negative); anything less certain waits on the desk. Shadow never acts. */
+export function ghostsItself(mode: Mode, d: Decision): boolean {
+  return d.action === "ghost" && d.category === "negative" && (mode === "assisted" || mode === "auto");
 }
 
 /** The one JSON object in the model's text, code fence or stray words around it ignored; null when there is none. */
@@ -210,10 +239,12 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
   if (mode === "off" || !KEY) return;
   try {
     const { reg, message } = a;
-    const [recentQ, toThemQ, marketsQ] = await Promise.all([
+    const [recentQ, toThemQ, marketsQ, saidQ] = await Promise.all([
       db().from("chat_messages").select("id, registrant_id, author_name, role, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("visibility", "all").is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(40),
       db().from("chat_messages").select("id, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").contains("mentions", [reg.id]).order("id", { ascending: false }).limit(5),
       db().from("market_counts").select("name, clients, live"),
+      // Her own lines tonight, drafts included (in shadow nothing posts, and the drafts were still her shapes).
+      db().from("kaitlyn_decisions").select("text").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("action", "reply").neq("text", "").order("id", { ascending: false }).limit(12),
     ]);
     const recent = (recentQ.data ?? []).reverse();
     const ctx: Context = {
@@ -223,6 +254,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       body: message.body,
       priorOwn: recent.filter((m) => m.registrant_id === reg.id).map((m) => String(m.body)).slice(-5),
       modReplies: (toThemQ.data ?? []).reverse().map((m) => String(m.body)),
+      said: (saidQ.data ?? []).reverse().map((r) => String(r.text)),
       recent: recent.slice(-25).map((m) => `[${m.role === "attendee" ? "attendee" : m.author_name === KAITLYN ? "Kaitlyn" : "team"}] ${m.author_name}: ${String(m.body).slice(0, 160)}`),
       market: marketLine(message.body, ((marketsQ.data ?? []) as MarketCount[])),
       katherine: a.katherine && asksForReplay(message.body),
@@ -232,7 +264,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
     const itself = postsItself(mode, d);
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.
-    const pending = mode === "shadow" ? d.action !== "skip" || Boolean(d.react) : (d.action === "reply" && !itself) || d.action === "ask_william" || (d.action === "ghost" && mode !== "auto");
+    const pending = mode === "shadow" ? d.action !== "skip" || Boolean(d.react) : (d.action === "reply" && !itself) || d.action === "ask_william" || (d.action === "ghost" && !ghostsItself(mode, d));
     const row = await db().from("kaitlyn_decisions").insert({ event_id: reg.event_id, session_date: reg.session_date, message_id: message.id, registrant_id: reg.id, action: d.action, category: d.category, text: d.text, react: d.react, why: d.why, status: pending ? "pending" : "skipped", decided_at: pending ? null : new Date().toISOString(), model: MODEL, ms: out.ms }).select("id").single();
     if (row.error) { console.error("[kaitlyn] decision insert failed", { code: row.error.code }); return; }
     const did = row.data.id as number;
@@ -246,11 +278,12 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       await db().from("registrants").update({ ghosted_at: new Date().toISOString(), auto_ghost_reason: `kaitlyn: ${d.why}`.slice(0, 200) }).eq("id", reg.id).is("ghosted_at", null);
       await db().from("chat_messages").update({ visibility: "author", updated_at: new Date().toISOString() }).eq("id", message.id);
       await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did);
+      if (reg.source !== "test") await postToChatChannel(`Kaitlyn ghosted ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} (${d.why}). Unghost on the desk if that was wrong.`);
       return;
     }
     if (!itself) return;
     const t0 = Date.now();
-    await new Promise((r) => setTimeout(r, delayMs(mode)));
+    await new Promise((r) => setTimeout(r, delayMs(mode, d.text.length)));
     // Still hers to answer? A moderator may have replied meanwhile, or she replied to them a moment ago.
     const [human, hers] = await Promise.all([
       db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", message.id).limit(1),

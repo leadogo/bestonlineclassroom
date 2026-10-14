@@ -16,6 +16,21 @@ async function admin() {
 // What a copy carries over: everything except the video, the brand images and the rows that belong to sessions.
 const COPIED = "host_name, timezone, start_time, days, cta_at_seconds, cta_hide_seconds, cta_label, cta_href, end_url, simulated_names, logo_url, icon_url, chapters, replay_hours, replay_opens_at, replay_copy, tags, reminder_rules, confirmation";
 
+/**
+ * The dashboard's Kaitlyn switch (William, Oct 14): on = assisted (her routine replies and sure ghosts happen on their
+ * own, for the nights nobody is on the desk), off = shadow (every line waits for a moderator). The room reads the mode
+ * per message, so it takes effect at once.
+ */
+export async function setKaitlynAssist(fd: FormData): Promise<void> {
+  await admin();
+  const slug = String(fd.get("slug") ?? "");
+  const { error } = await db().from("events").update({ kaitlyn_mode: fd.get("on") === "1" ? "assisted" : "shadow" }).eq("slug", slug);
+  if (error) throw new Error("Could not switch Kaitlyn.");
+  forgetEvent(slug);
+  revalidatePath("/admin");
+  revalidatePath(`/admin/events/${slug}`);
+}
+
 /** New webinar from an existing one; lands on its settings page. */
 export async function createEvent(_prev: DashState, fd: FormData): Promise<DashState> {
   await admin();

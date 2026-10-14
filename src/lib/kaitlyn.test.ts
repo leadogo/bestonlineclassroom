@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asMode, delayMs, extractJson, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asMode, delayMs, extractJson, ghostsItself, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
 test("parseDecision: the tool input checked; a wordless reply skips, a guarded reply becomes ask_william with the draft kept", () => {
@@ -38,9 +38,18 @@ test("postsItself and delayMs: shadow never posts, assisted posts the routine ca
   assert.equal(postsItself("assisted", reply("price")), true);
   assert.equal(postsItself("auto", reply("product")), true);
   assert.equal(postsItself("auto", { action: "ghost", category: "negative", text: "", react: "", why: "" }), false);
-  assert.equal(delayMs("shadow"), 0);
-  assert.equal(delayMs("assisted", () => 0), 15_000);
-  assert.equal(delayMs("auto", () => 0.999), 39_975);
+  // Reading 5 s, typing 80 characters at 4 a second, never busy at pick 0; at pick 0.999 the busy tail lands and the cap holds a long line at two minutes.
+  assert.equal(delayMs("shadow", 80), 0);
+  assert.equal(delayMs("assisted", 80, () => 0), 25_000);
+  const slow = delayMs("auto", 80, () => 0.999);
+  assert.ok(slow > 85_000 && slow < 95_000, String(slow));
+  assert.equal(delayMs("assisted", 300, () => 0.999), 120_000);
+  const ghost = (category: "negative" | "other") => ({ action: "ghost" as const, category, text: "", react: "", why: "" });
+  assert.equal(ghostsItself("shadow", ghost("negative")), false);
+  assert.equal(ghostsItself("assisted", ghost("negative")), true);
+  assert.equal(ghostsItself("auto", ghost("negative")), true);
+  assert.equal(ghostsItself("assisted", ghost("other")), false);
+  assert.equal(ghostsItself("assisted", reply("market")), false);
   assert.equal(asMode("assisted"), "assisted");
   assert.equal(asMode("sideways"), "off");
 });
@@ -72,10 +81,12 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.ok(s.includes(EXAMPLES.qa[0].a) && s.includes(EXAMPLES.ghosts[0]));
   assert.ok(systemPrompt(null).includes("No fact sheet"));
   assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
-  const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
+  assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));
+  const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], said: ["7 in Massachusetts so you're good", "nobody in Chelan yet"], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
   assert.match(t, /minute 82, the pitch started at minute 75/);
   assert.match(t, /PERSON: Ana, earlier tonight: "hi from LA"/);
   assert.match(t, /MODERATORS TO THEM TONIGHT: nothing yet/);
+  assert.match(t, /YOU ALREADY SAID TONIGHT \(oldest first\): "7 in Massachusetts so you're good" \| "nobody in Chelan yet"/);
   assert.match(t, /MESSAGE TO DECIDE ON: Ana: "LA"$/);
-  assert.match(userTurn({ minute: 3, pitchMinute: 75, name: "Bo", body: "hi", priorOwn: [], modReplies: ["@Bo welcome!"], recent: [], market: null, katherine: true }), /before the pitch[\s\S]*\nMARKET DATA: none \(no place named\)\nKATHERINE AI: will answer/);
+  assert.match(userTurn({ minute: 3, pitchMinute: 75, name: "Bo", body: "hi", priorOwn: [], modReplies: ["@Bo welcome!"], said: [], recent: [], market: null, katherine: true }), /before the pitch[\s\S]*\nMARKET DATA: none \(no place named\)\nKATHERINE AI: will answer[\s\S]*YOU ALREADY SAID TONIGHT \(oldest first\): nothing yet/);
 });

@@ -124,7 +124,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
                   <option value="assisted">assisted: markets, booking, replay, tech, greetings and thanks post themselves</option>
                   <option value="auto">auto: every reply posts itself</option>
                 </select>
-                <span className="text-muted">Her link line at the pitch minute posts in every mode but off. Ghosts post themselves only in auto; everything she is unsure of waits for you on the desk (and pings Slack in assisted and auto).</span>
+                <span className="text-muted">Her link line at the pitch minute posts in every mode but off. In assisted and auto she ghosts heckling and spam on the spot (Slack gets a line; Unghost is on the desk); everything she is unsure of waits for you on the desk and pings Slack. The Webinars page has a one-tap switch between assisted and shadow for the nights you are or are not on the desk.</span>
               </label>
             </div>
             <Field label="Kaitlyn's fact sheet" name="kaitlyn_facts" rows={16} value={event.kaitlyn_facts ?? ""} hint="The only product claims she may make; never a price. Blank keeps her to markets, booking, the replay email and tech trouble. The first draft from Kevin's answers is docs/kaitlyn-facts.md." />
