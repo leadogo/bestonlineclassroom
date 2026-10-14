@@ -14,6 +14,12 @@ test("parseDecision: the tool input checked; a wordless reply skips, a guarded r
   assert.equal(priced.action, "ask_william");
   assert.equal(priced.text, "it's $400 a month");
   assert.match(priced.why, /^draft mentions a price; asked the price/);
+  const unsure = parseDecision({ action: "reply", category: "product", text: "the pixel reads personal posts too", sure: false, react: "", why: "pixel question" });
+  assert.equal(unsure.action, "ask_william");
+  assert.equal(unsure.text, "the pixel reads personal posts too");
+  assert.match(unsure.why, /^not sure; pixel question/);
+  assert.equal(parseDecision({ action: "reply", category: "market", text: "3 in Boston", sure: true, react: "", why: "" }).action, "reply");
+  assert.equal(parseDecision({ action: "reply", category: "market", text: "3 in Boston", react: "", why: "" }).action, "reply");
   assert.equal(parseDecision(null).action, "skip");
   assert.equal(parseDecision({ action: "reply", category: "other", text: "a".repeat(400), react: "", why: "" }).text.length, 300);
 });
@@ -38,12 +44,9 @@ test("postsItself and delayMs: shadow never posts, assisted posts the routine ca
   assert.equal(postsItself("assisted", reply("price")), true);
   assert.equal(postsItself("auto", reply("product")), true);
   assert.equal(postsItself("auto", { action: "ghost", category: "negative", text: "", react: "", why: "" }), false);
-  // Reading 5 s, typing 80 characters at 4 a second, never busy at pick 0; at pick 0.999 the busy tail lands and the cap holds a long line at two minutes.
-  assert.equal(delayMs("shadow", 80), 0);
-  assert.equal(delayMs("assisted", 80, () => 0), 25_000);
-  const slow = delayMs("auto", 80, () => 0.999);
-  assert.ok(slow > 85_000 && slow < 95_000, String(slow));
-  assert.equal(delayMs("assisted", 300, () => 0.999), 120_000);
+  assert.equal(delayMs("shadow"), 0);
+  assert.equal(delayMs("assisted", () => 0), 8_000);
+  assert.equal(delayMs("auto", () => 0.999), 14_993);
   const ghost = (category: "negative" | "other") => ({ action: "ghost" as const, category, text: "", react: "", why: "" });
   assert.equal(ghostsItself("shadow", ghost("negative")), false);
   assert.equal(ghostsItself("assisted", ghost("negative")), true);
@@ -82,6 +85,7 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.ok(systemPrompt(null).includes("No fact sheet"));
   assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
   assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));
+  assert.ok(s.includes('"sure": true only when FACTS or MARKET DATA give this answer outright') && s.includes("Never a filler reply") && !s.includes("can't answer that one here"));
   const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], said: ["7 in Massachusetts so you're good", "nobody in Chelan yet"], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
   assert.match(t, /minute 82, the pitch started at minute 75/);
   assert.match(t, /PERSON: Ana, earlier tonight: "hi from LA"/);

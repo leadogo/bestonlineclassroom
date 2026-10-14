@@ -607,14 +607,15 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
 
 /**
  * One of Kaitlyn's suggestions under the message it is about: her draft in a box you can edit before it posts as her,
- * a ghost or a reaction to approve with one tap, or a line she wants a human on. Skip drops it; nothing posts on its own.
+ * a ghost or a reaction to approve with one tap, or a line she wants a human on (the box is there, empty, for the
+ * proper answer; it posts as her). Skip drops it; nothing posts on its own.
  */
 function KaitlynRow({ k, onAct }: { k: KPending; onAct: (k: KPending, decision: KDecision, body?: string) => Promise<boolean> }) {
   const [draft, setDraft] = useState(k.text);
   const [busy, setBusy] = useState(false);
   const go = async (decision: KDecision, body?: string) => { setBusy(true); await onAct(k, decision, body); setBusy(false); };
   const label = k.action === "reply" ? "reply" : k.action === "ghost" ? "ghost?" : k.action === "ask_william" ? "needs you" : "react?";
-  const editable = k.action === "reply" || (k.action === "ask_william" && k.text);
+  const editable = k.action === "reply" || k.action === "ask_william";
   return (
     <div className="mt-2 rounded-xl border border-dashed border-cta/60 bg-cta/5 p-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
@@ -625,7 +626,7 @@ function KaitlynRow({ k, onAct }: { k: KPending; onAct: (k: KPending, decision: 
       </div>
       {editable ? (
         <div className="mt-1.5 flex items-end gap-2">
-          <input value={draft} onChange={(e) => setDraft(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (draft.trim()) go("send", draft); } }} aria-label="Kaitlyn's draft" className="min-h-9 min-w-0 flex-1 rounded-lg border border-line bg-panel px-2.5 text-[15px] focus:border-brand focus:outline-none" />
+          <input value={draft} onChange={(e) => setDraft(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (draft.trim()) go("send", draft); } }} aria-label="Kaitlyn's draft" placeholder={k.action === "ask_william" ? "Your answer, posted as Kaitlyn" : undefined} className="min-h-9 min-w-0 flex-1 rounded-lg border border-line bg-panel px-2.5 text-[15px] focus:border-brand focus:outline-none" />
           <button type="button" disabled={busy || !draft.trim()} onClick={() => go("send", draft)} className="min-h-9 shrink-0 rounded-lg bg-cta px-3 text-sm font-bold text-white disabled:opacity-40">Send as Kaitlyn</button>
         </div>
       ) : null}

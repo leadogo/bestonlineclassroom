@@ -48,11 +48,11 @@ VARIETY
   nothing in the directory: "nobody in Chelan yet, you'd be first" · "Irvine's wide open" · "none in DC so far" · "Waukesha County is open, nobody in Wisconsin yet" · "no one there yet" · "Hollywood's empty, 60 across Florida though"
   booked: "nice, the team texts and emails to confirm" · "got it 🙌 watch your phone for the confirmation" · "booked, see you on the call" · "love it, confirmation's on its way" · "awesome, keep an eye on your email" · "that's the move 🔥"
   price: the FACTS sentence word for word, with at most a two-word lead-in that changes each time ("short answer:", "depends,", "honestly,", or nothing).
-  not in FACTS: "that one's for the call" · "the call covers setup step by step" · "they go through that on the call for your market" · "best asked on the call, it depends on your setup" · "William gets to that in a bit" (only when FACTS say so) · "can't answer that one here, the call can"
+  FACTS say the call handles it (pricing levels, compliance specifics, setup for their market): "the call covers setup step by step" · "they go through that on the call for your market" · "William gets to that in a bit" (only when FACTS say the presentation covers it)
   thanks: "anytime" · "of course" · "💛" · "glad it helped" · "you got it" · "no problem at all"
 
 HARD RULES
-- Product facts come only from FACTS below. Not there → the call covers it, said in your own words each time, and ask_william when it matters to their decision.
+- Product facts come only from FACTS below. Not there, or you are not sure your answer is right → ask_william and "sure": false: nothing posts, a moderator answers from the desk. Never a filler reply ("that one's for the call", "the team can walk you through it") in place of an answer; "the call covers it" only when FACTS say the call is where that is handled.
 - Never a price or dollar figure, never a guarantee, never a date, the weather or the news, never whether this is live or a recording. Questions about live/recorded/replay: skip (Katherine AI answers replay questions).
 - Never promise that William will see or answer something.
 - Do not repeat what a moderator already told this person tonight, and do not answer what a moderator just answered.
@@ -62,10 +62,10 @@ ACTIONS
 - markets and the clock: before the pitch, a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") is them answering William on screen, who asks where people are from: skip it, no count. A direct market question ("how many in X?", "anyone in X?") gets the count at any minute, and once booking is open every market line does.
 - skip: one-word agreement ("yes", "ok", "lol"), answers to Katherine AI's polls (what they use AI for, sellers or buyers, S/B/SB, yes/no), chatter between attendees, statements that need no answer, "hi" on its own, anything you would only answer to look busy. The team answers about one message in nine. A quiet room is better than a robotic one.
 - ghost: the line would hurt the room and the person is not asking in good faith: soliciting or recruiting, links to other services, profanity or heckling ("booooo", "scam", "this is BS"), telling the room it is a recording or fake (claims, not questions), repeated spam. Category "negative" when you are sure; in assisted and auto that ghosts them on the spot, any other category waits for a moderator. Ghosting is invisible to them; they keep chatting and only they see it.
-- ask_william: an unhappy existing client or a support issue, a booking problem you cannot fix, a complaint, a legal or compliance question with specifics, anything you are unsure should be ghosted, a question FACTS does not cover that matters to their decision. Put a draft in text if you have one.
+- ask_william: any question FACTS or MARKET DATA do not answer outright, anything you are not sure of, an unhappy existing client or a support issue, a booking problem you cannot fix, a complaint, a legal or compliance question with specifics, anything you are unsure should be ghosted. Put a draft in text only if you have a real one; otherwise leave it empty and the moderator writes the answer.
 - react: on a clearly positive, excited or funny line (a win, "love this", "let's go") pick one of ${EMOJIS.join(" ")}, about one such line in four, with or without a reply. Never on a question, never on a negative line. Otherwise empty.
 
-OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "why": ten words for the desk}.`;
+OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "sure": true only when FACTS or MARKET DATA give this answer outright, "why": ten words for the desk}.`;
 
 /** The system prompt: persona and rules, the event's fact sheet, Kevin's real answers, and the lines the team ghosted. Cached by the API. */
 export function systemPrompt(facts: string | null): string {
@@ -138,7 +138,7 @@ export function withoutMention(text: string, firstName: string): string {
   return text.replace(re, "").trim() || text;
 }
 
-/** The model's tool input, checked: unknown actions skip, a reply without words skips, reactions only from the fixed set. */
+/** The model's tool input, checked: unknown actions skip, a reply without words skips, an unsure reply waits for a moderator, reactions only from the fixed set. */
 export function parseDecision(input: unknown): Decision {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const text = String(o.text ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
@@ -147,6 +147,8 @@ export function parseDecision(input: unknown): Decision {
   const react = isEmoji(String(o.react ?? "")) ? String(o.react) : "";
   let why = String(o.why ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
   if (action === "reply" && !text) action = "skip";
+  // A reply she is not sure of never posts: the draft goes to the desk for a moderator to replace or send (William, Oct 14).
+  if (action === "reply" && o.sure === false) { action = "ask_william"; why = `not sure; ${why}`.slice(0, 140); }
   const bad = action === "reply" ? guard(text) : null;
   if (bad) { action = "ask_william"; why = `draft mentions ${bad}; ${why}`.slice(0, 140); }
   return { action, category, text: action === "skip" || action === "ghost" ? "" : text, react, why };
@@ -158,17 +160,9 @@ export function postsItself(mode: Mode, d: Decision): boolean {
   return mode === "auto" || (mode === "assisted" && ASSISTED.has(d.category));
 }
 
-/**
- * A human pause before a reply posts itself: reading the line (5 to 20 s), typing it (4 to 7 characters a second) and,
- * one time in four, being busy with something else (20 to 60 s more). William's own desk tonight (Oct 13) ran 9 to 65 s,
- * median 27 s; a fixed window read as a bot. Capped at two minutes; none in shadow, where nothing posts.
- */
-export function delayMs(mode: Mode, chars = 80, pick = Math.random): number {
-  if (mode === "shadow" || mode === "off") return 0;
-  const read = 5_000 + pick() * 15_000;
-  const type = (Math.max(1, chars) * 1_000) / (4 + pick() * 3);
-  const busy = pick() > 0.75 ? 20_000 + pick() * 40_000 : 0;
-  return Math.min(120_000, Math.floor(read + type + busy));
+/** A human pause before a reply posts itself: 8 to 15 s, a different draw each time (William, Oct 14: people are waiting for the answer; 85 s read as neglect). None in shadow, where nothing posts. */
+export function delayMs(mode: Mode, pick = Math.random): number {
+  return mode === "shadow" || mode === "off" ? 0 : 8_000 + Math.floor(pick() * 7_000);
 }
 
 /** Whether a ghost decision acts without a moderator: assisted and auto ghost on the spot when she is sure (category negative); anything less certain waits on the desk. Shadow never acts. */
@@ -283,7 +277,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     }
     if (!itself) return;
     const t0 = Date.now();
-    await new Promise((r) => setTimeout(r, delayMs(mode, d.text.length)));
+    await new Promise((r) => setTimeout(r, delayMs(mode)));
     // Still hers to answer? A moderator may have replied meanwhile, or she replied to them a moment ago.
     const [human, hers] = await Promise.all([
       db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", message.id).limit(1),
