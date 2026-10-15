@@ -42,7 +42,7 @@ export function emailVars(p: Person, e: EventRow, session: Session): Record<stri
   };
 }
 
-function withFooter(text: string, footer: boolean, token: string): string {
+export function withFooter(text: string, footer: boolean, token: string): string {
   return `${text}\n\n${footer ? `${TRANSPARENCY_FOOTER}\n\n` : ""}To stop these emails: ${APP}/u/${token}`;
 }
 
@@ -76,4 +76,22 @@ export async function sendReminder(rule: { key: string; subject: string; body: s
   const vars = emailVars(p, e, session);
   const text = withFooter(fill(rule.body, vars), footer, p.token);
   return sendEmail({ to: p.email, subject: fill(rule.subject, vars), text, html: toHtml(text), tag: rule.key });
+}
+
+const LINK_SUBJECT = "Your link for today's {{title}}";
+const LINK_BODY = `Hi {{first_name}},
+
+As promised, here is your personal link for today's {{title}} at {{start_local}}:
+{{join_url}}
+
+Open it a few minutes early on a laptop or your phone and turn the sound on when it starts.
+
+See you there,
+{{host_name}}`;
+
+/** The link on request: what Katherine sends when someone on the reminder call asks for it by email. */
+export async function sendLinkEmail(p: Person, e: EventRow, session: Session): Promise<{ ok: boolean; error?: string }> {
+  const vars = emailVars(p, e, session);
+  const text = withFooter(fill(LINK_BODY, vars), false, p.token);
+  return sendEmail({ to: p.email, subject: fill(LINK_SUBJECT, vars), text, html: toHtml(text), tag: "link_request" });
 }

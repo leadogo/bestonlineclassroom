@@ -3,11 +3,12 @@ import { TOKEN_RE } from "@/lib/registrants";
 
 export const dynamic = "force-dynamic";
 const SECRET = process.env.REGISTER_SECRET ?? "";
-const ALLOWED = new Set(["hot", "ultra_hot", "training_minutes", "training_completed"]);
+const ALLOWED = new Set(["hot", "ultra_hot", "training_minutes", "training_completed", "reminder_cohort", "reminder_call", "will_attend", "link_sent"]);
 
 /**
  * PATCH /api/registrants/flags (Bearer REGISTER_SECRET) { token, flags }: merges the site's training flags into the
- * registrant (hot, ultra_hot, training_minutes, training_completed). The moderator view shows hot as a badge.
+ * registrant (hot, ultra_hot, training_minutes, training_completed), and Katherine's reminder-call stamps
+ * (reminder_cohort, reminder_call, will_attend, link_sent). The moderator view shows hot as a badge.
  */
 export async function PATCH(request: Request) {
   if (!SECRET || request.headers.get("authorization") !== `Bearer ${SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,7 +21,7 @@ export async function PATCH(request: Request) {
   const token = typeof body.token === "string" ? body.token : "";
   if (!TOKEN_RE.test(token) || !body.flags || typeof body.flags !== "object") return Response.json({ error: "Bad request" }, { status: 400 });
   const incoming: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(body.flags as Record<string, unknown>)) if (ALLOWED.has(k) && (typeof v === "boolean" || typeof v === "number" || Array.isArray(v))) incoming[k] = v;
+  for (const [k, v] of Object.entries(body.flags as Record<string, unknown>)) if (ALLOWED.has(k) && (typeof v === "boolean" || typeof v === "number" || typeof v === "string" || Array.isArray(v))) incoming[k] = v;
   const reg = await db().from("registrants").select("id, flags").eq("token", token).maybeSingle();
   if (reg.error || !reg.data) return Response.json({ error: "Not found" }, { status: 404 });
   const flags = { ...((reg.data.flags as Record<string, unknown>) ?? {}), ...incoming };
