@@ -84,7 +84,7 @@ const LINK_BODY = `Hi {{first_name}},
 As promised, here is your personal link for today's {{title}} at {{start_local}}:
 {{join_url}}
 
-Open it a few minutes early on a laptop or your phone and turn the sound on when it starts.
+It's an online classroom page that opens right in your browser, on a laptop or your phone. No Zoom needed. Open it a few minutes early and turn the sound on when it starts.
 
 See you there,
 {{host_name}}`;
