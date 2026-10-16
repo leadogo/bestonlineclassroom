@@ -49,8 +49,9 @@ export async function GET(request: Request) {
 
   let updated: Array<{ id: number; reactions: Record<string, number>; deleted: boolean }> = [];
   if (since && after_ > 0) {
-    const u = await db().from("chat_messages").select("id, reactions, deleted_at, author_name").eq("event_id", r.event_id).eq("session_date", r.session_date).lte("id", after_).gt("updated_at", since).limit(200);
-    updated = (u.data ?? []).map((m) => ({ id: m.id, reactions: (m.reactions as Record<string, number>) ?? {}, deleted: Boolean(m.deleted_at), name: m.author_name as string }));
+    // A line hidden after a ghost (visibility "author") reads as deleted to everyone but its author, who keeps seeing it.
+    const u = await db().from("chat_messages").select("id, reactions, deleted_at, author_name, visibility, registrant_id").eq("event_id", r.event_id).eq("session_date", r.session_date).lte("id", after_).gt("updated_at", since).limit(200);
+    updated = (u.data ?? []).map((m) => ({ id: m.id, reactions: (m.reactions as Record<string, number>) ?? {}, deleted: Boolean(m.deleted_at) || (m.visibility !== "all" && m.registrant_id !== r.id), name: m.author_name as string }));
   }
   const own = after_ === 0 ? await mine(r.id, news.map((m) => m.id)) : [];
   return Response.json({ new: news, updated, now: new Date().toISOString(), you: r.id, mine: own }, { headers: { "cache-control": "no-store" } });

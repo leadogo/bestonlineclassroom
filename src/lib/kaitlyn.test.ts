@@ -86,6 +86,7 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
   assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));
   assert.ok(s.includes('"sure": true only when FACTS or MARKET DATA give this answer outright') && s.includes("Never a filler reply") && !s.includes("can't answer that one here"));
+  assert.ok(s.includes("testing whether the room is live") && s.includes('("sounds robotic", "she was AI") are welcome, not ghosts'));
   const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], said: ["7 in Massachusetts so you're good", "nobody in Chelan yet"], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
   assert.match(t, /minute 82, the pitch started at minute 75/);
   assert.match(t, /PERSON: Ana, earlier tonight: "hi from LA"/);

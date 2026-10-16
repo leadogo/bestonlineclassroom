@@ -281,7 +281,7 @@ function Message({ m, mine, onReact, onReactLocal, onReply, ctaHref, ctaLabel, t
       <Avatar name={m.name} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className={`truncate text-sm font-bold ${m.role === "moderator" ? "text-brand" : m.mine ? "text-ink" : "text-ink/90"}`}>{m.name}</span>
+          <span className={`min-w-0 break-words text-sm font-bold ${m.role === "moderator" ? "text-brand" : m.mine ? "text-ink" : "text-ink/90"}`}>{m.name}</span>
           {m.role === "moderator" && <span className="rounded bg-brand/15 px-1.5 py-px text-[11px] font-bold text-brand">Moderator</span>}
           <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{time}</span>
         </div>

@@ -187,6 +187,8 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
     return true;
   }
   const person = (rid?: string | null) => people.find((p) => p.registrant_id === rid);
+  /** Not seen in the room for two minutes (William, Oct 15: grey the name and say "left"). */
+  const gone = (m: { role: string; registrantId?: string | null }) => m.role === "attendee" && person(m.registrantId)?.in_room === false;
 
   // A sent message shows here at once; the poll would otherwise take up to three seconds to bring it back.
   async function send(body: string, extra: object): Promise<boolean> {
@@ -400,7 +402,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                   <Avatar name={m.name} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
-                      <span className={`font-bold ${m.role === "moderator" ? "text-brand" : m.role === "simulated" ? "text-muted" : ""}`}>{m.name}</span>
+                      <span className={`font-bold ${m.role === "moderator" ? "text-brand" : m.role === "simulated" || gone(m) ? "text-muted" : ""}`}>{m.name}</span>
                       {m.role === "simulated" && <span className="text-xs text-muted">simulated</span>}
                       {m.name === "Katherine AI" && <span className="rounded bg-cta/20 px-1.5 text-[11px] font-bold text-cta">{m.kind === "cta" ? "book-now row" : "auto"}</span>}
                       {m.name === KAITLYN && <span className="rounded bg-cta/20 px-1.5 text-[11px] font-bold text-cta" title={m.kind === "kaitlyn" ? "Posted by Kaitlyn herself" : "Kaitlyn's draft, sent by a moderator"}>{m.kind === "kaitlyn" ? "auto" : "approved"}</span>}
@@ -409,6 +411,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                       {m.question && <span className="rounded bg-panel px-1.5 text-[11px] text-muted">question</span>}
                       {m.role === "attendee" && person(m.registrantId)?.prior_sessions ? <span className="rounded bg-panel px-1.5 text-[11px] text-muted">watched before ×{person(m.registrantId)!.prior_sessions}</span> : null}
                       {m.role === "attendee" && person(m.registrantId) && <span className="text-xs text-muted">{person(m.registrantId)!.source} · {person(m.registrantId)!.minutes} min</span>}
+                      {gone(m) && <span className="rounded bg-panel px-1.5 text-[11px] text-muted" title="Not seen in the room for two minutes">left {clock(person(m.registrantId)!.last_seen_at)}</span>}
                       {m.ghost && <span className="rounded bg-panel px-1.5 text-xs text-muted" title="Only they can see this">ghost</span>}
                       <span className="ml-auto text-xs text-muted tabular-nums">{clock(m.at)}</span>
                     </div>
@@ -454,7 +457,7 @@ export function ModView({ member, event, session, serverNow, backHref }: { membe
                               <button type="button" onClick={() => setConfirmBlock(m.registrantId!)} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-live">
                                 Block
                               </button>
-                              <button type="button" onClick={() => act({ action: person(m.registrantId)?.ghosted ? "unghost" : "ghost", registrant_id: m.registrantId })} className={`min-h-8 rounded-full px-2 text-sm ${person(m.registrantId)?.ghosted ? "bg-live/15 font-bold text-live" : "text-muted hover:text-ink"}`} title="They keep chatting; only they see it">
+                              <button type="button" onClick={() => act({ action: person(m.registrantId)?.ghosted ? "unghost" : "ghost", registrant_id: m.registrantId, id: m.id })} className={`min-h-8 rounded-full px-2 text-sm ${person(m.registrantId)?.ghosted ? "bg-live/15 font-bold text-live" : "text-muted hover:text-ink"}`} title="They keep chatting; only they see it">
                                 {person(m.registrantId)?.ghosted ? "Unghost" : "Ghost"}
                               </button>
                               {person(m.registrantId)?.ip_blocked && (

@@ -213,6 +213,10 @@ export async function POST(request: Request) {
       if (!/^[0-9a-f-]{36}$/i.test(rid)) return Response.json({ error: "Which person?" }, { status: 422 });
       const { error } = await db().from("registrants").update({ ghosted_at: b.action === "ghost" ? now : null }).eq("id", rid).eq("event_id", s.event.id);
       if (error) return Response.json({ error: "Could not change that." }, { status: 500 });
+      // Ghosting from a message row hides that line from the room too (William, Oct 15: David's "say LIVE" stayed up for
+      // 98 s after the ghost). The author still sees it; Kaitlyn's approved ghost already does the same.
+      const mid = Number(b.id);
+      if (b.action === "ghost" && mid) await db().from("chat_messages").update({ visibility: "author", updated_at: now }).eq("id", mid).eq("event_id", s.event.id).eq("registrant_id", rid);
       return Response.json({ ok: true });
     }
     case "block_ip": {

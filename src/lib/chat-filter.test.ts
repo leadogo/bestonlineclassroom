@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { autoGhostReason, checkMessage, cleanName, exposesRecording } from "./chat-filter.ts";
+import { autoGhostReason, checkMessage, cleanName, exposesRecording, testsLive } from "./chat-filter.ts";
 
 test("chat filter: links, swearing, scam lines and shouting are refused; ordinary questions pass", () => {
   assert.equal(checkMessage("Great session, thanks William!").ok, true);
@@ -42,4 +42,10 @@ test("autoGhostReason: a recording claim, the word scam in any form, or a crude 
     ["nice 🍆🍆🍆", "crude emoji"],
   ] as const) assert.equal(autoGhostReason(s), why, s);
   for (const s of ["Will there be a recording sent later?", "Are you recording?", "can I get the replay please", "love this 🔥", "Chicago", "scambled eggs"]) assert.equal(autoGhostReason(s), null, s);
+});
+
+test("testsLive: an instruction to the room to prove it is live ghosts on the spot (William, Oct 15); sincere questions, honest reactions and real-estate lines do not", () => {
+  for (const s of ["if you're live on here, say LIVE", 'watchers: all the "live" watchers, say BIG', "type 1 if you're actually live", "prove this is live", "Pre rec?", "say hi if ur live", "if ur watching live, drop a 1"]) assert.equal(autoGhostReason(s), "tested whether the room is live", s);
+  for (const s of ["is this live?", "will there be a recording?", "sounds robotic", "she was AI", "if you're in Boston say hi", "if you're real estate agents say hi", "all the real estate people here say hi", "love that this is live", "say LIVE", "Live", "recorded?"]) assert.equal(autoGhostReason(s), null, s);
+  assert.equal(testsLive("if you're live on here, say LIVE"), true);
 });

@@ -50,9 +50,26 @@ export function exposesRecording(body: string): boolean {
 const SCAM_WORD = /\bscam(?:s|my|mer|mers|med|ming)?\b/i;
 const CRUDE = /[🍆🍑💦🖕]/u;
 
+// William, Oct 15 2026: David's "if you're live on here, say LIVE" stayed up for 98 s before a by-hand ghost, and his
+// "all the 'live' watchers, say BIG" was the same test again. An instruction to the room to prove it is live ghosts on
+// the spot; so does the bare "pre rec?" taunt. A sincere question ("is this live?") and honest reactions to Katherine's
+// voice ("sounds robotic", "she was AI": the webinar asks for that honesty) are not tests and stay.
+const YOU = "(?:youre|you are|ur|u r|u are|your|yall|you guys are|you all are)";
+const ASK = "(?:say|type|write|comment|reply|put|drop|post|hit|press|react|like|answer)";
+const REAL = "(?:live|real(?!\\s*estate))";
+const LIVE_TEST = new RegExp(`\\b(?:if|when|whoever is|whoevers|anyone who is|everyone who is)\\s+${YOU}\\s+(?:\\w+\\s+){0,2}?${REAL}\\b[\\s\\S]*\\b${ASK}\\b|\\b${ASK}\\b[\\s\\S]*\\b(?:if|when)\\s+${YOU}\\s+(?:\\w+\\s+){0,2}?${REAL}\\b|\\b(?:all|any|every|everyone|anyone|anybody)\\b[\\s\\S]*\\b${REAL}\\s+(?:watchers|viewers|people|ones|folks|attendees|humans|persons)\\b[\\s\\S]*\\b${ASK}\\b|\\bprove\\s+(?:to (?:me|us)\\s+)?(?:this is|its|it is|that this is|that its|youre|you are|that youre)\\s+(?:actually\\s+|really\\s+)?(?:live|real|not recorded|not a recording|not a replay)\\b`);
+const PRE_REC = /^pre ?rec(?:orded)?\??$/;
+
+/** The message tells the room to prove it is live. */
+export function testsLive(body: string): boolean {
+  const t = SAID(body);
+  return LIVE_TEST.test(t) || PRE_REC.test(t);
+}
+
 /** Why this line ghosts its author the moment it is posted, or null when it does not. */
 export function autoGhostReason(body: string): string | null {
   if (exposesRecording(body)) return "said it's a recording";
+  if (testsLive(body)) return "tested whether the room is live";
   if (SCAM_WORD.test(body)) return "said scam";
   if (CRUDE.test(body)) return "crude emoji";
   return null;
