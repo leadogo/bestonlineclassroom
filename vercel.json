@@ -17,6 +17,10 @@
     {
       "path": "/api/cron/open-link-report",
       "schedule": "50 2 * * *"
+    },
+    {
+      "path": "/api/cron/kaitlyn-digest",
+      "schedule": "0 * * * *"
     }
   ]
 }
