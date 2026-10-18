@@ -146,11 +146,11 @@ export function guard(text: string): string | null {
   // The two figures William approved Oct 17 (Katherine's subscription, the ad-budget example) pass; every other figure does not.
   const t = text.replace(/\$250 a month/gi, "").replace(/\$10 a day/gi, "");
   // A figure with "a month" is a price; "one to four a month" (how often William presents) is not.
-  if (/\$|\b\d+\s?(?:cents?|usd|cad|dollars|bucks)\b|\b\d[\d,.]*k?\s?(?:a|per) month\b/i.test(t)) return "a price";
+  if (/\$|\b\d+\s?(?:cents?|usd|cad|dollars|bucks)\b|\b\d[\d,.]*k?\s?(?:(?:\/|per|a)\s?mo(?:nth)?|monthly)\b/i.test(t)) return "a price";
   // Promising a guarantee is out; saying there is none (William's approved answer) is fine.
   if (/\bguarantee/i.test(t.replace(/\b(?:no|not a|don'?t|doesn'?t|can'?t|never|without a?|any company that offers a?|offers one|zero) guarantees?\b/gi, "").replace(/\bno guarantee\b/gi, ""))) return "a guarantee";
   // Claims about this session only; "the replay", "a replayable recording" pass (William, Oct 17: she answers replay questions).
-  if (/\bpre-?recorded\b|\b(?:it'?s|this is|we'?re|i'?m|you'?re watching) (?:not )?(?:live|recorded|a recording)\b|\bnot live\b|\bis (?:a )?recording\b/i.test(t)) return "live or recorded";
+  if (/\bpre-?recorded\b|\b(?:it'?s|this is|we'?re|i'?m|he'?s|she'?s|yes,?|you'?re watching) (?:not )?(?:live|recorded|a recording)\b|\bnot live\b|\blive (?:right )?now\b|\bis (?:a )?recording\b/i.test(t)) return "live or recorded";
   if (/\b(?:jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? \d{1,2}\b|\b20\d\d\b/i.test(text)) return "a date";
   if (/\b(?:i'?m|i am) (?:an? )?(?:ai|bot|human|real person)\b/i.test(text)) return "bot or human";
   return null;
@@ -274,10 +274,18 @@ export async function lastDeskSeen(eventId: string, sessionDate: string): Promis
 
 /** The knowledge row the model named: a known question counts another ask, a new one opens a row for William (SPEC-kaitlyn-knowledge.md). */
 async function touchKb(eventId: string, kb: { key: string; question: string }): Promise<void> {
-  const now = new Date().toISOString();
-  const have = await db().from("kaitlyn_kb").select("asked").eq("event_id", eventId).eq("key", kb.key).maybeSingle();
-  if (have.data) await db().from("kaitlyn_kb").update({ asked: Number(have.data.asked) + 1, last_asked_at: now, updated_at: now }).eq("event_id", eventId).eq("key", kb.key);
-  else if (kb.question) await db().from("kaitlyn_kb").insert({ event_id: eventId, key: kb.key, question: kb.question, handling: "open", asked: 1, last_asked_at: now });
+  // One atomic upsert (migration 033), so two messages naming the same new key at once cannot race.
+  const { error } = await db().rpc("kaitlyn_kb_touch", { p_event: eventId, p_key: kb.key, p_question: kb.question });
+  if (error) console.error("[kaitlyn] kb touch failed", { code: error.code });
+}
+
+/** After the pause, whether the reply is still hers to post: null when it is, otherwise who got there first. */
+async function takenBy(reg: Reg, messageId: number): Promise<"a moderator answered first" | "she replied to them a moment ago" | null> {
+  const [human, hers] = await Promise.all([
+    db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", messageId).limit(1),
+    db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("author_name", KAITLYN).contains("mentions", [reg.id]).gte("created_at", new Date(Date.now() - PER_PERSON_MS).toISOString()).limit(1),
+  ]);
+  return human.data?.length ? "a moderator answered first" : hers.data?.length ? "she replied to them a moment ago" : null;
 }
 
 /** One Slack line when autopilot takes over or hands back; the previous decision tonight says which way it went. */
@@ -291,26 +299,24 @@ async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopil
 }
 
 /** When she does not know and nobody is on the desk: one hand-off line per person per night; the question stays pending for a human (decision 5). */
-async function handoff(reg: Reg, message: { id: number; offset: number }, did: number, autopilot: Autopilot, thought: number): Promise<void> {
-  const prior = await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_message_id", "is", null).limit(1);
-  if (prior.data?.length) return;
+async function handoff(reg: Reg, message: { id: number; offset: number }, did: number, thought: number): Promise<void> {
+  const priorHandoff = async () => Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_message_id", "is", null).neq("id", did).limit(1)).data?.length);
+  if (await priorHandoff()) return;
   const line = handoffLine();
   const t0 = Date.now();
   const wait = delayMs("auto", Math.random, line.length) - thought;
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  const human = await db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", message.id).limit(1);
-  if (human.data?.length) return;
-  if (autopilot === "auto") {
-    const back = await lastDeskSeen(reg.event_id, reg.session_date);
-    if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
-  }
+  // Checked again after the pause: a second unknown from them seconds later, a moderator's answer, her own reply inside the window, or a moderator back on the desk all mean silence.
+  if ((await priorHandoff()) || (await takenBy(reg, message.id))) return;
+  const back = await lastDeskSeen(reg.event_id, reg.session_date);
+  if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
   const body = `@${reg.first_name} ${line}`;
   const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, "autopilot");
   if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
 }
 
 /** Called after an attendee message is stored. Decides, records the decision, and in assisted/auto (or under autopilot) acts on it. */
-export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null; autopilot?: Autopilot }; message: { id: number; body: string; offset: number }; katherine: boolean }): Promise<void> {
+export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null; autopilot?: Autopilot }; message: { id: number; body: string; offset: number; /** minutes since the session started by the server's clock; the client's offset is not trusted for autopilot */ sessionMinute?: number | null }; katherine: boolean }): Promise<void> {
   const mode = a.event.kaitlyn_mode;
   if (mode === "off" || !KEY) return;
   try {
@@ -322,7 +328,8 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       db().from("market_counts").select("name, clients, live"),
       // Her own lines tonight, drafts included (in shadow nothing posts, and the drafts were still her shapes).
       db().from("kaitlyn_decisions").select("text").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("action", "reply").neq("text", "").order("id", { ascending: false }).limit(12),
-      db().from("kaitlyn_kb").select("key, question, answer, approved, handling, asked").eq("event_id", reg.event_id).order("asked", { ascending: false }),
+      // Ordered by key: the KNOWLEDGE block only changes when the knowledge does, so the API's prompt cache keeps hitting.
+      db().from("kaitlyn_kb").select("key, question, answer, approved, handling, asked").eq("event_id", reg.event_id).order("key"),
       lastDeskSeen(reg.event_id, reg.session_date),
     ]);
     const recent = (recentQ.data ?? []).reverse();
@@ -339,7 +346,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       katherine: a.katherine && asksForReplay(message.body),
     };
     // Autopilot: with nobody on the desk, shadow and assisted act as auto for this message; her unsure lines still wait (SPEC-kaitlyn-autopilot.md, C).
-    const auto = engaged(autopilot, seen, ctx.minute, Date.now());
+    const auto = engaged(autopilot, seen, a.message.sessionMinute ?? ctx.minute, Date.now());
     const eff: Mode = auto && mode !== "auto" ? "auto" : mode;
     const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[]), userTurn(ctx));
     if (!out) return;
@@ -356,7 +363,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (d.react) { await reactAsKaitlyn(message.id, d.react); await db().from("kaitlyn_decisions").update({ reacted_at: new Date().toISOString() }).eq("id", did); }
     if (pending) {
       if (reg.source !== "test") await postToChatChannel(`Kaitlyn needs you · ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} → ${d.action.replace("_", " ")}${d.text ? ` ${JSON.stringify(d.text)}` : ""} (${d.why})`);
-      if (auto && d.action === "ask_william") await handoff(reg, message, did, autopilot, out.ms);
+      if (auto && d.action === "ask_william") await handoff(reg, message, did, out.ms);
       return;
     }
     if (d.action === "ghost") {
@@ -372,12 +379,9 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     const wait = delayMs(eff, Math.random, d.text.length) - out.ms;
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     // Still hers to answer? A moderator may have replied meanwhile, or she replied to them a moment ago.
-    const [human, hers] = await Promise.all([
-      db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", message.id).limit(1),
-      db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("author_name", KAITLYN).contains("mentions", [reg.id]).gte("created_at", new Date(Date.now() - PER_PERSON_MS).toISOString()).limit(1),
-    ]);
-    if (human.data?.length || hers.data?.length) {
-      await db().from("kaitlyn_decisions").update({ status: "skipped", why: `${human.data?.length ? "a moderator answered first" : "she replied to them a moment ago"}; ${d.why}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", did);
+    const taken = await takenBy(reg, message.id);
+    if (taken) {
+      await db().from("kaitlyn_decisions").update({ status: "skipped", why: `${taken}; ${d.why}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", did);
       return;
     }
     // Auto hands back the moment a moderator is looking again: the line waits on the desk instead of posting.

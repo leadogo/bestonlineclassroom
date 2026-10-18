@@ -15,7 +15,7 @@ const DAY_MS = 24 * 3600 * 1000;
  * change never moves it; `?dry=1` returns the text without posting or recording; `?force=1` ignores the clock.
  */
 export async function GET(request: Request) {
-  if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const params = new URL(request.url).searchParams;
   const dry = params.get("dry") === "1";
   const force = params.get("force") === "1";
@@ -42,8 +42,9 @@ export async function GET(request: Request) {
       url: `${SITE}/admin/knowledge?event=${e.slug}`,
     });
     if (!dry) {
-      if (text) await postToIntel(text);
-      await db().from("events").update({ kaitlyn_digest_on: today }).eq("id", e.id);
+      const sent = text ? await postToIntel(text) : { ok: true };
+      // A Slack hiccup leaves the day unrecorded, so the next hourly run tries again.
+      if (sent.ok) await db().from("events").update({ kaitlyn_digest_on: today }).eq("id", e.id);
     }
     report.push({ event: e.slug, due, text });
   }

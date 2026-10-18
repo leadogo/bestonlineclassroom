@@ -121,6 +121,6 @@ export async function POST(request: Request) {
   // Katherine answers the replay question (switch per event), a few seconds later, once per person.
   if (r.katherine && !ghosted) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name }, body, offset));
   // Kaitlyn decides what to do with it (switch per event): drafts for the desk in shadow, posts the routine replies herself in assisted and auto.
-  if (r.kaitlyn.kaitlyn_mode !== "off" && !ghosted) after(() => kaitlynHandle({ reg: { id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name, source: String(r.source ?? "") }, event: r.kaitlyn, message: { id: ins.data.id as number, body, offset }, katherine: r.katherine }));
+  if (r.kaitlyn.kaitlyn_mode !== "off" && !ghosted) after(() => kaitlynHandle({ reg: { id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name, source: String(r.source ?? "") }, event: r.kaitlyn, message: { id: ins.data.id as number, body, offset, sessionMinute: r.sessionStart ? Math.max(0, Math.floor((Date.now() - new Date(r.sessionStart).getTime()) / 60_000)) : null }, katherine: r.katherine }));
   return Response.json({ message: ins.data });
 }

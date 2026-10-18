@@ -52,9 +52,9 @@ the Knowledge Base page where he wrote them, `approved` = the line, `handling` =
 - **Every non-skip decision touches the row**: new key → a row with `handling = 'open'`; existing key →
   `asked + 1`, `last_asked_at`. The decision stores `kb_key`. A `skip` never creates a row (chatter is not a
   question).
-- **Open means she could not answer it well**: a key whose row has no `approved` line and received an
-  `ask_william`, a draft a moderator skipped or edited, or a line of hers a moderator deleted. Keys with an
-  approved line only accumulate counts.
+- **Open means she could not answer it well**: a key the model coined for a question nothing covered (every new
+  key opens a row, whatever the decision). Keys with an approved line only accumulate counts; a moderator's skip,
+  edit or delete shows on the card as context (her draft, the team's reply) and does not re-open an approved key.
 
 ## What she knows
 `systemPrompt` builds a KNOWLEDGE block from `kaitlyn_kb` for the event at call time: approved answers

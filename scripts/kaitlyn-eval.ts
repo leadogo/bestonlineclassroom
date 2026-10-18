@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { db } from "../src/lib/db.ts";
 import { tells } from "../src/lib/humanize.ts";
-import { decide, systemPrompt, userTurn, type Context } from "../src/lib/kaitlyn.ts";
+import { decide, marketLine, systemPrompt, userTurn, type Context } from "../src/lib/kaitlyn.ts";
 import type { KbRow } from "../src/lib/kaitlyn-kb.ts";
 
 type Item = { key: string; expected: "answer" | "market" | "skip"; body: string; minute: number };
@@ -27,7 +27,6 @@ items = [...items, ...rest].slice(0, want);
 const ev = (await db().from("events").select("id, kaitlyn_facts, cta_at_seconds").eq("slug", "ailg-r").maybeSingle()).data!;
 const kb = ((await db().from("kaitlyn_kb").select("key, question, answer, approved, handling, asked").eq("event_id", ev.id)).data ?? []) as KbRow[];
 const markets = (await db().from("market_counts").select("name, clients, live")).data ?? [];
-const { marketLine } = await import("../src/lib/kaitlyn.ts");
 const system = systemPrompt(ev.kaitlyn_facts, kb);
 const pitch = ev.cta_at_seconds === null ? null : Math.floor(ev.cta_at_seconds / 60);
 

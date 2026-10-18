@@ -43,10 +43,11 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
   for (const d of decs) { const l = perKey.get(d.kb_key as string) ?? []; if (l.length < 5) { l.push(d); perKey.set(d.kb_key as string, l); } }
   const picked = [...perKey.values()].flat();
   const mids = picked.map((d) => d.message_id as number);
-  const rids = [...new Set(picked.map((d) => d.registrant_id as string))];
+  const rids = [...new Set(picked.map((d) => d.registrant_id as string))].slice(0, 100);
+  const firstMid = mids.length ? Math.min(...mids) : 0;
   const [msgs, replies] = await Promise.all([
     mids.length ? db().from("chat_messages").select("id, body, author_name").in("id", mids) : Promise.resolve({ data: [] as Array<{ id: number; body: string; author_name: string }> }),
-    rids.length ? db().from("chat_messages").select("id, body, session_date, mentions, created_at").eq("event_id", event.id).eq("role", "moderator").overlaps("mentions", rids).order("id") : Promise.resolve({ data: [] as Array<{ id: number; body: string; session_date: string; mentions: string[]; created_at: string }> }),
+    rids.length ? db().from("chat_messages").select("id, body, session_date, mentions, created_at").eq("event_id", event.id).eq("role", "moderator").overlaps("mentions", rids).gt("id", firstMid).order("id").limit(500) : Promise.resolve({ data: [] as Array<{ id: number; body: string; session_date: string; mentions: string[]; created_at: string }> }),
   ]);
   const msgById = new Map((msgs.data ?? []).map((m) => [m.id as number, m]));
   const asks: Ask[] = picked.map((d) => {

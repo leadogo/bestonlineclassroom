@@ -28,7 +28,7 @@ for (const slug of slugs) {
   let written = 0;
   for (const r of rows) {
     const p = prior.get(r.key);
-    if (p?.approved_at && p.approved_at > SEEDED_AT) continue; // William changed it on the page since; his wins
+    if (p?.approved_at && new Date(p.approved_at) > new Date(SEEDED_AT)) continue; // William changed it on the page since; his wins
     const row = { event_id: ev.data.id, key: r.key, question: r.question, answer: r.answer, approved: r.approved, handling: r.handling, asked: Math.max(r.asked, p?.asked ?? 0), last_asked_at: "2026-10-17T23:59:00Z", answered_at: r.answer ? SEEDED_AT : null, approved_at: r.approved || r.handling === "ignore" ? SEEDED_AT : null, updated_at: new Date().toISOString() };
     const { error } = await sb.from("kaitlyn_kb").upsert(row, { onConflict: "event_id,key" });
     if (error) throw new Error(`${slug} ${r.key}: ${error.message}`);
