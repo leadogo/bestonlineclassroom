@@ -17,14 +17,14 @@ export const BROADCASTS: Record<Broadcast["weekday"], Broadcast> = {
     weekday: "wednesday",
     title: "🚨 Doors open in two minutes",
     body:
-      "The workshop doors are open right now. It starts at 7 pm Eastern, 5 Mountain, 4 Pacific. It runs about two hours and twenty minutes. You will see the system agents use to turn leads into booked showings. The door asks for a name or email, that is how the room holds your seat. If you cannot stay the whole way, the replay stays up for 72 hours.\n\n" +
+      "The workshop doors are open right now. It starts at 7 pm Eastern, 5 Mountain, 4 Pacific. You will see the system agents use to turn leads into booked showings. The door asks for a name or email, that is how the room holds your seat. If you cannot stay the whole way, the replay stays up for 72 hours.\n\n" +
       `Here is the door: ${BROADCAST_LINK}\n\nCome in now.`,
   },
   sunday: {
     weekday: "sunday",
     title: "🚨 How many leads did you waste last month?",
     body:
-      "Quick question: how many of the leads you paid for last month turned into appointments? If the honest answer is low, the workshop running right now fixes exactly that. Doors are open. It starts at 7 pm Eastern, 5 Mountain, 4 Pacific, and runs about two hours and twenty minutes. The door asks for a name or email so the room can hold your seat. The replay stays up for 72 hours if tonight does not work.\n\n" +
+      "Quick question: how many of the leads you paid for last month turned into appointments? If the honest answer is low, the workshop running right now fixes exactly that. Doors are open. It starts at 7 pm Eastern, 5 Mountain, 4 Pacific. The door asks for a name or email so the room can hold your seat. The replay stays up for 72 hours if tonight does not work.\n\n" +
       `Door: ${BROADCAST_LINK}\n\nCome in.`,
   },
 };

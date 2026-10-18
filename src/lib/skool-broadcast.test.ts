@@ -24,5 +24,6 @@ test("copy fits Skool and carries the generic door", () => {
     assert.ok(!/\blive\b/i.test(b.title), "no live claim in the title");
     assert.ok(b.title.startsWith("🚨") && (b.title.match(/🚨/g) ?? []).length === 1, "one siren, no stacks");
     assert.ok(!/tonight at/i.test(b.title), "the post lands two minutes before the doors");
+    assert.ok(!/\b(hours?|minutes?|twenty)\b/i.test(b.body), "the body never states the length (William, Oct 18)");
   }
 });
