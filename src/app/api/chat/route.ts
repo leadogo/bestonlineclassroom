@@ -14,6 +14,8 @@ import { isBelief, isQuestion } from "@/lib/engagement";
 import { forwardCallRequest, PHONE_RE } from "@/lib/call-requests";
 
 export const dynamic = "force-dynamic";
+// Kaitlyn answers in after(): a human-shaped pause of up to 25 s plus the model, past the platform's default function duration.
+export const maxDuration = 60;
 
 const HISTORY = 300;
 const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offset_seconds, reactions, mentions, mention_names, kind, created_at";
