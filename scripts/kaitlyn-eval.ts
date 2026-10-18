@@ -38,7 +38,8 @@ const run = async (i: Item): Promise<void> => {
   const out = await decide(system, userTurn(ctx));
   const d = out?.decision;
   const action = d?.action ?? "no-answer";
-  const ok = i.expected === "skip" ? action === "skip" || action === "ghost" : i.expected === "market" ? action === "reply" || action === "ask_william" : action === "reply" && d?.kb?.key === i.key;
+  // A bare place before the pitch is skipped by design (they are answering William's where-are-you-from), so that counts as expected.
+  const ok = i.expected === "skip" ? action === "skip" || action === "ghost" : i.expected === "market" ? action === "reply" || action === "ask_william" || (action === "skip" && pitch !== null && i.minute < pitch) : action === "reply" && d?.kb?.key === i.key;
   results.push({ ...i, action, kb: d?.kb?.key ?? null, text: d?.text ?? "", why: d?.why ?? "", tells: d?.text ? tells(d.text) : [], ms: out?.ms ?? 0, ok });
   process.stdout.write(ok ? "." : "x");
 };

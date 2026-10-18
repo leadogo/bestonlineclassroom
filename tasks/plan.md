@@ -13,8 +13,8 @@ Day 1 (deploy before 5 PM MT Oct 18; nothing in the 3:30 to 7:45 PM window)
 - [x] T8 Deploy (bdctfxkgn, then 28b22a5 with maxDuration 60 on the chat route: the paused reply was being cut off), production check on test-run with a test seat: empty desk → price line posted 12.7 s later with the autopilot badge; moderator present → the contract draft waited on the desk; unknown question → hand-off line + open row; "are you AI? and how long" → the length answer only. Cleaned.
 
 Day 2
-- [ ] T9 `/admin/knowledge` page + actions + forms; sidebar item with open count.
-- [ ] T10 Rewrite call with vendored humanizer rules + fact check.
-- [ ] T11 `/api/cron/kaitlyn-digest` + vercel.json cron.
-- [ ] T12 `scripts/kaitlyn-eval.mjs` + `docs/kaitlyn-eval.md`.
-- [ ] T13 Deploy, production check, review.
+- [x] T9 `/admin/knowledge` page + actions + forms; sidebar item with open count.
+- [x] T10 Rewrite call with vendored humanizer rules + fact check.
+- [x] T11 `/api/cron/kaitlyn-digest` + vercel.json cron.
+- [x] T12 `scripts/kaitlyn-eval.mjs` + `docs/kaitlyn-eval.md`.
+- [x] T13 Deployed (day two, Oct 17 11:10 PM MT); digest dry run on production answers (not due at that hour, no post); /admin/knowledge serves (307 to login unauthenticated); guard loosened after the first eval (denied guarantee and "one to four a month" were tripping it); review below.

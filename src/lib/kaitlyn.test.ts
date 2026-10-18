@@ -98,7 +98,8 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
 
 test("guard: the two approved figures and the replay wording pass; other prices, this-is-live and pre-recorded still do not", () => {
   for (const s of ["Katherine AI included free instead of $250 a month", "plenty of people start at $10 a day", "it's a replayable recording, it goes out by email tonight", "yes, it goes out by email after the class"]) assert.equal(guard(s), null, s);
-  for (const s of ["$400 a month", "it's 500 per month", "$250 a month plus $50 setup", "this is live", "it's recorded", "the pre-recorded video", "we're live right now"]) assert.notEqual(guard(s), null, s);
+  for (const s of ["$400 a month", "it's 500 per month", "$250 a month plus $50 setup", "this is live", "it's recorded", "the pre-recorded video", "we're live right now", "we guarantee results", "results are guaranteed"]) assert.notEqual(guard(s), null, s);
+  for (const s of ["No guarantee, and be wary of any company that offers one, because they can't actually uphold it.", "we don't guarantee deals, nobody can", "William does more presentations in our private community, one to four a month."]) assert.equal(guard(s), null, s);
 });
 
 test("engaged: on always, off never, auto when the desk has been empty 3 minutes or nobody opened it by minute 5", () => {

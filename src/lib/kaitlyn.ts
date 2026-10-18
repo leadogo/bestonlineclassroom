@@ -145,8 +145,10 @@ export function marketLine(body: string, markets: MarketCount[]): string | null 
 export function guard(text: string): string | null {
   // The two figures William approved Oct 17 (Katherine's subscription, the ad-budget example) pass; every other figure does not.
   const t = text.replace(/\$250 a month/gi, "").replace(/\$10 a day/gi, "");
-  if (/\$|\b\d+\s?(?:cents?|usd|cad|dollars|bucks)\b|\b(?:a|per) month\b/i.test(t)) return "a price";
-  if (/\bguarantee/i.test(t)) return "a guarantee";
+  // A figure with "a month" is a price; "one to four a month" (how often William presents) is not.
+  if (/\$|\b\d+\s?(?:cents?|usd|cad|dollars|bucks)\b|\b\d[\d,.]*k?\s?(?:a|per) month\b/i.test(t)) return "a price";
+  // Promising a guarantee is out; saying there is none (William's approved answer) is fine.
+  if (/\bguarantee/i.test(t.replace(/\b(?:no|not a|don'?t|doesn'?t|can'?t|never|without a?|any company that offers a?|offers one|zero) guarantees?\b/gi, "").replace(/\bno guarantee\b/gi, ""))) return "a guarantee";
   // Claims about this session only; "the replay", "a replayable recording" pass (William, Oct 17: she answers replay questions).
   if (/\bpre-?recorded\b|\b(?:it'?s|this is|we'?re|i'?m|you'?re watching) (?:not )?(?:live|recorded|a recording)\b|\bnot live\b|\bis (?:a )?recording\b/i.test(t)) return "live or recorded";
   if (/\b(?:jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? \d{1,2}\b|\b20\d\d\b/i.test(text)) return "a date";
