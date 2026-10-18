@@ -21,12 +21,13 @@
     "ac:links": "doppler run -- node scripts/ac-links.ts"
   },
   "dependencies": {
-    "next": "16.3.5",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "@supabase/supabase-js": "^2.98.0",
     "@supabase/ssr": "^0.8.0",
-    "@vercel/blob": "^2.0.0"
+    "@supabase/supabase-js": "^2.98.0",
+    "@vercel/blob": "^2.0.0",
+    "next": "16.3.5",
+    "playwright-core": "^1.49.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
