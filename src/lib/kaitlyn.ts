@@ -6,7 +6,9 @@
 // Best-effort everywhere: a model outage or a bad answer is silence, never an error in the room.
 import { KAITLYN, KAITLYN_MODES, type KaitlynMode } from "./chat.ts";
 import { db } from "./db.ts";
+import { tells, tidy } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
+import { handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
 import { asksForReplay } from "./katherine.ts";
 import { asksMarket, findMarkets, findStates, onlyStates, placeOf, rollup, type MarketCount } from "./market-answer.ts";
 import { EMOJIS, isEmoji } from "./moderation.ts";
@@ -20,7 +22,16 @@ export const ACTIONS = ["reply", "skip", "ghost", "ask_william"] as const;
 export type Action = (typeof ACTIONS)[number];
 export const CATEGORIES = ["market", "booking", "price", "product", "integration", "compliance", "replay", "tech", "greeting", "thanks", "chatter", "negative", "support", "other"] as const;
 export type Category = (typeof CATEGORIES)[number];
-export type Decision = { action: Action; category: Category; text: string; react: string; why: string };
+export type Decision = { action: Action; category: Category; text: string; react: string; why: string; kb: { key: string; question: string } | null };
+/** Autopilot (SPEC-kaitlyn-autopilot.md): auto takes over by desk presence, on from the first message, off never. */
+export type Autopilot = "auto" | "on" | "off";
+export const asAutopilot = (v: unknown): Autopilot => (v === "on" || v === "off" ? v : "auto");
+/** Auto engages this long after the last desk poll, or from this minute of a session nobody opened. */
+export const AUTOPILOT_AFTER_MS = 180_000;
+export const AUTOPILOT_FROM_MINUTE = 5;
+/** The pause before a line she posts herself grows with its length, like typing, and never past the cap. */
+export const PAUSE_PER_CHAR_MS = 40;
+export const PAUSE_MAX_MS = 25_000;
 /** In assisted mode these post without a moderator: the categories Kevin's history shows are routine (price: William's fixed wording, never a figure; the guard still catches one). */
 export const ASSISTED = new Set<Category>(["market", "booking", "price", "replay", "tech", "greeting", "thanks"]);
 export const MAX_TEXT = 300;
@@ -39,7 +50,16 @@ VOICE
 - No customer-service phrases, ever: "great question", "good question", "totally fair", "love that energy", "thanks for the honest feedback", "so glad you're here", "our team will walk you through", "happy to help". Say the thing.
 - An exclamation mark in one reply in five at most. An emoji in one reply in four at most (🙌 💛 🔥 😊 ✨), never on two replies in a row. Never sarcastic, never argue, never lecture, never apologise for the product.
 - Speak for the team ("we"), never for William ("William says…"). "William gets to that in a bit" is fine when FACTS say the presentation covers it.
-- Never claim to be a bot or an AI, never claim to be human. If asked, skip.
+- Never say whether you are AI or human. If a line asks only that, skip. If it asks that and something else, answer the something else as if the AI part was never asked.
+
+WRITING (the humanizer rules; a line that breaks them reads as a bot and goes to the desk instead of the room)
+- Lead with the answer. No run-up ("Honestly?", "Here's the thing", "Great question"), no closer that restates it ("that's the real win").
+- Never "not X but Y" or "it's not about X, it's Y": say the thing.
+- no dashes of any kind: a comma, a period, or nothing.
+- No threes for rhythm; two items, or one.
+- No stock words: delve, crucial, pivotal, robust, seamless, elevate, game-changer, leverage, journey, landscape, testament, unlock, empower, streamline, cutting-edge, world-class.
+- Plain verbs: is, has, does; never "serves as", "boasts", "features".
+- Straight quotes. Keep the asker's own words where they help. Never add a number, a name or a date that FACTS, KNOWLEDGE or MARKET DATA do not give.
 
 VARIETY
 - YOU ALREADY SAID TONIGHT is in every turn. Do not open the way any of the last three did, do not close the way any of the last three did, do not reuse a phrase from that list tonight, and no emoji if the last one had one. When the fact is the same as before (a market count, a booking, the price line), give it a new shape: a fragment ("3 in Boston"), a plain statement, a short aside, a question back.
@@ -52,8 +72,8 @@ VARIETY
   thanks: "anytime" · "of course" · "💛" · "glad it helped" · "you got it" · "no problem at all"
 
 HARD RULES
-- Product facts come only from FACTS below. Not there, or you are not sure your answer is right → ask_william and "sure": false: nothing posts, a moderator answers from the desk. Never a filler reply ("that one's for the call", "the team can walk you through it") in place of an answer; "the call covers it" only when FACTS say the call is where that is handled.
-- Never a price or dollar figure, never a guarantee, never a date, the weather or the news, never whether this is live or a recording. Questions about live/recorded/replay: skip (Katherine AI answers replay questions).
+- Product facts come only from FACTS and KNOWLEDGE below. Not there, or you are not sure your answer is right → ask_william and "sure": false: nothing posts, a moderator answers from the desk. Never a filler reply ("that one's for the call", "the team can walk you through it") in place of an answer; "the call covers it" only when FACTS say the call is where that is handled.
+- Never a BMS price or dollar figure; the only figures allowed are the two in KNOWLEDGE ($250 a month for Katherine's subscription, $10 a day as an ad-budget example). Never a guarantee, never a date, the weather or the news, never whether this is live or a recording. A replay question: when KATHERINE AI says she will answer it, skip; otherwise answer it from KNOWLEDGE.
 - Never promise that William will see or answer something.
 - Do not repeat what a moderator already told this person tonight, and do not answer what a moderator just answered.
 
@@ -65,13 +85,14 @@ ACTIONS
 - ask_william: any question FACTS or MARKET DATA do not answer outright, anything you are not sure of, an unhappy existing client or a support issue, a booking problem you cannot fix, a complaint, a legal or compliance question with specifics, anything you are unsure should be ghosted. Put a draft in text only if you have a real one; otherwise leave it empty and the moderator writes the answer.
 - react: on a clearly positive, excited or funny line (a win, "love this", "let's go") pick one of ${EMOJIS.join(" ")}, about one such line in four, with or without a reply. Never on a question, never on a negative line. Otherwise empty.
 
-OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "sure": true only when FACTS or MARKET DATA give this answer outright, "why": ten words for the desk}.`;
+OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright, "why": ten words for the desk, "kb": {"key": one of KEYS YOU MAY NAME when the meaning matches, else a new lowercase-hyphen slug, "question": the question in plain words} on every reply, ghost or ask_william, null on skip}.`;
 
 /** The system prompt: persona and rules, the event's fact sheet, Kevin's real answers, and the lines the team ghosted. Cached by the API. */
-export function systemPrompt(facts: string | null): string {
+export function systemPrompt(facts: string | null, kb: KbRow[] = []): string {
   const f = facts?.trim() ? facts.trim() : "(No fact sheet for this event: answer only about markets, booking, the replay email and tech trouble; everything else is ask_william.)";
   const qa = EXAMPLES.qa.map((x) => `[${x.m}m] Q: ${x.q}\n   A: ${x.a}`).join("\n");
-  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first: this is the voice to match, its length and plainness; the substance where FACTS agree)\n${qa}\n\nLINES THE TEAM GHOSTED ON THE SPOT\n${EXAMPLES.ghosts.map((g) => `- ${g}`).join("\n")}`;
+  const k = knowledgeBlock(kb);
+  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}${k ? `\n\n${k}` : ""}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first: this is the voice to match, its length and plainness; the substance where FACTS agree)\n${qa}\n\nLINES THE TEAM GHOSTED ON THE SPOT\n${EXAMPLES.ghosts.map((g) => `- ${g}`).join("\n")}`;
 }
 
 export type Context = {
@@ -122,9 +143,12 @@ export function marketLine(body: string, markets: MarketCount[]): string | null 
 
 /** What a reply may never contain, whatever the model wrote; the reply becomes ask_william with the draft kept. */
 export function guard(text: string): string | null {
-  if (/\$|\b\d+\s?(?:cents?|usd|cad|dollars|bucks)\b|\b(?:a|per) month\b/i.test(text)) return "a price";
-  if (/\bguarantee/i.test(text)) return "a guarantee";
-  if (/\b(?:pre-?)?record(?:ed|ing)?\b|\blive\b/i.test(text)) return "live or recorded";
+  // The two figures William approved Oct 17 (Katherine's subscription, the ad-budget example) pass; every other figure does not.
+  const t = text.replace(/\$250 a month/gi, "").replace(/\$10 a day/gi, "");
+  if (/\$|\b\d+\s?(?:cents?|usd|cad|dollars|bucks)\b|\b(?:a|per) month\b/i.test(t)) return "a price";
+  if (/\bguarantee/i.test(t)) return "a guarantee";
+  // Claims about this session only; "the replay", "a replayable recording" pass (William, Oct 17: she answers replay questions).
+  if (/\bpre-?recorded\b|\b(?:it'?s|this is|we'?re|i'?m|you'?re watching) (?:not )?(?:live|recorded|a recording)\b|\bnot live\b|\bis (?:a )?recording\b/i.test(t)) return "live or recorded";
   if (/\b(?:jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? \d{1,2}\b|\b20\d\d\b/i.test(text)) return "a date";
   if (/\b(?:i'?m|i am) (?:an? )?(?:ai|bot|human|real person)\b/i.test(text)) return "bot or human";
   return null;
@@ -141,7 +165,7 @@ export function withoutMention(text: string, firstName: string): string {
 /** The model's tool input, checked: unknown actions skip, a reply without words skips, an unsure reply waits for a moderator, reactions only from the fixed set. */
 export function parseDecision(input: unknown): Decision {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
-  const text = String(o.text ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
+  const text = tidy(String(o.text ?? "")).slice(0, MAX_TEXT);
   let action: Action = (ACTIONS as readonly string[]).includes(String(o.action)) ? (o.action as Action) : "skip";
   const category: Category = (CATEGORIES as readonly string[]).includes(String(o.category)) ? (o.category as Category) : "other";
   const react = isEmoji(String(o.react ?? "")) ? String(o.react) : "";
@@ -151,7 +175,13 @@ export function parseDecision(input: unknown): Decision {
   if (action === "reply" && o.sure === false) { action = "ask_william"; why = `not sure; ${why}`.slice(0, 140); }
   const bad = action === "reply" ? guard(text) : null;
   if (bad) { action = "ask_william"; why = `draft mentions ${bad}; ${why}`.slice(0, 140); }
-  return { action, category, text: action === "skip" || action === "ghost" ? "" : text, react, why };
+  // A line with an AI tell never posts on its own; the desk sees what tripped it (SPEC-kaitlyn-autopilot.md, B).
+  const tell = action === "reply" ? tells(text)[0] : undefined;
+  if (tell) { action = "ask_william"; why = `sounds like a bot: ${tell}; ${why}`.slice(0, 140); }
+  const kbo = o.kb && typeof o.kb === "object" ? (o.kb as Record<string, unknown>) : null;
+  const key = kbKey(kbo?.key);
+  const kb = key && action !== "skip" ? { key, question: kbQuestion(kbo?.question) } : null;
+  return { action, category, text: action === "skip" || action === "ghost" ? "" : text, react, why, kb };
 }
 
 /** Whether this decision posts without a moderator in this mode. */
@@ -161,8 +191,15 @@ export function postsItself(mode: Mode, d: Decision): boolean {
 }
 
 /** A human pause before a reply posts itself: 8 to 15 s, a different draw each time (William, Oct 14: people are waiting for the answer; 85 s read as neglect). None in shadow, where nothing posts. */
-export function delayMs(mode: Mode, pick = Math.random): number {
-  return mode === "shadow" || mode === "off" ? 0 : 8_000 + Math.floor(pick() * 7_000);
+export function delayMs(mode: Mode, pick = Math.random, textLength = 0): number {
+  return mode === "shadow" || mode === "off" ? 0 : Math.min(PAUSE_MAX_MS, 8_000 + Math.floor(pick() * 7_000) + PAUSE_PER_CHAR_MS * textLength);
+}
+
+/** Whether autopilot runs the room for this message: on always, off never, auto once the desk has been empty 3 minutes or from minute 5 of a session nobody opened. */
+export function engaged(autopilot: Autopilot, lastModSeenMs: number | null, sessionMinute: number, nowMs: number): boolean {
+  if (autopilot === "on") return true;
+  if (autopilot === "off") return false;
+  return lastModSeenMs === null ? sessionMinute >= AUTOPILOT_FROM_MINUTE : nowMs - lastModSeenMs >= AUTOPILOT_AFTER_MS;
 }
 
 /** Whether a ghost decision acts without a moderator: assisted and auto ghost on the spot when she is sure (category negative); anything less certain waits on the desk. Shadow never acts. */
@@ -227,18 +264,64 @@ export async function reactAsKaitlyn(messageId: number, emoji: string): Promise<
   if (!have.data) await toggleReaction(messageId, "kaitlyn", emoji);
 }
 
-/** Called after an attendee message is stored. Decides, records the decision, and in assisted/auto acts on it. */
-export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null }; message: { id: number; body: string; offset: number }; katherine: boolean }): Promise<void> {
+/** The latest desk poll for this session as ms since epoch; null when nobody has opened the desk tonight. */
+export async function lastDeskSeen(eventId: string, sessionDate: string): Promise<number | null> {
+  const r = await db().from("team_presence").select("last_seen_at").eq("event_id", eventId).eq("session_date", sessionDate).order("last_seen_at", { ascending: false }).limit(1).maybeSingle();
+  return r.data?.last_seen_at ? new Date(r.data.last_seen_at as string).getTime() : null;
+}
+
+/** The knowledge row the model named: a known question counts another ask, a new one opens a row for William (SPEC-kaitlyn-knowledge.md). */
+async function touchKb(eventId: string, kb: { key: string; question: string }): Promise<void> {
+  const now = new Date().toISOString();
+  const have = await db().from("kaitlyn_kb").select("asked").eq("event_id", eventId).eq("key", kb.key).maybeSingle();
+  if (have.data) await db().from("kaitlyn_kb").update({ asked: Number(have.data.asked) + 1, last_asked_at: now, updated_at: now }).eq("event_id", eventId).eq("key", kb.key);
+  else if (kb.question) await db().from("kaitlyn_kb").insert({ event_id: eventId, key: kb.key, question: kb.question, handling: "open", asked: 1, last_asked_at: now });
+}
+
+/** One Slack line when autopilot takes over or hands back; the previous decision tonight says which way it went. */
+async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopilot: Autopilot): Promise<void> {
+  const prev = await db().from("kaitlyn_decisions").select("autopilot").eq("event_id", reg.event_id).eq("session_date", reg.session_date).lt("id", did).order("id", { ascending: false }).limit(1).maybeSingle();
+  if ((prev.data ? Boolean(prev.data.autopilot) : false) === auto) return;
+  if (auto) { await postToChatChannel(autopilot === "on" ? "Autopilot on: the switch is On, Kaitlyn is answering on her own tonight." : "Autopilot on: nobody on the desk for 3 min, Kaitlyn is answering."); return; }
+  const who = await db().from("team_presence").select("member_id, member:team_members!inner(display_name)").eq("event_id", reg.event_id).eq("session_date", reg.session_date).order("last_seen_at", { ascending: false }).limit(1).maybeSingle();
+  const name = (who.data?.member as unknown as { display_name?: string } | null)?.display_name ?? "a moderator";
+  await postToChatChannel(`Autopilot off: ${name} is back on the desk.`);
+}
+
+/** When she does not know and nobody is on the desk: one hand-off line per person per night; the question stays pending for a human (decision 5). */
+async function handoff(reg: Reg, message: { id: number; offset: number }, did: number, autopilot: Autopilot, thought: number): Promise<void> {
+  const prior = await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_message_id", "is", null).limit(1);
+  if (prior.data?.length) return;
+  const line = handoffLine();
+  const t0 = Date.now();
+  const wait = delayMs("auto", Math.random, line.length) - thought;
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  const human = await db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", message.id).limit(1);
+  if (human.data?.length) return;
+  if (autopilot === "auto") {
+    const back = await lastDeskSeen(reg.event_id, reg.session_date);
+    if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
+  }
+  const body = `@${reg.first_name} ${line}`;
+  const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, "kaitlyn");
+  if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
+}
+
+/** Called after an attendee message is stored. Decides, records the decision, and in assisted/auto (or under autopilot) acts on it. */
+export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null; autopilot?: Autopilot }; message: { id: number; body: string; offset: number }; katherine: boolean }): Promise<void> {
   const mode = a.event.kaitlyn_mode;
   if (mode === "off" || !KEY) return;
   try {
     const { reg, message } = a;
-    const [recentQ, toThemQ, marketsQ, saidQ] = await Promise.all([
+    const autopilot = a.event.autopilot ?? "auto";
+    const [recentQ, toThemQ, marketsQ, saidQ, kbQ, seen] = await Promise.all([
       db().from("chat_messages").select("id, registrant_id, author_name, role, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("visibility", "all").is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(40),
       db().from("chat_messages").select("id, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").contains("mentions", [reg.id]).order("id", { ascending: false }).limit(5),
       db().from("market_counts").select("name, clients, live"),
       // Her own lines tonight, drafts included (in shadow nothing posts, and the drafts were still her shapes).
       db().from("kaitlyn_decisions").select("text").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("action", "reply").neq("text", "").order("id", { ascending: false }).limit(12),
+      db().from("kaitlyn_kb").select("key, question, answer, approved, handling, asked").eq("event_id", reg.event_id).order("asked", { ascending: false }),
+      lastDeskSeen(reg.event_id, reg.session_date),
     ]);
     const recent = (recentQ.data ?? []).reverse();
     const ctx: Context = {
@@ -253,19 +336,25 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       market: marketLine(message.body, ((marketsQ.data ?? []) as MarketCount[])),
       katherine: a.katherine && asksForReplay(message.body),
     };
-    const out = await decide(systemPrompt(a.event.kaitlyn_facts), userTurn(ctx));
+    // Autopilot: with nobody on the desk, shadow and assisted act as auto for this message; her unsure lines still wait (SPEC-kaitlyn-autopilot.md, C).
+    const auto = engaged(autopilot, seen, ctx.minute, Date.now());
+    const eff: Mode = auto && mode !== "auto" ? "auto" : mode;
+    const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[]), userTurn(ctx));
     if (!out) return;
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
-    const itself = postsItself(mode, d);
+    if (d.kb) await touchKb(reg.event_id, d.kb);
+    const itself = postsItself(eff, d);
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.
-    const pending = mode === "shadow" ? d.action !== "skip" || Boolean(d.react) : (d.action === "reply" && !itself) || d.action === "ask_william" || (d.action === "ghost" && !ghostsItself(mode, d));
-    const row = await db().from("kaitlyn_decisions").insert({ event_id: reg.event_id, session_date: reg.session_date, message_id: message.id, registrant_id: reg.id, action: d.action, category: d.category, text: d.text, react: d.react, why: d.why, status: pending ? "pending" : "skipped", decided_at: pending ? null : new Date().toISOString(), model: MODEL, ms: out.ms }).select("id").single();
+    const pending = eff === "shadow" ? d.action !== "skip" || Boolean(d.react) : (d.action === "reply" && !itself) || d.action === "ask_william" || (d.action === "ghost" && !ghostsItself(eff, d));
+    const row = await db().from("kaitlyn_decisions").insert({ event_id: reg.event_id, session_date: reg.session_date, message_id: message.id, registrant_id: reg.id, action: d.action, category: d.category, text: d.text, react: d.react, why: d.why, status: pending ? "pending" : "skipped", decided_at: pending ? null : new Date().toISOString(), model: MODEL, ms: out.ms, kb_key: d.kb?.key ?? null, autopilot: auto }).select("id").single();
     if (row.error) { console.error("[kaitlyn] decision insert failed", { code: row.error.code }); return; }
     const did = row.data.id as number;
-    if (mode === "shadow") return;
+    if (reg.source !== "test") await autopilotTransition(reg, did, auto, autopilot);
+    if (eff === "shadow") return;
     if (d.react) { await reactAsKaitlyn(message.id, d.react); await db().from("kaitlyn_decisions").update({ reacted_at: new Date().toISOString() }).eq("id", did); }
     if (pending) {
       if (reg.source !== "test") await postToChatChannel(`Kaitlyn needs you · ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} → ${d.action.replace("_", " ")}${d.text ? ` ${JSON.stringify(d.text)}` : ""} (${d.why})`);
+      if (auto && d.action === "ask_william") await handoff(reg, message, did, autopilot, out.ms);
       return;
     }
     if (d.action === "ghost") {
@@ -278,7 +367,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (!itself) return;
     const t0 = Date.now();
     // The pause counts from their message, so the model's own thinking time (out.ms) comes off it.
-    const wait = delayMs(mode) - out.ms;
+    const wait = delayMs(eff, Math.random, d.text.length) - out.ms;
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     // Still hers to answer? A moderator may have replied meanwhile, or she replied to them a moment ago.
     const [human, hers] = await Promise.all([
@@ -288,6 +377,14 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (human.data?.length || hers.data?.length) {
       await db().from("kaitlyn_decisions").update({ status: "skipped", why: `${human.data?.length ? "a moderator answered first" : "she replied to them a moment ago"}; ${d.why}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", did);
       return;
+    }
+    // Auto hands back the moment a moderator is looking again: the line waits on the desk instead of posting.
+    if (auto && autopilot === "auto" && mode !== "auto") {
+      const back = await lastDeskSeen(reg.event_id, reg.session_date);
+      if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) {
+        await db().from("kaitlyn_decisions").update({ status: "pending", decided_at: null, why: `a moderator is back; ${d.why}`.slice(0, 140) }).eq("id", did);
+        return;
+      }
     }
     const body = `@${reg.first_name} ${d.text}`;
     const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, "kaitlyn");

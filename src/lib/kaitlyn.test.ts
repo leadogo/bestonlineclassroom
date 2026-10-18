@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asMode, delayMs, extractJson, ghostsItself, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
 test("parseDecision: the tool input checked; a wordless reply skips, a guarded reply becomes ask_william with the draft kept", () => {
-  assert.deepEqual(parseDecision({ action: "reply", category: "market", text: "  weve got 10 in LA,   youre good 🙌 ", react: "🔥", why: "named a market" }), { action: "reply", category: "market", text: "weve got 10 in LA, youre good 🙌", react: "🔥", why: "named a market" });
+  assert.deepEqual(parseDecision({ action: "reply", category: "market", text: "  weve got 10 in LA,   youre good 🙌 ", react: "🔥", why: "named a market" }), { action: "reply", category: "market", text: "weve got 10 in LA, youre good 🙌", react: "🔥", why: "named a market", kb: null });
   assert.equal(parseDecision({ action: "reply", category: "market", text: "", react: "", why: "" }).action, "skip");
   assert.equal(parseDecision({ action: "dance", category: "nope", text: "x", react: "🎉", why: "" }).action, "skip");
   assert.equal(parseDecision({ action: "skip", category: "nope", text: "x", react: "🎉", why: "" }).react, "");
@@ -37,17 +37,17 @@ test("guard: prices, guarantees, live or recorded, dates and bot talk never reac
 });
 
 test("postsItself and delayMs: shadow never posts, assisted posts the routine categories, auto posts every reply", () => {
-  const reply = (category: (typeof ASSISTED extends Set<infer C> ? C : never)) => ({ action: "reply" as const, category, text: "x", react: "", why: "" });
+  const reply = (category: (typeof ASSISTED extends Set<infer C> ? C : never)) => ({ action: "reply" as const, category, text: "x", react: "", why: "", kb: null });
   assert.equal(postsItself("shadow", reply("market")), false);
   assert.equal(postsItself("assisted", reply("market")), true);
   assert.equal(postsItself("assisted", reply("product")), false);
   assert.equal(postsItself("assisted", reply("price")), true);
   assert.equal(postsItself("auto", reply("product")), true);
-  assert.equal(postsItself("auto", { action: "ghost", category: "negative", text: "", react: "", why: "" }), false);
+  assert.equal(postsItself("auto", { action: "ghost", category: "negative", text: "", react: "", why: "", kb: null }), false);
   assert.equal(delayMs("shadow"), 0);
   assert.equal(delayMs("assisted", () => 0), 8_000);
   assert.equal(delayMs("auto", () => 0.999), 14_993);
-  const ghost = (category: "negative" | "other") => ({ action: "ghost" as const, category, text: "", react: "", why: "" });
+  const ghost = (category: "negative" | "other") => ({ action: "ghost" as const, category, text: "", react: "", why: "", kb: null });
   assert.equal(ghostsItself("shadow", ghost("negative")), false);
   assert.equal(ghostsItself("assisted", ghost("negative")), true);
   assert.equal(ghostsItself("auto", ghost("negative")), true);
@@ -85,7 +85,7 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.ok(systemPrompt(null).includes("No fact sheet"));
   assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
   assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));
-  assert.ok(s.includes('"sure": true only when FACTS or MARKET DATA give this answer outright') && s.includes("Never a filler reply") && !s.includes("can't answer that one here"));
+  assert.ok(s.includes('"sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright') && s.includes("Never a filler reply") && !s.includes("can't answer that one here"));
   assert.ok(s.includes("testing whether the room is live") && s.includes('("sounds robotic", "she was AI") are welcome, not ghosts'));
   const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], said: ["7 in Massachusetts so you're good", "nobody in Chelan yet"], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
   assert.match(t, /minute 82, the pitch started at minute 75/);
@@ -94,4 +94,53 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.match(t, /YOU ALREADY SAID TONIGHT \(oldest first\): "7 in Massachusetts so you're good" \| "nobody in Chelan yet"/);
   assert.match(t, /MESSAGE TO DECIDE ON: Ana: "LA"$/);
   assert.match(userTurn({ minute: 3, pitchMinute: 75, name: "Bo", body: "hi", priorOwn: [], modReplies: ["@Bo welcome!"], said: [], recent: [], market: null, katherine: true }), /before the pitch[\s\S]*\nMARKET DATA: none \(no place named\)\nKATHERINE AI: will answer[\s\S]*YOU ALREADY SAID TONIGHT \(oldest first\): nothing yet/);
+});
+
+test("guard: the two approved figures and the replay wording pass; other prices, this-is-live and pre-recorded still do not", () => {
+  for (const s of ["Katherine AI included free instead of $250 a month", "plenty of people start at $10 a day", "it's a replayable recording, it goes out by email tonight", "yes, it goes out by email after the class"]) assert.equal(guard(s), null, s);
+  for (const s of ["$400 a month", "it's 500 per month", "$250 a month plus $50 setup", "this is live", "it's recorded", "the pre-recorded video", "we're live right now"]) assert.notEqual(guard(s), null, s);
+});
+
+test("engaged: on always, off never, auto when the desk has been empty 3 minutes or nobody opened it by minute 5", () => {
+  const now = 1_000_000_000;
+  assert.equal(engaged("on", now, 1, now), true);
+  assert.equal(engaged("off", null, 60, now), false);
+  assert.equal(engaged("auto", null, 4, now), false);
+  assert.equal(engaged("auto", null, 5, now), true);
+  assert.equal(engaged("auto", now - 60_000, 40, now), false);
+  assert.equal(engaged("auto", now - 180_000, 40, now), true);
+  assert.equal(engaged("auto", now - 181_000, 2, now), true);
+  assert.equal(asAutopilot("on"), "on");
+  assert.equal(asAutopilot("sideways"), "auto");
+  assert.equal(asAutopilot(null), "auto");
+});
+
+test("parseDecision: drafts are tidied, a bot tell goes to the desk, the kb key is kept when it is a slug", () => {
+  const dashed = parseDecision({ action: "reply", category: "price", text: "depends on your market — that's what the call is for", sure: true, react: "", why: "price", kb: { key: "Price", question: "How much does it cost?" } });
+  assert.equal(dashed.action, "reply");
+  assert.equal(dashed.text, "depends on your market, that's what the call is for");
+  assert.deepEqual(dashed.kb, { key: "price", question: "How much does it cost?" });
+  const residue = parseDecision({ action: "reply", category: "product", text: "Great question! Yes, she texts too", sure: true, react: "", why: "texting" });
+  assert.equal(residue.action, "ask_william");
+  assert.equal(residue.text, "Great question! Yes, she texts too");
+  assert.match(residue.why, /^sounds like a bot: chatbot residue; texting/);
+  assert.equal(parseDecision({ action: "reply", category: "product", text: "yes she texts", react: "", why: "", kb: { key: "Texting!", question: "x" } }).kb, null);
+  assert.equal(parseDecision({ action: "skip", category: "chatter", text: "", react: "", why: "", kb: { key: "price", question: "x" } }).kb, null);
+  assert.deepEqual(parseDecision({ action: "ask_william", category: "other", text: "", react: "", why: "new one", kb: { key: "redfin-agents", question: "  Do you work with Redfin agents?  " } }).kb, { key: "redfin-agents", question: "Do you work with Redfin agents?" });
+});
+
+test("delayMs: the pause grows with the line, 40 ms a character, never past 25 s, still nothing in shadow", () => {
+  assert.equal(delayMs("auto", () => 0, 100), 12_000);
+  assert.equal(delayMs("auto", () => 0.999, 1000), 25_000);
+  assert.equal(delayMs("shadow", () => 0, 1000), 0);
+});
+
+test("systemPrompt: the WRITING block, the are-you-AI rule, the KNOWLEDGE block from rows, and no Katherine-answers-replay line", () => {
+  const plain = systemPrompt("PRICE: never in chat.");
+  assert.ok(plain.includes("WRITING") && plain.includes("no dashes") && plain.includes("Never say whether you are AI or human"));
+  assert.ok(!plain.includes("Katherine AI answers replay questions") && !plain.includes("KNOWLEDGE (William's approved answers"));
+  assert.ok(plain.includes('"kb"'));
+  const withKb = systemPrompt("PRICE: never in chat.", [{ key: "price", question: "How much does it cost?", answer: null, approved: "It depends on your market, so that's what the call is for.", handling: "answer", asked: 24 }]);
+  assert.ok(withKb.includes("KNOWLEDGE (William's approved answers") && withKb.includes("A: It depends on your market"));
+  assert.ok(withKb.indexOf("PRICE: never in chat.") < withKb.indexOf("KNOWLEDGE (William's approved answers"));
 });
