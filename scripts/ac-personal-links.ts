@@ -40,8 +40,9 @@ const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const newToken = () => { const b = randomBytes(12); let s = ""; for (let i = 0; i < 12; i++) s += ALPHABET[b[i] % ALPHABET.length]; return s; };
 const emailHash = (e: string) => createHash("sha256").update(e.trim().toLowerCase()).digest("hex");
 const sleep = (ms: number) => new Promise((f) => setTimeout(f, ms));
-async function ac(path: string, init?: RequestInit) {
+async function ac(path: string, init?: RequestInit, retried = false): Promise<any> {
   const r = await fetch(`${base}/api/3${path}`, { ...init, headers: { "Api-Token": key, "content-type": "application/json" } });
+  if (r.status === 429 && !retried) { await sleep(1500); return ac(path, init, true); } // AC allows 5 requests a second; one breath, one retry
   if (!r.ok) throw new Error(`${init?.method ?? "GET"} ${path} → ${r.status} ${(await r.text()).slice(0, 160)}`);
   return r.json();
 }

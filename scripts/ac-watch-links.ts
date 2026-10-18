@@ -53,8 +53,9 @@ export function rewrite(value: string): { next: string; kind: string } | null {
   return { next: v, kind: "unknown_left" };
 }
 
-async function api(path: string, init?: RequestInit) {
+async function api(path: string, init?: RequestInit, retried = false): Promise<any> {
   const r = await fetch(`${base}/api/3${path}`, { ...init, headers: { "Api-Token": key, "content-type": "application/json", ...(init?.headers ?? {}) } });
+  if (r.status === 429 && !retried) { await sleep(1500); return api(path, init, true); } // AC allows 5 requests a second; one breath, one retry
   if (!r.ok) throw new Error(`${init?.method ?? "GET"} ${path} → ${r.status} ${(await r.text()).slice(0, 200)}`);
   return r.json();
 }
