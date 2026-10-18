@@ -18,3 +18,5 @@ Day 2
 - [x] T11 `/api/cron/kaitlyn-digest` + vercel.json cron.
 - [x] T12 `scripts/kaitlyn-eval.mjs` + `docs/kaitlyn-eval.md`.
 - [x] T13 Deployed (day two, Oct 17 11:10 PM MT); digest dry run on production answers (not due at that hour, no post); /admin/knowledge serves (307 to login unauthenticated); guard loosened after the first eval (denied guarantee and "one to four a month" were tripping it); review below.
+
+Review (Oct 17 11:40 PM MT, fresh-context reviewer over dea6c59..HEAD): no critical findings; four important ones fixed in the follow-up commit (hand-off double post and per-person window, racy kb upsert → migration 033 rpc, knowledge order busting the prompt cache, unbounded knowledge-page query), plus the cheap suggestions (server-clock minute for autopilot, guard forms, digest recording, merge safety, nits). Left on the list: a weekly-review cron, moderators answering on the knowledge page, the full 494-line eval run.
