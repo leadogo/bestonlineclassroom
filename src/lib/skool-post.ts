@@ -50,6 +50,9 @@ export async function postToSkool(input: SkoolPostInput): Promise<SkoolPostResul
     await title.fill(input.title);
     const editor = page.locator(".tiptap.skool-editor").first();
     await editor.click();
+    // A persistent context can hold a half-written draft; start from an empty body.
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.press("Backspace");
     for (const [i, para] of input.body.split("\n\n").entries()) {
       if (i > 0) { await page.keyboard.press("Enter"); await page.keyboard.press("Enter"); }
       await page.keyboard.insertText(para);
@@ -90,7 +93,17 @@ export async function postToSkool(input: SkoolPostInput): Promise<SkoolPostResul
       return result;
     }
     await page.locator("button", { hasText: /^post$/i }).first().click();
-    const posted = page.getByText(input.title, { exact: true }).first();
+    // Emailing every member asks "Send email to all members? This email will be sent to N members, are you sure you
+    // want to proceed?" (6,246 on Oct 18 2026). The first real broadcast sat on that question until its session was
+    // released and nothing posted; answer it, and refuse any other question.
+    const confirm = page.getByRole("button", { name: /^confirm$/i }).first();
+    if (await confirm.waitFor({ state: "visible", timeout: 5_000 }).then(() => true, () => false)) {
+      const asked = await page.getByText("Send email to all members?", { exact: true }).first().isVisible().catch(() => false);
+      if (!asked) throw new Error("an unexpected confirmation appeared after Post");
+      await confirm.click();
+    }
+    // The title on the feed, matched without its leading emoji so a trimmed or wrapped render still counts.
+    const posted = page.getByText(input.title.replace(/^\S+\s+/, ""), { exact: false }).first();
     await posted.waitFor({ state: "visible", timeout: 30_000 });
     await posted.click().catch(() => {});
     await page.waitForTimeout(2500);
