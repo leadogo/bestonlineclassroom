@@ -44,10 +44,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     }),
   );
   const logoUrl = ((data ?? []) as EventRow[]).find((e) => e.logo_url)?.logo_url ?? null;
+  // Open knowledge questions across the real webinars, for the sidebar badge (SPEC-kaitlyn-knowledge.md).
+  const realIds = ((data ?? []) as EventRow[]).filter((e) => !e.slug.startsWith("test")).map((e) => e.id);
+  const knowledgeOpen = member.role === "admin" && realIds.length ? ((await db().from("kaitlyn_kb").select("key", { count: "exact", head: true }).in("event_id", realIds).eq("handling", "open")).count ?? 0) : 0;
   return (
     <div className="min-h-screen bg-room text-ink lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
       <aside className="flex flex-col border-b border-line bg-panel lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-        <AdminNav webinars={webinars} isAdmin={member.role === "admin"} user={{ name: member.display_name, role: member.role }} logoUrl={logoUrl} signOut={signOut} setAutopilot={setAutopilot} />
+        <AdminNav webinars={webinars} isAdmin={member.role === "admin"} user={{ name: member.display_name, role: member.role }} logoUrl={logoUrl} signOut={signOut} setAutopilot={setAutopilot} knowledgeOpen={knowledgeOpen} />
       </aside>
       <main className="min-w-0 px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-5xl">{children}</div>

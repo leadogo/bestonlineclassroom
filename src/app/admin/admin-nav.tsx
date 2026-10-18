@@ -9,7 +9,7 @@ export type NavWebinar = { slug: string; title: string; live: boolean; nextDate:
 const item = (active: boolean) => `flex min-h-10 items-center gap-2 rounded-lg px-3 text-[15px] ${active ? "bg-line/60 font-bold text-ink" : "text-muted hover:bg-line/40 hover:text-ink"}`;
 const sub = (active: boolean) => `flex min-h-9 items-center rounded-md px-3 text-sm ${active ? "font-bold text-ink" : "text-muted hover:text-ink"}`;
 
-export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut, setAutopilot }: { webinars: NavWebinar[]; isAdmin: boolean; user: { name: string; role: string }; logoUrl: string | null; signOut: () => Promise<void>; setAutopilot: (fd: FormData) => Promise<void> }) {
+export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut, setAutopilot, knowledgeOpen = 0 }: { webinars: NavWebinar[]; isAdmin: boolean; user: { name: string; role: string }; logoUrl: string | null; signOut: () => Promise<void>; setAutopilot: (fd: FormData) => Promise<void>; knowledgeOpen?: number }) {
   const path = usePathname();
   const onWebinar = (slug: string) => path.startsWith(`/admin/events/${slug}`);
   return (
@@ -66,6 +66,12 @@ export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut, setAutopil
             )}
           </div>
         ))}
+        {isAdmin && (
+          <Link href="/admin/knowledge" className={`${item(path.startsWith("/admin/knowledge"))} justify-between`} title="What the room asks and what Kaitlyn says; the open ones need your answer">
+            Knowledge base
+            {knowledgeOpen > 0 && <span className="rounded-full bg-cta px-2 text-xs font-bold text-cta-ink">{knowledgeOpen}</span>}
+          </Link>
+        )}
         <Link href="/admin/blocked" className={item(path.startsWith("/admin/blocked"))}>
           Blocked
         </Link>
