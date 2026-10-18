@@ -7,29 +7,25 @@ export const BROADCAST_HOUR = 16; // 4:58 pm Mountain, two minutes before the 5 
 export const BROADCAST_MINUTE = 58;
 export const CATEGORY = "Announcements";
 
-/** Jeremy's proof figures (600+ agents, 270 markets, 7,000 appointments) are his draft; flip when William confirms them. */
-export const PROOF_CONFIRMED = false;
 
 export type Broadcast = { weekday: "wednesday" | "sunday"; title: string; body: string };
 
-const WEDNESDAY_PROOF = "600+ agents across 270 markets have been through this system and it has booked over 7,000 appointments. ";
-
 export const BROADCASTS: Record<Broadcast["weekday"], Broadcast> = {
+  // The post and its email land at 4:58 pm Mountain, two minutes before the doors: doors-open-now framing (Jeremy,
+  // Oct 18, second pass). One siren, never a row of them: Skool members are past registrants, not cold traffic.
   wednesday: {
     weekday: "wednesday",
-    title: PROOF_CONFIRMED ? "600+ agents, one system, tonight at 7 Eastern" : "One booking system, tonight at 7 Eastern",
+    title: "🚨 Doors open in two minutes",
     body:
-      "Quick one for you. The Book More Showings workshop runs today at 7 pm Eastern, 5 Mountain, 4 Pacific. It runs about two hours and twenty minutes. " +
-      (PROOF_CONFIRMED ? WEDNESDAY_PROOF : "") +
-      "If you registered before and did not make it in, tonight is a clean restart. You will drop a name or email at the door, that is how the room holds your seat. Replay stays up for 72 hours after.\n\n" +
-      `Here is the door: ${BROADCAST_LINK}\n\nSee you at 7.`,
+      "The workshop doors are open right now. It starts at 7 pm Eastern, 5 Mountain, 4 Pacific. It runs about two hours and twenty minutes. You will see the system agents use to turn leads into booked showings. The door asks for a name or email, that is how the room holds your seat. If you cannot stay the whole way, the replay stays up for 72 hours.\n\n" +
+      `Here is the door: ${BROADCAST_LINK}\n\nCome in now.`,
   },
   sunday: {
     weekday: "sunday",
-    title: "What happened to the leads you already paid for?",
+    title: "🚨 How many leads did you waste last month?",
     body:
-      "Question for you: how many of the leads you already paid for turned into appointments last month? If the honest answer is low, that is the exact problem this workshop solves. It starts today at 7 pm Eastern, 5 Mountain, 4 Pacific, and runs about two hours and twenty minutes. You will see the full booking system agents use to turn leads into showings, and the replay stays up for 72 hours if tonight does not work. Drop a name or email at the door and you are in.\n\n" +
-      `Door is here: ${BROADCAST_LINK}`,
+      "Quick question: how many of the leads you paid for last month turned into appointments? If the honest answer is low, the workshop running right now fixes exactly that. Doors are open. It starts at 7 pm Eastern, 5 Mountain, 4 Pacific, and runs about two hours and twenty minutes. The door asks for a name or email so the room can hold your seat. The replay stays up for 72 hours if tonight does not work.\n\n" +
+      `Door: ${BROADCAST_LINK}\n\nCome in.`,
   },
 };
 
