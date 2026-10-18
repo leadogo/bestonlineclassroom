@@ -4,12 +4,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export type NavWebinar = { slug: string; title: string; live: boolean; nextDate: string };
+export type NavWebinar = { slug: string; title: string; live: boolean; nextDate: string; autopilot: "auto" | "on" | "off"; status: string; kaitlyn: boolean };
 
 const item = (active: boolean) => `flex min-h-10 items-center gap-2 rounded-lg px-3 text-[15px] ${active ? "bg-line/60 font-bold text-ink" : "text-muted hover:bg-line/40 hover:text-ink"}`;
 const sub = (active: boolean) => `flex min-h-9 items-center rounded-md px-3 text-sm ${active ? "font-bold text-ink" : "text-muted hover:text-ink"}`;
 
-export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut }: { webinars: NavWebinar[]; isAdmin: boolean; user: { name: string; role: string }; logoUrl: string | null; signOut: () => Promise<void> }) {
+export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut, setAutopilot }: { webinars: NavWebinar[]; isAdmin: boolean; user: { name: string; role: string }; logoUrl: string | null; signOut: () => Promise<void>; setAutopilot: (fd: FormData) => Promise<void> }) {
   const path = usePathname();
   const onWebinar = (slug: string) => path.startsWith(`/admin/events/${slug}`);
   return (
@@ -47,6 +47,22 @@ export function AdminNav({ webinars, isAdmin, user, logoUrl, signOut }: { webina
                   {w.live && <span className="text-xs font-bold">Live</span>}
                 </Link>
               </div>
+            )}
+            {isAdmin && w.kaitlyn && (
+              <form action={setAutopilot} className="mx-1 mb-1 mt-1.5 hidden rounded-lg border border-cta/50 bg-cta/5 px-2.5 py-2 lg:block" aria-label={`Autopilot for ${w.title}`}>
+                <input type="hidden" name="slug" value={w.slug} />
+                <div className="flex items-baseline justify-between text-[13px] font-bold text-ink">
+                  Autopilot <span className="text-xs font-normal text-muted">Kaitlyn</span>
+                </div>
+                <div className="mt-1.5 grid grid-cols-3 overflow-hidden rounded-md border border-line bg-room text-[13px]">
+                  {(["auto", "on", "off"] as const).map((v) => (
+                    <button key={v} type="submit" name="value" value={v} aria-pressed={w.autopilot === v} className={`min-h-7 ${w.autopilot === v ? "bg-cta font-bold text-cta-ink" : "text-muted hover:text-ink"}`}>
+                      {v === "auto" ? "Auto" : v === "on" ? "On" : "Off"}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs leading-snug text-muted">{w.status}</p>
+              </form>
             )}
           </div>
         ))}

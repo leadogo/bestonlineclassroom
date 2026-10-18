@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { setKaitlynAssist } from "./actions";
+import { setAutopilot, setKaitlynAssist } from "./actions";
 import { DeleteWebinar, NewWebinar } from "./dash-forms";
 import { LiveStrip } from "./live-strip";
 import { btn, btnQuiet, Empty, PageHeader, Stat } from "./ui";
@@ -76,6 +76,22 @@ export default async function AdminHome() {
                   <button type="submit" className={`${btnQuiet} min-h-8 px-3`}>
                     {e.kaitlyn_mode === "shadow" ? "Turn on" : "Turn off"}
                   </button>
+                </form>
+              )}
+              {me.role === "admin" && e.kaitlyn_mode !== "off" && (
+                <form action={setAutopilot} className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                  <input type="hidden" name="slug" value={e.slug} />
+                  <span>
+                    Autopilot <span className="font-bold text-cta">{e.autopilot ?? "auto"}</span>
+                    <span className="text-muted">{e.autopilot === "off" ? " · never takes over" : e.autopilot === "on" ? " · answers on her own from the first message" : " · takes over 3 min after the last moderator leaves, or at minute 5 if nobody opens the desk"}</span>
+                  </span>
+                  <span className="inline-flex overflow-hidden rounded-lg border border-line">
+                    {(["auto", "on", "off"] as const).map((v) => (
+                      <button key={v} type="submit" name="value" value={v} aria-pressed={(e.autopilot ?? "auto") === v} className={`min-h-8 px-3 text-sm ${(e.autopilot ?? "auto") === v ? "bg-cta font-bold text-cta-ink" : "text-muted hover:text-ink"}`}>
+                        {v}
+                      </button>
+                    ))}
+                  </span>
                 </form>
               )}
               <div className="flex flex-wrap gap-2">

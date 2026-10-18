@@ -1,11 +1,12 @@
 import { canModerate, getTeamMember } from "@/lib/auth";
 import { currentOrNextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
-import { getEvent } from "@/lib/events";
+import { forgetEvent, getEvent } from "@/lib/events";
 import { blockAtEdge, edgeConfigured, unblockAtEdge } from "@/lib/edge-block";
 import { forgetBlockedIps } from "@/lib/ip";
 import { toggleReaction } from "@/lib/reactions";
-import { asMode, postAsKaitlyn, reactAsKaitlyn } from "@/lib/kaitlyn";
+import { asAutopilot, asMode, postAsKaitlyn, reactAsKaitlyn } from "@/lib/kaitlyn";
+import { postToChatChannel } from "@/lib/slack";
 import { withQuery } from "@/lib/params";
 import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
 
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
   // Kaitlyn's open suggestions for this session: drafts, ghost and react proposals, and the lines she wants a human on.
   const kmode = asMode(s.event.kaitlyn_mode);
   const kp = kmode === "off" ? [] : ((await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, action, category, text, react, why, created_at").eq("event_id", s.event.id).eq("session_date", s.session.date).eq("status", "pending").order("id").limit(100)).data ?? []);
-  return Response.json({ new: news, updated, people, team, desk, stats, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date, booking_href: bookingLink(s.event.cta_href), kaitlyn: { mode: kmode, pending: kp } }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ new: news, updated, people, team, desk, stats, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date, booking_href: bookingLink(s.event.cta_href), kaitlyn: { mode: kmode, pending: kp, autopilot: asAutopilot(s.event.autopilot) } }, { headers: { "cache-control": "no-store" } });
 }
 
 /** POST { event, date, action: reply | delete | block | react, ... } */
@@ -206,6 +207,31 @@ export async function POST(request: Request) {
         return Response.json({ ok: true, message: msg.data });
       }
       return Response.json({ error: "Unknown decision." }, { status: 422 });
+    }
+    case "autopilot": {
+      // The Autopilot switch from the desk (SPEC-kaitlyn-autopilot.md): auto | on | off, admins only; the room reads it per message.
+      if (member.role !== "admin") return Response.json({ error: "Admins only" }, { status: 403 });
+      const value = b.value;
+      if (value !== "auto" && value !== "on" && value !== "off") return Response.json({ error: "auto, on or off" }, { status: 422 });
+      const { error } = await db().from("events").update({ autopilot: value }).eq("id", s.event.id);
+      if (error) return Response.json({ error: "Could not switch Autopilot." }, { status: 500 });
+      forgetEvent(s.event.slug);
+      return Response.json({ ok: true, autopilot: value });
+    }
+    case "teach": {
+      // Teach Kaitlyn a fact (SPEC-kaitlyn-autopilot.md, D): one dated line appended to the fact sheet, live for the next message.
+      if (member.role !== "admin") return Response.json({ error: "Admins only" }, { status: 403 });
+      const text = String(b.text ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
+      if (text.length < 4) return Response.json({ error: "Type the fact first." }, { status: 422 });
+      const cur = await db().from("events").select("kaitlyn_facts").eq("id", s.event.id).maybeSingle();
+      const stamp = new Date().toLocaleDateString("en-US", { timeZone: s.event.timezone || "America/Edmonton", month: "short", day: "numeric", year: "numeric" });
+      const line = `- ${text} (${member.display_name}, ${stamp})`;
+      const facts = `${String(cur.data?.kaitlyn_facts ?? "").trimEnd()}\n${line}`.trim();
+      const { error } = await db().from("events").update({ kaitlyn_facts: facts }).eq("id", s.event.id);
+      if (error) return Response.json({ error: "Could not save that." }, { status: 500 });
+      forgetEvent(s.event.slug);
+      await postToChatChannel(`Kaitlyn learned (${member.display_name}): ${text}`);
+      return Response.json({ ok: true, line });
     }
     case "ghost":
     case "unghost": {

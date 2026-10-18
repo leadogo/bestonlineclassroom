@@ -251,7 +251,7 @@ export async function decide(system: string, turn: string): Promise<{ decision: 
 type Reg = { id: string; event_id: string; session_date: string; first_name: string; source: string };
 
 /** Kaitlyn's row in the room: a reply to one person (hidden from everyone else when that person is a ghost). Returns the new id. */
-export async function postAsKaitlyn(reg: Reg, body: string, offset: number, kind: "kaitlyn" | "text"): Promise<number | null> {
+export async function postAsKaitlyn(reg: Reg, body: string, offset: number, kind: "kaitlyn" | "autopilot" | "text"): Promise<number | null> {
   const g = await db().from("registrants").select("ghosted_at").eq("id", reg.id).maybeSingle();
   const ins = await db().from("chat_messages").insert({ event_id: reg.event_id, session_date: reg.session_date, team_member_id: null, author_name: KAITLYN, role: "moderator", body: body.slice(0, 500), offset_seconds: Math.max(0, Math.floor(offset)), mentions: [reg.id], mention_names: [reg.first_name], kind, visible_to: g.data?.ghosted_at ? reg.id : null }).select("id").single();
   if (ins.error) { console.error("[kaitlyn] post failed", { code: ins.error.code }); return null; }
@@ -303,7 +303,7 @@ async function handoff(reg: Reg, message: { id: number; offset: number }, did: n
     if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
   }
   const body = `@${reg.first_name} ${line}`;
-  const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, "kaitlyn");
+  const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, "autopilot");
   if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
 }
 
@@ -387,7 +387,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       }
     }
     const body = `@${reg.first_name} ${d.text}`;
-    const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, "kaitlyn");
+    const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, auto ? "autopilot" : "kaitlyn");
     if (mid) await db().from("kaitlyn_decisions").update({ status: "auto", sent_body: body, sent_message_id: mid, decided_at: new Date().toISOString() }).eq("id", did);
   } catch (err) {
     console.error("[kaitlyn] handle threw", { err: String(err) });

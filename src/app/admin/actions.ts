@@ -31,6 +31,19 @@ export async function setKaitlynAssist(fd: FormData): Promise<void> {
   revalidatePath(`/admin/events/${slug}`);
 }
 
+/** The Autopilot switch (SPEC-kaitlyn-autopilot.md): auto (takes over when the desk is empty), on (from the first message), off (never). */
+export async function setAutopilot(fd: FormData): Promise<void> {
+  await admin();
+  const slug = String(fd.get("slug") ?? "");
+  const value = String(fd.get("value") ?? "");
+  if (value !== "auto" && value !== "on" && value !== "off") throw new Error("auto, on or off");
+  const { error } = await db().from("events").update({ autopilot: value }).eq("slug", slug);
+  if (error) throw new Error("Could not switch Autopilot.");
+  forgetEvent(slug);
+  revalidatePath("/admin", "layout");
+  revalidatePath(`/admin/events/${slug}`);
+}
+
 /** New webinar from an existing one; lands on its settings page. */
 export async function createEvent(_prev: DashState, fd: FormData): Promise<DashState> {
   await admin();
