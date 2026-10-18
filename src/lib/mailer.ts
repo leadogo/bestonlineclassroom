@@ -31,8 +31,9 @@ export function emailVars(p: Person, e: EventRow, session: Session): Record<stri
     first_name: p.first_name,
     title: e.title,
     host_name: e.host_name,
-    join_url: joinUrl(p.token),
-    event_link: joinUrl(p.token),
+    // ?src= tells the room which link brought the person in (join-sources.ts): email body vs calendar entry.
+    join_url: `${joinUrl(p.token)}?src=email`,
+    event_link: `${joinUrl(p.token)}?src=calendar`,
     replay_url: replayUrl(p.token),
     replay_link: replayUrl(p.token),
     webinar_time: w.time,

@@ -3,6 +3,7 @@ import { getEvent } from "@/lib/events";
 import { peakConcurrent, PRESENCE_GRACE_MS, retentionCurve } from "@/lib/outcomes";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { loadHistory, projectBookings, typicalNight } from "@/lib/history";
+import { loadJoinSources } from "@/lib/join-sources-data";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,8 @@ export async function GET(request: Request) {
       const proj = at_pitch !== null && at_pitch > 0 ? projectBookings(history, session.start.getUTCDay(), at_pitch) : in_room > 0 ? projectBookings(history, session.start.getUTCDay(), in_room) : null;
       extras = { until_pitch_minutes: pitchAt !== null && pitchAt > nowMs ? Math.round((pitchAt - nowMs) / 60_000) : null, projected: proj, typical: typicalNight(history.map((h) => h.curve).filter((c): c is number[] => Array.isArray(c)), minuteNow), minute: minuteNow };
     }
-    sessions.push({ ...row, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, site_joined, in_room, at_pitch, peak_live, booked: booked.count ?? 0, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0, ...extras });
+    const by_source = await loadJoinSources(event.id, row.session_date as string, event.cta_at_seconds ?? 4500);
+    sessions.push({ ...row, by_source, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, site_joined, in_room, at_pitch, peak_live, booked: booked.count ?? 0, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0, ...extras });
   }
   return Response.json({ event: event.slug, sessions }, { headers: { "cache-control": "no-store" } });
 }

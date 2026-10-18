@@ -4,6 +4,7 @@
 //   doppler run -- node scripts/ac-watch-links.ts            # dry run: counts by transform, nothing written
 //   doppler run -- node scripts/ac-watch-links.ts --apply    # write, <= 5 requests a second, idempotent
 //   --phase2               also rewrite open links, replay links and dead EasyWebinar links (needs the path rule)
+//   --training             also rewrite TrainingLink (thefuturerealestateagent.com/training/start?t=) onto the watch host (needs the /training/ rule)
 //   --days 90 (default)   --limit N (apply at most N writes)   --plan FILE (write the from→next plan as JSON before applying)
 //   --revert FILE          put every value in FILE back to its "from" (the undo for an --apply run)
 //
@@ -15,12 +16,14 @@ if (!base || !key) throw new Error("ACTIVECAMPAIGN_API_URL / ACTIVECAMPAIGN_API_
 
 const WATCH = "https://watch.bookmoreshowings.com";
 const OPEN = `${WATCH}/w/ailg-r`;
-const FIELDS = { join: "47", replay: "49" } as const;
+const FIELDS: Record<string, string> = { join: "47", replay: "49" };
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const arg = (name: string, fallback: number) => { const i = args.indexOf(name); return i >= 0 ? Number(args[i + 1]) : fallback; };
 const days = arg("--days", 90);
 const limit = arg("--limit", Infinity);
+const training = args.includes("--training");
+if (training) FIELDS.training = "TRAININGLINK"; // resolved to its id at run time
 const planPath = (() => { const i = args.indexOf("--plan"); return i >= 0 ? args[i + 1] : ""; })();
 const revertPath = (() => { const i = args.indexOf("--revert"); return i >= 0 ? args[i + 1] : ""; })();
 
@@ -44,6 +47,8 @@ export function rewrite(value: string): { next: string; kind: string } | null {
     if (host.startsWith("watch.")) return null;
     return { next: `${WATCH}${path}${query}`, kind: replayTok ? "classroom_replay" : "classroom_open" };
   }
+  const t = /^https:\/\/(?:www\.)?thefuturerealestateagent\.com(\/training\/start\?t=[a-z0-9]{12})$/i.exec(v);
+  if (t) return training ? { next: `${WATCH}${t[1]}`, kind: "training" } : null;
   if (/easywebinar/i.test(v)) return phase2 ? { next: OPEN, kind: "easywebinar_dead" } : null;
   return { next: v, kind: "unknown_left" };
 }
@@ -85,6 +90,12 @@ async function main() {
   }
   console.log(`contacts created since ${since}: ${inScope.size}`);
 
+  if (FIELDS.training === "TRAININGLINK") {
+    const fields = await api("/fields?limit=100");
+    const id = ((fields.fields ?? []) as Array<{ id: string; perstag: string }>).find((f) => f.perstag === "TRAININGLINK")?.id;
+    if (!id) throw new Error("TRAININGLINK field not found");
+    FIELDS.training = id;
+  }
   const plan: Array<{ id: string; contact: string; field: string; from: string; next: string; kind: string }> = [];
   for (const [name, field] of Object.entries(FIELDS)) {
     for (let off = 0; ; off += 100) {

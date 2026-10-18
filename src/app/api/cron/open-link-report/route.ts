@@ -5,6 +5,8 @@ import { openLinkLine, shiftDay, type Funnel } from "@/lib/open-link";
 import { postToIntel } from "@/lib/slack";
 import { SKOOL_MEMBERS, resultLine, type BroadcastResult } from "@/lib/skool-broadcast-results";
 import { SKOOL_GROUP } from "@/lib/skool-broadcast";
+import { loadJoinSources } from "@/lib/join-sources-data";
+import { joinSourcesLine } from "@/lib/join-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,7 @@ export async function GET(request: Request) {
     }
     const walled = await db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", e.id).eq("session_date", today).eq("block_reason", "client");
     const hits = await db().from("link_clicks").select("id", { count: "exact", head: true }).eq("event_id", e.id).eq("session_date", today).eq("outcome", "walled");
+    lines.push(joinSourcesLine(e.title, today, await loadJoinSources(e.id, today, e.cta_at_seconds ?? 4500)));
     const broadcast = await db().from("skool_broadcasts").select("id, weekday, title").eq("group_slug", SKOOL_GROUP).eq("broadcast_date", today).eq("status", "posted").maybeSingle();
     if (broadcast.data && e.slug === "ailg-r") {
       const result = await scoreBroadcast(e.id, today, e.cta_at_seconds ?? 4500);
