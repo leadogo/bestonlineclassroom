@@ -42,6 +42,9 @@ export type EventRow = {
   /** Kaitlyn from William's Team (kaitlyn.ts): off | shadow | assisted | auto, and the fact sheet she may quote. */
   kaitlyn_mode: "off" | "shadow" | "assisted" | "auto";
   kaitlyn_facts: string | null;
+  /** Autopilot (SPEC-kaitlyn-autopilot.md): auto | on | off; and the last local date the 9 AM knowledge digest went out. */
+  autopilot: "auto" | "on" | "off";
+  kaitlyn_digest_on: string | null;
   cta_prompt_minutes: number[];
   testimonials_from_seconds: number | null;
   replay_copy: Record<string, unknown>;

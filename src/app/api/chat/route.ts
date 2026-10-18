@@ -9,7 +9,7 @@ import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { postToChatChannel } from "@/lib/slack";
 import { tagNow } from "@/lib/tagging";
 import { katherineReply } from "@/lib/katherine";
-import { asMode, kaitlynHandle } from "@/lib/kaitlyn";
+import { asAutopilot, asMode, kaitlynHandle } from "@/lib/kaitlyn";
 import { isBelief, isQuestion } from "@/lib/engagement";
 import { forwardCallRequest, PHONE_RE } from "@/lib/call-requests";
 
@@ -20,11 +20,11 @@ const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offs
 
 async function registrant(token: string) {
   if (!TOKEN_RE.test(token)) return null;
-  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases, kaitlyn_mode, kaitlyn_facts, cta_at_seconds)").eq("token", token).maybeSingle();
+  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases, kaitlyn_mode, kaitlyn_facts, cta_at_seconds, autopilot)").eq("token", token).maybeSingle();
   if (!data) return null;
-  const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean; belief_phrases?: string[]; kaitlyn_mode?: string | null; kaitlyn_facts?: string | null; cta_at_seconds?: number | null } | null;
+  const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean; belief_phrases?: string[]; kaitlyn_mode?: string | null; kaitlyn_facts?: string | null; cta_at_seconds?: number | null; autopilot?: string | null } | null;
   const start = ev ? sessionFor(scheduleOf(ev), data.session_date as string)?.start ?? null : null;
-  return { ...data, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled), beliefPhrases: ev?.belief_phrases ?? undefined, kaitlyn: { kaitlyn_mode: asMode(ev?.kaitlyn_mode), kaitlyn_facts: ev?.kaitlyn_facts ?? null, cta_at_seconds: ev?.cta_at_seconds ?? null } };
+  return { ...data, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled), beliefPhrases: ev?.belief_phrases ?? undefined, kaitlyn: { kaitlyn_mode: asMode(ev?.kaitlyn_mode), kaitlyn_facts: ev?.kaitlyn_facts ?? null, cta_at_seconds: ev?.cta_at_seconds ?? null, autopilot: asAutopilot(ev?.autopilot) } };
 }
 
 /** GET ?token=&after=<id>&since=<iso>: new real messages after `after`, and deletes/reactions since `since`. */
