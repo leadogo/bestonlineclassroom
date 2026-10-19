@@ -1,7 +1,7 @@
 // Tonight's class by minute (SPEC-kaitlyn-transcript.md, B): one model call over the event's transcript (the room's
 // captions VTT) that writes 10 to 15 lines of "minute N: what he covers", printed and, with --write, stored in
 // events.outline for Kaitlyn's prompt. Edit the result on the event's Settings page.
-// Run: doppler run -p bestonlineclassroom -c prd -- node --no-warnings scripts/outline.ts --event ailg-r [--write]
+// Run: npm run outline -- --event ailg-r [--write]. Effort low: the model otherwise spends the whole output budget thinking over a 55k-token transcript.
 import { parseArgs } from "node:util";
 import { parseVtt } from "../src/lib/captions.ts";
 import { db } from "../src/lib/db.ts";
@@ -24,13 +24,14 @@ const SYSTEM = `You outline a recorded real estate webinar ("AI For Agents Maste
 const res = await fetch("https://api.anthropic.com/v1/messages", {
   method: "POST",
   headers: { "x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-  body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: SYSTEM, messages: [{ role: "user", content: `TRANSCRIPT (minute:second then the words)\n${transcript}` }] }),
+  body: JSON.stringify({ model: MODEL, max_tokens: 16000, output_config: { effort: "low" }, system: SYSTEM, messages: [{ role: "user", content: `TRANSCRIPT (minute:second then the words)\n${transcript}` }] }),
   signal: AbortSignal.timeout(180_000),
 });
 if (!res.ok) throw new Error(`model ${res.status}: ${(await res.text()).slice(0, 300)}`);
-const j = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-const outline = tidy((j.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("")).split("\n").map((l) => l.trim()).filter((l) => /^minute \d+:/i.test(l)).join("\n");
-if (!outline) throw new Error("no outline lines in the answer");
+const j = (await res.json()) as { content?: Array<{ type: string; text?: string }>; stop_reason?: string; usage?: unknown };
+// One line per "minute N:" whatever the model's line breaks; the transcript spells Katherine the way Zoom heard it.
+const outline = tidy((j.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("")).replace(/Catherine AI/g, "Katherine AI").split(/\s*(?=\bminute \d+:)/i).map((l) => l.trim()).filter((l) => /^minute \d+:/i.test(l)).join("\n");
+if (!outline) throw new Error(`no outline lines in the answer: stop ${j.stop_reason}, content ${JSON.stringify(j.content).slice(0, 600)}, usage ${JSON.stringify(j.usage)}`);
 console.log(outline);
 if (values.write) {
   const { error } = await db().from("events").update({ outline }).eq("id", ev.id);
