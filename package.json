@@ -19,7 +19,9 @@
     "simulated:remove": "doppler run -- node scripts/remove-simulated-name.ts",
     "import:legacy": "doppler run -- node scripts/import-legacy.ts",
     "ac:links": "doppler run -- node scripts/ac-links.ts",
-    "outline": "doppler run -p bestonlineclassroom -c prd -- node --no-warnings scripts/outline.ts"
+    "outline": "doppler run -p bestonlineclassroom -c prd -- node --no-warnings scripts/outline.ts",
+    "qa:transcript": "doppler run -p bestonlineclassroom -c prd -- node --no-warnings scripts/kaitlyn-qa-from-transcript.ts",
+    "kaitlyn:eval": "doppler run -p bestonlineclassroom -c prd -- node --no-warnings scripts/kaitlyn-eval.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
