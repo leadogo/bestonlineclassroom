@@ -33,6 +33,16 @@ export function knowledgeBlock(rows: KbRow[]): string {
   return parts.join("\n\n");
 }
 
+/** A line of hers the team fixed or removed (the kaitlyn_corrections view): the question as asked, what she said, and William's line when he gave one. */
+export type Correction = { asked: string; said: string; fixed: string | null };
+
+/** The block her prompt carries for the team's corrections, newest first: her line was wrong, William's is right. Empty when there are none. */
+export function correctionsBlock(rows: Correction[]): string {
+  if (!rows.length) return "";
+  const one = (s: string) => s.replace(/\s+/g, " ").trim();
+  return `CORRECTIONS (lines of yours the team fixed or removed, newest first. On a question like one of these, answer the way William did, in his words and his length, never the way you did. A removed line means say nothing like it.)\n${rows.map((r) => `Q: ${one(r.asked)}\n   you said: ${one(r.said)}\n   ${r.fixed ? `William: ${one(r.fixed)}` : "removed by the team"}`).join("\n")}`;
+}
+
 /** Whether the 9 AM digest is due: 9 o'clock in the team's zone and not yet sent today. `today` is the local date to record. */
 export function digestDue(now: Date, lastOn: string | null, tz = "America/Edmonton"): { due: boolean; today: string } {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false }).formatToParts(now);

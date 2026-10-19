@@ -44,6 +44,7 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
   const [markets, setMarkets] = useState<MarketCount[]>([]);
   const [kaitlyn, setKaitlyn] = useState<KPending[]>([]);
   const [autopilot, setAutopilot] = useState<"auto" | "on" | "off">(event.autopilot ?? "auto");
+  const [fixing, setFixing] = useState<number | null>(null);
   const [teach, setTeach] = useState("");
   const [taught, setTaught] = useState("");
   const [teamText, setTeamText] = useState("");
@@ -220,6 +221,23 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
     if (decision === "ghost") setPeople((p) => p.map((x) => (x.registrant_id === k.registrant_id ? { ...x, ghosted: true } : x)));
     const m = j.message;
     if (m) setList((l) => (l.some((x) => x.id === m.id) ? l : trimCrowd([...l, { key: `r${m.id}`, id: m.id, registrantId: null, name: m.author_name, role: "moderator" as const, body: m.body, at: Date.now(), reactions: {}, mentionNames: m.mention_names ?? [], kind: m.kind }], 300) as Item[]));
+    return true;
+  }
+  // Fixing one of Kaitlyn's lines (William, Oct 18): hers reads as deleted at once and his replacement shows as hers.
+  async function fix(m: Item, body: string): Promise<boolean> {
+    const res = await fetch("/api/mod", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: event.slug, date: session.date, action: "fix", id: m.id, body }) });
+    const j = (await res.json().catch(() => ({}))) as { error?: string; message?: Wire | null };
+    if (!res.ok) {
+      setError(j.error ?? "That didn't work.");
+      return false;
+    }
+    setError("");
+    setFixing(null);
+    const n = j.message;
+    setList((l) => {
+      const gone = l.map((x) => (x.id === m.id ? { ...x, deleted: true } : x));
+      return n && !gone.some((x) => x.id === n.id) ? (trimCrowd([...gone, { key: `r${n.id}`, id: n.id, registrantId: null, name: n.author_name, role: "moderator" as const, body: n.body, at: Date.now(), reactions: {}, mentionNames: n.mention_names ?? [], kind: n.kind }], 300) as Item[]) : gone;
+    });
     return true;
   }
   async function reply(e: React.FormEvent) {
@@ -459,6 +477,11 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
                         <button type="button" onClick={() => act({ action: "delete", id: m.id })} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink">
                           Delete
                         </button>
+                        {m.name === KAITLYN && (
+                          <button type="button" onClick={() => setFixing((f) => (f === m.id ? null : m.id!))} className={`min-h-8 rounded-full px-2 text-sm ${fixing === m.id ? "font-bold text-cta" : "text-muted hover:text-cta"}`} title="Delete her line, post your better one as her, and she learns it for next time">
+                            Fix
+                          </button>
+                        )}
                         {m.role === "attendee" && m.registrantId && (
                           confirmBlock === m.registrantId ? (
                             <>
@@ -491,6 +514,7 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
                       </div>
                     )}
                     {m.role === "attendee" && m.id !== undefined && kaitlyn.filter((k) => k.message_id === m.id).map((k) => <KaitlynRow key={k.id} k={k} onAct={kaitlynAct} />)}
+                    {fixing === m.id && m.id !== undefined && !m.deleted && <FixRow m={m} onFix={fix} onClose={() => setFixing(null)} />}
                   </div>
                 </div>
               ))}
@@ -661,6 +685,29 @@ function KaitlynRow({ k, onAct }: { k: KPending; onAct: (k: KPending, decision: 
           <button type="button" disabled={busy} onClick={() => go("react")} className="min-h-8 rounded-full border border-line bg-panel px-2.5 text-sm disabled:opacity-40" title="React as Kaitlyn">React {k.react}</button>
         )}
         <button type="button" disabled={busy} onClick={() => go("skip")} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink disabled:opacity-40">{k.action === "ask_william" ? "Dismiss" : "Skip"}</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Fix one of Kaitlyn's posted lines (William, Oct 18): her text in a box to replace, posted as her to the same person.
+ * Her line is deleted, the decision keeps both, and she reads the correction from the next message on.
+ */
+function FixRow({ m, onFix, onClose }: { m: Item; onFix: (m: Item, body: string) => Promise<boolean>; onClose: () => void }) {
+  const name = m.mentionNames?.[0];
+  const hers = name && m.body.startsWith(`@${name} `) ? m.body.slice(name.length + 2) : m.body;
+  const [draft, setDraft] = useState(hers);
+  const [busy, setBusy] = useState(false);
+  const same = draft.trim() === hers.trim();
+  const go = async () => { if (!draft.trim() || same) return; setBusy(true); await onFix(m, draft.trim()); setBusy(false); };
+  return (
+    <div className="mt-2 rounded-xl border border-dashed border-cta/60 bg-cta/5 p-2">
+      <p className="text-[12px] text-muted">Your better answer replaces hers{name ? ` to ${name}` : ""}, posted as Kaitlyn. She learns it for next time.</p>
+      <div className="mt-1.5 flex items-end gap-2">
+        <input value={draft} onChange={(e) => setDraft(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); go(); } if (e.key === "Escape") onClose(); }} autoFocus aria-label="The better answer, posted as Kaitlyn" className="min-h-9 min-w-0 flex-1 rounded-lg border border-line bg-panel px-2.5 text-[15px] focus:border-brand focus:outline-none" />
+        <button type="button" disabled={busy || !draft.trim() || same} onClick={go} className="min-h-9 shrink-0 rounded-lg bg-cta px-3 text-sm font-bold text-white disabled:opacity-40">Post as Kaitlyn</button>
+        <button type="button" onClick={onClose} className="min-h-9 shrink-0 px-2 text-sm text-muted hover:text-ink">Cancel</button>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { forgetEvent, getEvent } from "@/lib/events";
 import { blockAtEdge, edgeConfigured, unblockAtEdge } from "@/lib/edge-block";
 import { forgetBlockedIps } from "@/lib/ip";
 import { toggleReaction } from "@/lib/reactions";
-import { asAutopilot, asMode, postAsKaitlyn, reactAsKaitlyn } from "@/lib/kaitlyn";
+import { asAutopilot, asMode, KAITLYN, postAsKaitlyn, reactAsKaitlyn, withoutMention } from "@/lib/kaitlyn";
 import { postToChatChannel } from "@/lib/slack";
 import { withQuery } from "@/lib/params";
 import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
@@ -157,9 +157,39 @@ export async function POST(request: Request) {
     case "delete": {
       const id = Number(b.id);
       if (!id) return Response.json({ error: "Which message?" }, { status: 422 });
-      const { error } = await db().from("chat_messages").update({ deleted_at: now, updated_at: now }).eq("id", id).eq("event_id", s.event.id);
+      const { data, error } = await db().from("chat_messages").update({ deleted_at: now, updated_at: now }).eq("id", id).eq("event_id", s.event.id).select("author_name").maybeSingle();
       if (error) return Response.json({ error: "Could not delete." }, { status: 500 });
+      // Deleting one of Kaitlyn's lines marks her decision wrong: from the next message she reads it as a correction (William, Oct 18).
+      if (data?.author_name === KAITLYN) await db().from("kaitlyn_decisions").update({ status: "deleted", decided_by: member.id, decided_at: now }).eq("sent_message_id", id);
       return Response.json({ ok: true });
+    }
+    case "fix": {
+      // Fix one of Kaitlyn's posted lines (William, Oct 18): hers is deleted, his better one posts as her to the same person,
+      // the decision keeps both as a correction she reads from now on, and a knowledge row still open learns his answer.
+      const id = Number(b.id);
+      const body = String(b.body ?? "").trim().slice(0, 500);
+      if (!id) return Response.json({ error: "Which message?" }, { status: 422 });
+      if (!body) return Response.json({ error: "Type the better answer first." }, { status: 422 });
+      const msg = await db().from("chat_messages").select("id, author_name, mentions").eq("id", id).eq("event_id", s.event.id).maybeSingle();
+      if (msg.data?.author_name !== KAITLYN) return Response.json({ error: "Only Kaitlyn's lines can be fixed." }, { status: 422 });
+      const dec = await db().from("kaitlyn_decisions").select("id, registrant_id, kb_key").eq("sent_message_id", id).maybeSingle();
+      const rid = String(dec.data?.registrant_id ?? (msg.data.mentions as string[] | null)?.[0] ?? "");
+      const reg = rid ? await db().from("registrants").select("id, event_id, session_date, first_name, source").eq("id", rid).maybeSingle() : null;
+      if (!reg?.data) return Response.json({ error: "Who was that?" }, { status: 422 });
+      const first = reg.data.first_name as string;
+      const bare = withoutMention(body, first);
+      await db().from("chat_messages").update({ deleted_at: now, updated_at: now }).eq("id", id);
+      const offset = Math.max(0, Math.floor((Date.now() - s.session.start.getTime()) / 1000));
+      const full = `@${first} ${bare}`;
+      const mid = await postAsKaitlyn({ id: reg.data.id as string, event_id: reg.data.event_id as string, session_date: reg.data.session_date as string, first_name: first, source: String(reg.data.source ?? "") }, full, offset, "text");
+      if (!mid) return Response.json({ error: "Could not send." }, { status: 500 });
+      if (dec.data) {
+        await db().from("kaitlyn_decisions").update({ status: "fixed", improved_text: full, sent_message_id: mid, decided_by: member.id, decided_at: now }).eq("id", dec.data.id);
+        // An open knowledge row learns his line as the approved answer; an approved line is edited on the Knowledge page, never overwritten from the desk.
+        if (dec.data.kb_key) await db().from("kaitlyn_kb").update({ answer: bare, approved: bare, handling: "answer", answered_at: now, answered_by: member.id, approved_at: now, updated_at: now }).eq("event_id", s.event.id).eq("key", dec.data.kb_key).eq("handling", "open");
+      }
+      const out = await db().from("chat_messages").select(SELECT).eq("id", mid).maybeSingle();
+      return Response.json({ ok: true, message: out.data });
     }
     case "react": {
       const id = Number(b.id);

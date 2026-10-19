@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { digestDue, digestText, factsLost, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
+import { correctionsBlock, digestDue, digestText, factsLost, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
 
 const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, handling: "open", asked: 0, ...p });
 
@@ -32,6 +32,17 @@ test("knowledgeBlock: approved answers as Q/A, hand-to-William keys, skip keys, 
   assert.match(b, /KEYS YOU MAY NAME[^\n]*\n[^\n]*price[^\n]*legal-specifics[^\n]*live[^\n]*redfin-agents/);
   assert.doesNotMatch(b, /A: null/);
   assert.equal(knowledgeBlock([]), "");
+});
+
+test("correctionsBlock: the question, her line and William's; a removed line as a don't; nothing when there are none", () => {
+  const b = correctionsBlock([
+    { asked: "is it per lead or  monthly?", said: "You need to book a call because it depends on your market area", fixed: "per lead, and the call works out the number for your market" },
+    { asked: "do you do rentals?", said: "yep, rentals work too", fixed: null },
+  ]);
+  assert.match(b, /^CORRECTIONS \(/);
+  assert.match(b, /Q: is it per lead or monthly\?\n\s*you said: You need to book a call[^\n]*\n\s*William: per lead, and the call/);
+  assert.match(b, /Q: do you do rentals\?\n\s*you said: yep, rentals work too\n\s*removed by the team/);
+  assert.equal(correctionsBlock([]), "");
 });
 
 test("digestDue: 9 AM in Edmonton, once a day, across the clock change", () => {
