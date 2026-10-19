@@ -14,6 +14,7 @@ import { asksMarket, findMarkets, findStates, onlyStates, placeOf, rollup, type 
 import { EMOJIS, isEmoji } from "./moderation.ts";
 import { toggleReaction } from "./reactions.ts";
 import { postToChatChannel } from "./slack.ts";
+import { cuesFor, onScreen, type OnScreen } from "./transcript.ts";
 
 export { KAITLYN };
 export const MODES = KAITLYN_MODES;
@@ -70,6 +71,14 @@ VARIETY
   price: the FACTS sentence word for word, with at most a two-word lead-in that changes each time ("short answer:", "depends,", "honestly,", or nothing).
   FACTS say the call handles it (pricing levels, compliance specifics, setup for their market): "the call covers setup step by step" · "they go through that on the call for your market" · "William gets to that in a bit" (only when FACTS say the presentation covers it)
   thanks: "anytime" · "of course" · "💛" · "glad it helped" · "you got it" · "no problem at all"
+  he is about to cover it (only when COMING UP shows it): "he's getting to that in a sec" · "he covers that in a minute, hang on" · "coming up right now, keep watching" · "that's literally the next thing he shows"
+
+WHAT HE IS SAYING (the turn carries WILLIAM ON SCREEN, COMING UP and SEGMENT whenever the transcript of the presentation is known)
+- Read their line as a reply to him first. An answer to something he just asked the room ("type YES", "where are you from", "S, B or SB", "what do you use AI for") is a skip whatever the words are, with "answering him on screen" in why. Katherine's polls and the bare cities before the pitch are the usual cases of this.
+- When his words on screen answer the question outright, answer from them in your own words, one sentence, and count it as sure ("he just said the pixel reads the listing pages, not anyone's personal posts"). A product claim must still agree with FACTS and KNOWLEDGE, and a figure he said on screen never posts unless KNOWLEDGE allows it.
+- When COMING UP covers the question, do not answer it yourself: say he is about to, sure, category other, one of the "about to cover it" shapes. Only when it is in COMING UP; otherwise the usual rules.
+- "What was that called?", "what did he just say the budget was?", "can you repeat the three ingredients?": questions about what he just showed are answered from the screen, one sentence in your words, never a quote, same guard.
+- Nothing on screen changes the ghost rules or the are-you-AI rule.
 
 HARD RULES
 - Product facts come only from FACTS and KNOWLEDGE below. Not there, or you are not sure your answer is right → ask_william and "sure": false: nothing posts, a moderator answers from the desk. Never a filler reply ("that one's for the call", "the team can walk you through it") in place of an answer; "the call covers it" only when FACTS say the call is where that is handled.
@@ -111,12 +120,22 @@ export type Context = {
   recent: string[];
   market: string | null;
   katherine: boolean;
+  /** What William is saying on screen around their second (SPEC-kaitlyn-transcript.md); null or absent without a transcript. */
+  onScreen?: OnScreen | null;
 };
 
 export function userTurn(c: Context): string {
   const room = c.pitchMinute === null ? `minute ${c.minute} of the session` : c.minute >= c.pitchMinute ? `minute ${c.minute}, the pitch started at minute ${c.pitchMinute} (booking is open)` : `minute ${c.minute}, before the pitch (it starts at minute ${c.pitchMinute})`;
+  const screen = c.onScreen
+    ? [
+        `WILLIAM ON SCREEN (the last 90 seconds, ending as they typed): ${c.onScreen.said ? JSON.stringify(c.onScreen.said) : "(silence)"}`,
+        `COMING UP (the next 2 minutes): ${c.onScreen.next ? JSON.stringify(c.onScreen.next) : "(nothing yet)"}`,
+        ...(c.onScreen.segment ? [`SEGMENT: ${c.onScreen.segment}`] : []),
+      ]
+    : [];
   const lines = [
     `ROOM: ${room}.`,
+    ...screen,
     `MARKET DATA: ${c.market ?? "none (no place named)"}`,
     `KATHERINE AI: ${c.katherine ? "will answer this one (replay question)" : "not involved"}`,
     `PERSON: ${c.name}${c.priorOwn.length ? `, earlier tonight: ${c.priorOwn.map((s) => JSON.stringify(s)).join(" | ")}` : ", first message tonight"}`,
@@ -317,13 +336,13 @@ async function handoff(reg: Reg, message: { id: number; offset: number }, did: n
 }
 
 /** Called after an attendee message is stored. Decides, records the decision, and in assisted/auto (or under autopilot) acts on it. */
-export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null; autopilot?: Autopilot }; message: { id: number; body: string; offset: number; /** minutes since the session started by the server's clock; the client's offset is not trusted for autopilot */ sessionMinute?: number | null }; katherine: boolean }): Promise<void> {
+export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null; autopilot?: Autopilot; /** The transcript of the presentation (the room's captions) and the chapters, for WHAT HE IS SAYING. */ captions_url?: string | null; captions_offset_seconds?: number | string | null; chapters?: Array<{ at: number; label: string }>; video_seconds?: number | null }; message: { id: number; body: string; offset: number; /** minutes since the session started by the server's clock; the client's offset is not trusted for autopilot */ sessionMinute?: number | null }; katherine: boolean }): Promise<void> {
   const mode = a.event.kaitlyn_mode;
   if (mode === "off" || !KEY) return;
   try {
     const { reg, message } = a;
     const autopilot = a.event.autopilot ?? "auto";
-    const [recentQ, toThemQ, marketsQ, saidQ, kbQ, fixQ, seen] = await Promise.all([
+    const [recentQ, toThemQ, marketsQ, saidQ, kbQ, fixQ, seen, cues] = await Promise.all([
       db().from("chat_messages").select("id, registrant_id, author_name, role, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("visibility", "all").is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(40),
       db().from("chat_messages").select("id, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").contains("mentions", [reg.id]).order("id", { ascending: false }).limit(5),
       db().from("market_counts").select("name, clients, live"),
@@ -334,6 +353,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       // The team's Fix and Delete on her lines, newest first (migration 036): what she said and what William said instead.
       db().from("kaitlyn_corrections").select("asked, said, fixed").eq("event_id", reg.event_id).order("id", { ascending: false }).limit(40),
       lastDeskSeen(reg.event_id, reg.session_date),
+      cuesFor(a.event.captions_url),
     ]);
     const recent = (recentQ.data ?? []).reverse();
     const ctx: Context = {
@@ -347,6 +367,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       recent: recent.slice(-25).map((m) => `[${m.role === "attendee" ? "attendee" : m.author_name === KAITLYN ? "Kaitlyn" : "team"}] ${m.author_name}: ${String(m.body).slice(0, 160)}`),
       market: marketLine(message.body, ((marketsQ.data ?? []) as MarketCount[])),
       katherine: a.katherine && asksForReplay(message.body),
+      onScreen: onScreen(cues, a.event.chapters ?? [], message.offset, a.event.video_seconds ?? null, Number(a.event.captions_offset_seconds ?? 0) || 0),
     };
     // Autopilot: with nobody on the desk, shadow and assisted act as auto for this message; her unsure lines still wait (SPEC-kaitlyn-autopilot.md, C).
     const auto = engaged(autopilot, seen, a.message.sessionMinute ?? ctx.minute, Date.now());

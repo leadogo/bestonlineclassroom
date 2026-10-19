@@ -150,3 +150,15 @@ test("systemPrompt: the WRITING block, the are-you-AI rule, the KNOWLEDGE block 
   assert.ok(withFix.includes("CORRECTIONS (") && withFix.includes("William: sales only, no rentals"));
   assert.ok(withFix.indexOf("CORRECTIONS (") < withFix.indexOf("HOW THE TEAM HAS ANSWERED"));
 });
+
+test("userTurn and PERSONA: what William is saying on screen rides in the turn when the transcript is known, and the rules are in the prompt", () => {
+  const base = { minute: 2, pitchMinute: 75, name: "Sam", body: "yes", priorOwn: [], modReplies: [], said: [], recent: [], market: null, katherine: false };
+  const plain = userTurn(base);
+  assert.ok(!plain.includes("WILLIAM ON SCREEN") && !plain.includes("COMING UP"));
+  const t = userTurn({ ...base, onScreen: { said: "Type YES if that makes sense.", next: "Now the pixel.", segment: "Start (minute 2 of 139)" } });
+  assert.match(t, /ROOM: minute 2[^\n]*\nWILLIAM ON SCREEN \(the last 90 seconds, ending as they typed\): "Type YES if that makes sense\."\nCOMING UP \(the next 2 minutes\): "Now the pixel\."\nSEGMENT: Start \(minute 2 of 139\)\n/);
+  const quiet = userTurn({ ...base, onScreen: { said: "", next: "", segment: null } });
+  assert.ok(quiet.includes("(silence)") && quiet.includes("(nothing yet)") && !quiet.includes("SEGMENT:"));
+  const s = systemPrompt("PRICE: never in chat.");
+  assert.ok(s.includes("WHAT HE IS SAYING") && s.includes("answering him on screen") && s.includes("he's getting to that in a sec") && s.includes("never a quote"));
+});
