@@ -45,6 +45,8 @@ export type EventRow = {
   /** Autopilot (SPEC-kaitlyn-autopilot.md): auto | on | off; and the last local date the 9 AM knowledge digest went out. */
   autopilot: "auto" | "on" | "off";
   kaitlyn_digest_on: string | null;
+  /** Tonight's class by minute, for Kaitlyn (SPEC-kaitlyn-transcript.md, B): generated from the transcript, editable on Settings. */
+  outline: string | null;
   cta_prompt_minutes: number[];
   testimonials_from_seconds: number | null;
   replay_copy: Record<string, unknown>;

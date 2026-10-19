@@ -162,3 +162,10 @@ test("userTurn and PERSONA: what William is saying on screen rides in the turn w
   const s = systemPrompt("PRICE: never in chat.");
   assert.ok(s.includes("WHAT HE IS SAYING") && s.includes("answering him on screen") && s.includes("he's getting to that in a sec") && s.includes("never a quote"));
 });
+
+test("systemPrompt: tonight's class by minute rides in the prompt when the event has an outline", () => {
+  const s = systemPrompt("PRICE: never in chat.", [], [], "minute 5: who William is\nminute 75: the offer and how to book");
+  assert.ok(s.includes("TONIGHT'S CLASS (what William covers") && s.includes("minute 75: the offer and how to book"));
+  assert.ok(s.indexOf("TONIGHT'S CLASS (what William covers") < s.indexOf("HOW THE TEAM HAS ANSWERED"));
+  assert.ok(!systemPrompt("PRICE: never in chat.", [], [], "  ").includes("TONIGHT'S CLASS (what William covers"));
+});

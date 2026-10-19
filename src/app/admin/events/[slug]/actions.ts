@@ -61,6 +61,7 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
     cta_prompt_minutes: str(fd, "cta_prompt_minutes", 100).split(/[,\s]+/).map((x) => Number(x)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 120).slice(0, 12),
     testimonials_from_seconds: parseSeconds(str(fd, "testimonials_from")),
     chapters: parseChapters(str(fd, "chapters", 4000)),
+    outline: str(fd, "outline", 4000) || null,
     days: [0, 1, 2, 3, 4, 5, 6].filter((d) => fd.get(`day_${d}`) === "on"),
     host_tagline: str(fd, "host_tagline", 120) || null,
     captions_offset_seconds: Number(str(fd, "captions_offset", 10)) || 0,

@@ -102,6 +102,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             <Field label="Replay opens at" name="replay_opens_at" type="time" value={(event.replay_opens_at ?? "").slice(0, 5)} hint="Local time on the session's day. Blank = the moment the session ends. 20:00 keeps the room clean and matches the replay emails." />
           </div>
           <Field label="Replay chapters" name="chapters" rows={7} value={chaptersText(event.chapters ?? [])} hint="One per line: time then label, e.g. 1:15:00 Offer and next steps" />
+          <Field label="Class outline (for Kaitlyn)" name="outline" rows={8} value={event.outline ?? ""} hint="What William covers, by minute, one line each (e.g. minute 75: the offer, what is included, how to book). She says 'he gets to that around minute N' from this list. Generate the first draft from the transcript with npm run outline -- --event <slug> --write." />
             <div className="flex flex-col gap-2 rounded-xl border border-line p-4">
               <p className="text-sm font-bold">Switches (off by default; try them on Test run first)</p>
               <label className="flex items-center gap-2 text-sm">

@@ -18,7 +18,8 @@
     "upload:brand": "doppler run -- node scripts/upload-brand.ts",
     "simulated:remove": "doppler run -- node scripts/remove-simulated-name.ts",
     "import:legacy": "doppler run -- node scripts/import-legacy.ts",
-    "ac:links": "doppler run -- node scripts/ac-links.ts"
+    "ac:links": "doppler run -- node scripts/ac-links.ts",
+    "outline": "doppler run -p bestonlineclassroom -c prd -- node --no-warnings scripts/outline.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

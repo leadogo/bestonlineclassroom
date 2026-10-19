@@ -79,6 +79,7 @@ WHAT HE IS SAYING (the turn carries WILLIAM ON SCREEN, COMING UP and SEGMENT whe
 - When COMING UP covers the question, do not answer it yourself: say he is about to, sure, category other, one of the "about to cover it" shapes. Only when it is in COMING UP; otherwise the usual rules.
 - "What was that called?", "what did he just say the budget was?", "can you repeat the three ingredients?": questions about what he just showed are answered from the screen, one sentence in your words, never a quote, same guard.
 - Nothing on screen changes the ghost rules or the are-you-AI rule.
+- TONIGHT'S CLASS (when given) lists what he covers by minute. A question the class answers later gets "he gets to that around minute N" (sure, category other) instead of the call line or a guess; the minute comes from that list and nowhere else.
 
 HARD RULES
 - Product facts come only from FACTS and KNOWLEDGE below. Not there, or you are not sure your answer is right → ask_william and "sure": false: nothing posts, a moderator answers from the desk. Never a filler reply ("that one's for the call", "the team can walk you through it") in place of an answer; "the call covers it" only when FACTS say the call is where that is handled.
@@ -96,13 +97,14 @@ ACTIONS
 
 OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright, "why": ten words for the desk, "kb": {"key": one of KEYS YOU MAY NAME when the meaning matches, else a new lowercase-hyphen slug, "question": the question in plain words} on every reply, ghost or ask_william, null on skip}.`;
 
-/** The system prompt: persona and rules, the event's fact sheet, the knowledge table, the team's corrections of her lines, Kevin's real answers, and the lines the team ghosted. Cached by the API. */
-export function systemPrompt(facts: string | null, kb: KbRow[] = [], corrections: Correction[] = []): string {
+/** The system prompt: persona and rules, the event's fact sheet, the knowledge table, the team's corrections of her lines, tonight's class by minute, Kevin's real answers, and the lines the team ghosted. Cached by the API. */
+export function systemPrompt(facts: string | null, kb: KbRow[] = [], corrections: Correction[] = [], outline: string | null = null): string {
   const f = facts?.trim() ? facts.trim() : "(No fact sheet for this event: answer only about markets, booking, the replay email and tech trouble; everything else is ask_william.)";
   const qa = EXAMPLES.qa.map((x) => `[${x.m}m] Q: ${x.q}\n   A: ${x.a}`).join("\n");
   const k = knowledgeBlock(kb);
   const c = correctionsBlock(corrections);
-  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}${k ? `\n\n${k}` : ""}${c ? `\n\n${c}` : ""}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first: this is the voice to match, its length and plainness; the substance where FACTS agree)\n${qa}\n\nLINES THE TEAM GHOSTED ON THE SPOT\n${EXAMPLES.ghosts.map((g) => `- ${g}`).join("\n")}`;
+  const o = outline?.trim() ? `TONIGHT'S CLASS (what William covers, by minute of the recording; "he gets to that around minute N" comes only from here)\n${outline.trim()}` : "";
+  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}${k ? `\n\n${k}` : ""}${c ? `\n\n${c}` : ""}${o ? `\n\n${o}` : ""}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first: this is the voice to match, its length and plainness; the substance where FACTS agree)\n${qa}\n\nLINES THE TEAM GHOSTED ON THE SPOT\n${EXAMPLES.ghosts.map((g) => `- ${g}`).join("\n")}`;
 }
 
 export type Context = {
@@ -336,7 +338,7 @@ async function handoff(reg: Reg, message: { id: number; offset: number }, did: n
 }
 
 /** Called after an attendee message is stored. Decides, records the decision, and in assisted/auto (or under autopilot) acts on it. */
-export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null; autopilot?: Autopilot; /** The transcript of the presentation (the room's captions) and the chapters, for WHAT HE IS SAYING. */ captions_url?: string | null; captions_offset_seconds?: number | string | null; chapters?: Array<{ at: number; label: string }>; video_seconds?: number | null }; message: { id: number; body: string; offset: number; /** minutes since the session started by the server's clock; the client's offset is not trusted for autopilot */ sessionMinute?: number | null }; katherine: boolean }): Promise<void> {
+export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; kaitlyn_facts: string | null; cta_at_seconds: number | null; autopilot?: Autopilot; /** The transcript of the presentation (the room's captions) and the chapters, for WHAT HE IS SAYING. */ captions_url?: string | null; captions_offset_seconds?: number | string | null; chapters?: Array<{ at: number; label: string }>; video_seconds?: number | null; outline?: string | null }; message: { id: number; body: string; offset: number; /** minutes since the session started by the server's clock; the client's offset is not trusted for autopilot */ sessionMinute?: number | null }; katherine: boolean }): Promise<void> {
   const mode = a.event.kaitlyn_mode;
   if (mode === "off" || !KEY) return;
   try {
@@ -372,7 +374,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     // Autopilot: with nobody on the desk, shadow and assisted act as auto for this message; her unsure lines still wait (SPEC-kaitlyn-autopilot.md, C).
     const auto = engaged(autopilot, seen, a.message.sessionMinute ?? ctx.minute, Date.now());
     const eff: Mode = auto && mode !== "auto" ? "auto" : mode;
-    const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[], (fixQ.data ?? []) as Correction[]), userTurn(ctx));
+    const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[], (fixQ.data ?? []) as Correction[], a.event.outline ?? null), userTurn(ctx));
     if (!out) return;
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
     if (d.kb) await touchKb(reg.event_id, d.kb);
