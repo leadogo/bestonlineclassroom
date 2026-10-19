@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { correctionsBlock, digestDue, digestText, factsLost, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
 
-const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, handling: "open", asked: 0, ...p });
+const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, approved_at: p.approved ? "2026-10-17T00:00:00Z" : null, handling: "open", asked: 0, ...p });
 
 test("kbKey and kbQuestion: a lowercase slug of 3 to 40 chars, a one-line question, or nothing", () => {
   assert.equal(kbKey("price"), "price");
@@ -32,6 +32,11 @@ test("knowledgeBlock: approved answers as Q/A, hand-to-William keys, skip keys, 
   assert.match(b, /KEYS YOU MAY NAME[^\n]*\n[^\n]*price[^\n]*legal-specifics[^\n]*live[^\n]*redfin-agents/);
   assert.doesNotMatch(b, /A: null/);
   assert.equal(knowledgeBlock([]), "");
+  // A rewrite waiting for his OK (approved text, no approved_at) is not in her answers, only in the keys she may name.
+  const waiting = knowledgeBlock([row({ key: "rentals", question: "Do you do rentals?", answer: "no", approved: "Sales only, no rentals.", approved_at: null, handling: "answer", asked: 2 })]);
+  assert.doesNotMatch(waiting, /A: Sales only/);
+  assert.match(waiting, /\(none yet\)/);
+  assert.match(waiting, /KEYS YOU MAY NAME[^\n]*\nrentals/);
 });
 
 test("correctionsBlock: the question, her line and William's; a removed line as a don't; nothing when there are none", () => {

@@ -3,7 +3,7 @@
 // kept William's facts, and the line she posts when she does not know and nobody is on the desk.
 
 export type KbHandling = "open" | "answer" | "me" | "ignore";
-export type KbRow = { key: string; question: string; answer: string | null; approved: string | null; handling: KbHandling; asked: number };
+export type KbRow = { key: string; question: string; answer: string | null; approved: string | null; /** When William approved the line; a rewrite waiting for his OK has `approved` text and no date, and stays out of her prompt. */ approved_at: string | null; handling: KbHandling; asked: number };
 
 /** A slug: lowercase letters, digits and hyphens, 3 to 40 chars, no hyphen at either end. */
 export const KB_KEY_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
@@ -21,7 +21,8 @@ export function kbQuestion(v: unknown): string {
 /** The block her system prompt carries: approved answers as Q/A, the keys William answers himself, the keys she skips, and every key she may name. Empty when the table is. */
 export function knowledgeBlock(rows: KbRow[]): string {
   if (!rows.length) return "";
-  const answers = rows.filter((r) => r.handling === "answer" && r.approved?.trim());
+  // Only lines he approved: a rewrite still waiting for his OK on the Knowledge page (approved text, no date) is not hers yet.
+  const answers = rows.filter((r) => r.handling === "answer" && r.approved?.trim() && r.approved_at);
   const me = rows.filter((r) => r.handling === "me");
   const skip = rows.filter((r) => r.handling === "ignore");
   const parts = [

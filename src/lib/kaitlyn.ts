@@ -351,7 +351,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       // Her own lines tonight, drafts included (in shadow nothing posts, and the drafts were still her shapes).
       db().from("kaitlyn_decisions").select("text").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("action", "reply").neq("text", "").order("id", { ascending: false }).limit(12),
       // Ordered by key: the KNOWLEDGE block only changes when the knowledge does, so the API's prompt cache keeps hitting.
-      db().from("kaitlyn_kb").select("key, question, answer, approved, handling, asked").eq("event_id", reg.event_id).order("key"),
+      db().from("kaitlyn_kb").select("key, question, answer, approved, approved_at, handling, asked").eq("event_id", reg.event_id).order("key"),
       // The team's Fix and Delete on her lines, newest first (migration 036): what she said and what William said instead.
       db().from("kaitlyn_corrections").select("asked, said, fixed").eq("event_id", reg.event_id).order("id", { ascending: false }).limit(40),
       lastDeskSeen(reg.event_id, reg.session_date),

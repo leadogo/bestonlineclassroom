@@ -141,7 +141,7 @@ test("systemPrompt: the WRITING block, the are-you-AI rule, the KNOWLEDGE block 
   assert.ok(plain.includes("WRITING") && plain.includes("no dashes") && plain.includes("Never say whether you are AI or human"));
   assert.ok(!plain.includes("Katherine AI answers replay questions") && !plain.includes("KNOWLEDGE (William's approved answers"));
   assert.ok(plain.includes('"kb"'));
-  const withKb = systemPrompt("PRICE: never in chat.", [{ key: "price", question: "How much does it cost?", answer: null, approved: "It depends on your market, so that's what the call is for.", handling: "answer", asked: 24 }]);
+  const withKb = systemPrompt("PRICE: never in chat.", [{ key: "price", question: "How much does it cost?", answer: null, approved: "It depends on your market, so that's what the call is for.", approved_at: "2026-10-17T00:00:00Z", handling: "answer", asked: 24 }]);
   assert.ok(withKb.includes("KNOWLEDGE (William's approved answers") && withKb.includes("A: It depends on your market"));
   assert.ok(withKb.indexOf("PRICE: never in chat.") < withKb.indexOf("KNOWLEDGE (William's approved answers"));
   // The team's corrections (Fix and Delete on her lines, Oct 18) sit after the knowledge and before Kevin's replies; none when there are none.
