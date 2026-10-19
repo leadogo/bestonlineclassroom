@@ -4,9 +4,10 @@ import { btn, btnQuiet, Empty, PageHeader } from "../ui";
 import { assignedEventIds, getTeamMember } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { factsLost, type KbHandling } from "@/lib/kaitlyn-kb";
+import { cuesFor, windowAt } from "@/lib/transcript";
 
 type Row = { key: string; question: string; answer: string | null; approved: string | null; handling: KbHandling; asked: number; last_asked_at: string | null; answered_at: string | null; approved_at: string | null };
-type Ask = { kb_key: string; message_id: number; registrant_id: string; session_date: string; text: string; created_at: string; body: string; name: string; team: string | null };
+type Ask = { kb_key: string; message_id: number; registrant_id: string; session_date: string; text: string; created_at: string; body: string; name: string; team: string | null; /** What William was saying on screen when they typed (the last 20 s). */ screen: string | null };
 
 const when = (iso: string | null, tz: string) => (iso ? new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso)) : "");
 const HANDLING: Record<KbHandling, string> = { open: "open", answer: "she answers it herself", me: "always handed to you", ignore: "ignored, not a question" };
@@ -20,9 +21,9 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
   const me = (await getTeamMember())!;
   const { event: slugParam, q } = await searchParams;
   const ids = await assignedEventIds(me);
-  let evq = db().from("events").select("id, slug, title, timezone").order("created_at");
+  let evq = db().from("events").select("id, slug, title, timezone, captions_url, captions_offset_seconds").order("created_at");
   if (ids) evq = evq.in("id", ids);
-  const events = ((await evq).data ?? []) as Array<{ id: string; slug: string; title: string; timezone: string }>;
+  const events = ((await evq).data ?? []) as Array<{ id: string; slug: string; title: string; timezone: string; captions_url: string | null; captions_offset_seconds: number | string | null }>;
   const real = events.filter((e) => !e.slug.startsWith("test"));
   const event = events.find((e) => e.slug === slugParam) ?? real[0] ?? events[0];
   if (!event) return <Empty>No webinars yet.</Empty>;
@@ -45,15 +46,19 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
   const mids = picked.map((d) => d.message_id as number);
   const rids = [...new Set(picked.map((d) => d.registrant_id as string))].slice(0, 100);
   const firstMid = mids.length ? Math.min(...mids) : 0;
-  const [msgs, replies] = await Promise.all([
-    mids.length ? db().from("chat_messages").select("id, body, author_name").in("id", mids) : Promise.resolve({ data: [] as Array<{ id: number; body: string; author_name: string }> }),
+  const [msgs, replies, cues] = await Promise.all([
+    mids.length ? db().from("chat_messages").select("id, body, author_name, offset_seconds").in("id", mids) : Promise.resolve({ data: [] as Array<{ id: number; body: string; author_name: string; offset_seconds: number }> }),
     rids.length ? db().from("chat_messages").select("id, body, session_date, mentions, created_at").eq("event_id", event.id).eq("role", "moderator").overlaps("mentions", rids).gt("id", firstMid).order("id").limit(500) : Promise.resolve({ data: [] as Array<{ id: number; body: string; session_date: string; mentions: string[]; created_at: string }> }),
+    mids.length ? cuesFor(event.captions_url) : Promise.resolve([]),
   ]);
+  const shift = Number(event.captions_offset_seconds ?? 0) || 0;
   const msgById = new Map((msgs.data ?? []).map((m) => [m.id as number, m]));
   const asks: Ask[] = picked.map((d) => {
     const m = msgById.get(d.message_id as number);
     const reply = (replies.data ?? []).find((r) => r.session_date === d.session_date && (r.mentions as string[]).includes(d.registrant_id as string) && (r.id as number) > (d.message_id as number) && new Date(r.created_at as string).getTime() - new Date(d.created_at as string).getTime() < 15 * 60_000);
-    return { kb_key: d.kb_key as string, message_id: d.message_id as number, registrant_id: d.registrant_id as string, session_date: d.session_date as string, text: String(d.text ?? ""), created_at: d.created_at as string, body: String(m?.body ?? ""), name: String(m?.author_name ?? "someone"), team: reply ? String(reply.body) : null };
+    // What William was saying on screen when they typed (the last 20 s), so the answer is written with the context (SPEC-kaitlyn-transcript.md, C).
+    const screen = m && cues.length ? windowAt(cues, (Number(m.offset_seconds) || 0) - shift, 20, 0).said.slice(0, 240) || null : null;
+    return { kb_key: d.kb_key as string, message_id: d.message_id as number, registrant_id: d.registrant_id as string, session_date: d.session_date as string, text: String(d.text ?? ""), created_at: d.created_at as string, body: String(m?.body ?? ""), name: String(m?.author_name ?? "someone"), team: reply ? String(reply.body) : null, screen };
   });
   const asksFor = (key: string) => asks.filter((a) => a.kb_key === key);
 
@@ -66,6 +71,7 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
           <li key={a.message_id} className="rounded-lg bg-room px-3 py-2">
             <span className="font-bold">{a.name}</span> <span className="text-muted">{when(a.created_at, tz)}</span>
             <div className="break-words">{a.body}</div>
+            {a.screen && <div className="mt-1 text-xs italic text-muted" title="What William was saying on screen when they typed">on screen: {a.screen}</div>}
             {a.text && <div className="mt-1 text-xs text-cta">her draft: {a.text}</div>}
             {a.team && <div className="mt-1 text-xs text-brand">team replied: {a.team}</div>}
           </li>

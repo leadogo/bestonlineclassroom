@@ -19,7 +19,7 @@ type Stats = { registered: number; joined: number; in_room: number; peak: number
 type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
 type Mentionable = { id: string; name: string; sub?: string };
 /** One of Kaitlyn's open suggestions (kaitlyn_decisions, status pending): a draft to send, a ghost or a reaction to approve, or a line she wants a human on. */
-type KPending = { id: number; message_id: number; registrant_id: string; action: "reply" | "skip" | "ghost" | "ask_william"; category: string; text: string; react: string; why: string };
+type KPending = { id: number; message_id: number; registrant_id: string; action: "reply" | "skip" | "ghost" | "ask_william"; category: string; text: string; react: string; why: string; /** What William was saying on screen when they typed (the last 20 s), when the event has a transcript. */ screen?: string | null };
 type KDecision = "send" | "skip" | "ghost" | "react";
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean; belief?: boolean; question?: boolean; ghostReply?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
@@ -671,6 +671,7 @@ function KaitlynRow({ k, onAct }: { k: KPending; onAct: (k: KPending, decision: 
         <span className="rounded bg-panel px-1.5">{k.category}</span>
         <span className="min-w-0 truncate" title={k.why}>{k.why}</span>
       </div>
+      {k.screen && <p className="mt-1 text-[12px] italic text-muted" title="What William was saying on screen when they typed">on screen: {k.screen}</p>}
       {editable ? (
         <div className="mt-1.5 flex items-end gap-2">
           <input value={draft} onChange={(e) => setDraft(e.target.value.slice(0, 500))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (draft.trim()) go("send", draft); } }} aria-label="Kaitlyn's draft" placeholder={k.action === "ask_william" ? "Your answer, posted as Kaitlyn" : undefined} className="min-h-9 min-w-0 flex-1 rounded-lg border border-line bg-panel px-2.5 text-[15px] focus:border-brand focus:outline-none" />

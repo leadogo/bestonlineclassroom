@@ -9,6 +9,7 @@ import { asAutopilot, asMode, KAITLYN, postAsKaitlyn, reactAsKaitlyn, withoutMen
 import { postToChatChannel } from "@/lib/slack";
 import { withQuery } from "@/lib/params";
 import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
+import { cuesFor, windowAt } from "@/lib/transcript";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,13 @@ export async function GET(request: Request) {
   // Kaitlyn's open suggestions for this session: drafts, ghost and react proposals, and the lines she wants a human on.
   const kmode = asMode(s.event.kaitlyn_mode);
   const kp = kmode === "off" ? [] : ((await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, action, category, text, react, why, created_at").eq("event_id", s.event.id).eq("session_date", s.session.date).eq("status", "pending").order("id").limit(100)).data ?? []);
+  // What William was saying on screen when each of those was typed (the last 20 s), so the desk answers with the context (SPEC-kaitlyn-transcript.md, C).
+  if (kp.length && s.event.captions_url) {
+    const [cues, offsets] = await Promise.all([cuesFor(s.event.captions_url), db().from("chat_messages").select("id, offset_seconds").in("id", kp.map((k) => k.message_id as number))]);
+    const shift = Number(s.event.captions_offset_seconds ?? 0) || 0;
+    const at = new Map((offsets.data ?? []).map((m) => [m.id as number, Number(m.offset_seconds) || 0]));
+    for (const k of kp as Array<Record<string, unknown>>) k.screen = cues.length && at.has(k.message_id as number) ? windowAt(cues, at.get(k.message_id as number)! - shift, 20, 0).said.slice(0, 240) || null : null;
+  }
   return Response.json({ new: news, updated, people, team, desk, stats, now: new Date().toISOString(), edge: edgeConfigured(), session_start: s.session.start.getTime(), session_date: s.session.date, booking_href: bookingLink(s.event.cta_href), kaitlyn: { mode: kmode, pending: kp, autopilot: asAutopilot(s.event.autopilot) } }, { headers: { "cache-control": "no-store" } });
 }
 
