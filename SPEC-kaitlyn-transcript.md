@@ -2,7 +2,8 @@
 
 Module of [SPEC.md](SPEC.md). Depends on: Kaitlyn as shipped Oct 11 to 18 (`src/lib/kaitlyn.ts`), `room` (the captions
 track: `events.captions_url`, `src/lib/captions.ts`), `kaitlyn-knowledge` (the table her answers live in). Proposed
-Oct 18 2026 late. Nothing here changes until William approves this spec.
+Oct 18 2026 late; William approved it the same night ("please /build your proposed /spec") and A to E were built and
+deployed Oct 19 early (tasks/todo.md has the commits; `docs/kaitlyn-eval.md` the before/after).
 
 ## Objective
 William, Oct 18: "she needs to have context on what is being said on the webinar player. Sometimes people ask
