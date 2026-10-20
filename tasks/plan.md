@@ -45,7 +45,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 - [ ] Tests, lint, build clean; eval after: ghost recall ≥ 80%, 0 false ghosts, answer/market/skip not below the Oct 19 run.
 
 ### Phase 3: the room, the roll-call, the audit
-- [ ] T9 C: reply-to-you scroll + flash in the chat; the pill when the chat is hidden or on the People tab.
+- [x] T9 C: reply-to-you scroll + flash in the chat; the pill when the chat is hidden or on the People tab.
 - [ ] T10 D + A5: the roll-call rule with its rate; the KB rows (SQL, recorded here); Katherine's minute-2 line on ailg-r and test-run.
 - [ ] T11 E1 + E2: `scripts/kaitlyn-audit.ts`; two digest lines; dry run against production.
 

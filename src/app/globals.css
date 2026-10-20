@@ -46,6 +46,17 @@ video::-webkit-media-controls-panel {
   }
 }
 
+/* A reply addressed to this viewer (SPEC-kaitlyn-ghosts.md, C): the row glows once so it is not missed. */
+@media (prefers-reduced-motion: no-preference) {
+  .reply-flash {
+    animation: reply-flash 2.4s ease-out 1;
+  }
+}
+@keyframes reply-flash {
+  0%, 30% { background-color: rgba(47, 124, 246, 0.45); }
+  100% { background-color: rgba(47, 124, 246, 0.1); }
+}
+
 /* The one moving thing in the admin: a webinar that is live right now. */
 @media (prefers-reduced-motion: no-preference) {
   .live-dot {

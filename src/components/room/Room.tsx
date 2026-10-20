@@ -3,7 +3,7 @@
 // Countdown until startsAt (only the countdown: no chat, no people), live until endsAt, then the end URL. Three
 // shapes: phone upright (video on top, chat below), phone sideways and desktop (video left, chat right). Full
 // screen: the real thing where the browser allows it, otherwise our own (the room fills the screen, chat hidden).
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SimulatedRow } from "@/lib/chat";
 import type { RoomProps } from "@/lib/room-props";
 import { useClientValue } from "@/lib/use-client-value";
@@ -23,6 +23,21 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
   const [ctaClosed, setCtaClosed] = useState(false);
   const [full, setFull] = useState(false);
   const [chatHidden, setChatHidden] = useState(false);
+  // A reply to this viewer while the chat is hidden or behind the People tab (SPEC-kaitlyn-ghosts.md, C): a pill over the video for 30 s; a tap brings the row into view.
+  const [reply, setReply] = useState<{ id: number; name: string } | null>(null);
+  const [show, setShow] = useState<{ id: number } | null>(null);
+  const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onReplyToMe = useCallback((m: { id: number; name: string }) => {
+    setReply(m);
+    if (replyTimer.current) clearTimeout(replyTimer.current);
+    replyTimer.current = setTimeout(() => setReply(null), 30_000);
+  }, []);
+  const openReply = () => {
+    if (!reply) return;
+    setChatHidden(false);
+    setShow({ id: reply.id });
+    setReply(null);
+  };
   const [cc, setCc] = useState(false);
   const [card, setCard] = useState(false);
   const cardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,6 +148,11 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
                 </div>
               </div>
             )}
+            {live && reply && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); openReply(); }} className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white shadow-lg rise">
+                {reply.name.split(" ")[0]} replied to you · {chatHidden ? "Show chat" : "See it"}
+              </button>
+            )}
             {live && (
               <button type="button" onClick={(e) => { e.stopPropagation(); toggleFull(); }} className="absolute bottom-2 right-2 z-10 grid h-10 w-10 place-items-center rounded-lg bg-black/55 text-white/90 hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70" aria-label={full ? "Leave full screen" : "Full screen"}>
                 {full ? (
@@ -152,7 +172,7 @@ export function Room(p: RoomProps & { simulated: SimulatedRow[] }) {
           </div>
           {showCta && !chatHidden && <div className="lg:hidden landscape-phone:hidden">{banner(false)}</div>}
         </div>
-        {live && !chatHidden && <Panel token={p.token} registrantId={p.registrantId} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} crowd={p.crowd} ctaHref={p.cta?.href ?? null} ctaLabel={p.cta?.label ?? "Book your call"} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} onRemoved={() => setRemoved(true)} />}
+        {live && <Panel token={p.token} registrantId={p.registrantId} firstName={p.firstName} hostName={p.hostName} simulatedNames={p.simulatedNames} crowd={p.crowd} ctaHref={p.cta?.href ?? null} ctaLabel={p.cta?.label ?? "Book your call"} simulated={p.simulated} live={live} expected={expected} onCount={setWatching} onRemoved={() => setRemoved(true)} hidden={chatHidden} onReplyToMe={onReplyToMe} show={show} />}
       </div>
     </div>
   );

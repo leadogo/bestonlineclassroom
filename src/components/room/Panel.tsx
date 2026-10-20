@@ -7,12 +7,23 @@ import { ChatPanel, type Mentionable } from "./ChatPanel";
 import { PeoplePanel } from "./PeoplePanel";
 import { crowdNames, crowdShare } from "@/lib/crowd";
 
-export function Panel({ token, registrantId, firstName, hostName, simulatedNames, crowd, ctaHref, ctaLabel, simulated, live, expected, onCount, onRemoved }: { token: string; registrantId: string; firstName: string; hostName: string; simulatedNames: string[]; crowd: { curve: boolean; pitchAt: number | null; seconds: number }; ctaHref: string | null; ctaLabel: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; onCount: (n: number) => void; onRemoved: () => void }) {
+/** `hidden`: the viewer hid the chat; the panel stays mounted so the poll runs and a reply to them can raise the room's pill (SPEC-kaitlyn-ghosts.md, C). `show`: the room asks for one row to be brought into view. */
+export function Panel({ token, registrantId, firstName, hostName, simulatedNames, crowd, ctaHref, ctaLabel, simulated, live, expected, onCount, onRemoved, hidden = false, onReplyToMe, show = null }: { token: string; registrantId: string; firstName: string; hostName: string; simulatedNames: string[]; crowd: { curve: boolean; pitchAt: number | null; seconds: number }; ctaHref: string | null; ctaLabel: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; onCount: (n: number) => void; onRemoved: () => void; hidden?: boolean; onReplyToMe?: (m: { id: number; name: string }) => void; show?: { id: number } | null }) {
   const [tab, setTab] = useState<"chat" | "people">("chat");
   const [unread, setUnread] = useState(0);
   const [real, setReal] = useState<string[]>([]);
   const [people, setPeople] = useState<Mentionable[]>([]);
   const [mods, setMods] = useState<string[]>([]);
+  // The room's pill was tapped: the chat tab, and the reply in view.
+  useEffect(() => {
+    if (!show) return;
+    const id = requestAnimationFrame(() => {
+      setTab("chat");
+      setUnread(0);
+      requestAnimationFrame(() => document.getElementById(`m${show.id}`)?.scrollIntoView({ block: "center" }));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [show]);
 
   useEffect(() => {
     if (!live) return;
@@ -49,7 +60,7 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
   useEffect(() => onCount(count), [count, onCount]);
 
   return (
-    <aside className="flex min-h-0 flex-1 flex-col bg-room lg:w-[380px] lg:flex-none lg:border-l lg:border-line landscape-phone:w-[40%] landscape-phone:flex-none landscape-phone:border-l landscape-phone:border-line">
+    <aside hidden={hidden} className="flex min-h-0 flex-1 flex-col bg-room lg:w-[380px] lg:flex-none lg:border-l lg:border-line landscape-phone:w-[40%] landscape-phone:flex-none landscape-phone:border-l landscape-phone:border-line">
       <div className="flex border-b border-line">
         <Tab active={tab === "chat"} onClick={() => { setTab("chat"); setUnread(0); }}>
           Chat
@@ -61,7 +72,7 @@ export function Panel({ token, registrantId, firstName, hostName, simulatedNames
         </Tab>
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "chat"}>
-        <ChatPanel token={token} registrantId={registrantId} people={people} onRemoved={onRemoved} ctaHref={ctaHref} ctaLabel={ctaLabel} simulated={simulated} live={live} expected={expected} visible={tab === "chat"} onUnread={() => setUnread((n) => n + 1)} />
+        <ChatPanel token={token} registrantId={registrantId} people={people} onRemoved={onRemoved} ctaHref={ctaHref} ctaLabel={ctaLabel} simulated={simulated} live={live} expected={expected} visible={tab === "chat" && !hidden} onUnread={() => setUnread((n) => n + 1)} onReplyToMe={(m) => { if (hidden || tab !== "chat") onReplyToMe?.(m); }} />
       </div>
       <div className="min-h-0 flex-1" hidden={tab !== "people"}>
         <PeoplePanel hostName={hostName} moderators={mods} you={firstName} realNames={realNames} simulatedNames={shownSim} />

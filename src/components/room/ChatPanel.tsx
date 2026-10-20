@@ -13,13 +13,20 @@ export type Mentionable = { id: string; name: string; sub?: string };
 
 const POLL_MS = 3000;
 
-export function ChatPanel({ token, registrantId, simulated, live, expected, visible, onUnread, people, onRemoved, ctaHref, ctaLabel }: { token: string; registrantId: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void; people: Mentionable[]; ctaHref: string | null; ctaLabel: string; onRemoved: () => void }) {
+/** `onReplyToMe`: a team line addressed to this viewer arrived (SPEC-kaitlyn-ghosts.md, C); the room shows a pill when the chat is not in view. */
+export function ChatPanel({ token, registrantId, simulated, live, expected, visible, onUnread, onReplyToMe, people, onRemoved, ctaHref, ctaLabel }: { token: string; registrantId: string; simulated: SimulatedRow[]; live: boolean; expected: () => number; visible: boolean; onUnread: () => void; onReplyToMe?: (m: { id: number; name: string }) => void; people: Mentionable[]; ctaHref: string | null; ctaLabel: string; onRemoved: () => void }) {
   const [list, setList] = useState<Item[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [pending, setPending] = useState(0);
+  // A reply to this viewer flashes once and, when they had scrolled up, the list jumps to it (C).
+  const [flash, setFlash] = useState<number | null>(null);
+  // The poll keeps running with the values from mount, so what it needs live lives in refs.
+  const atBottomRef = useRef(true);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
   const [mine, setMine] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Mentionable[]>([]);
   // A phone number in the box: ask whether they want a call before anything posts (phase 6.4).
@@ -38,11 +45,13 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
     (items: Item[]) => {
       if (items.length === 0) return;
       setList((l) => trimList([...l, ...items]) as Item[]);
-      if (!visible) items.forEach(onUnread);
-      else if (!atBottom) setPending((n) => n + items.length);
+      if (!visibleRef.current) items.forEach(onUnread);
+      else if (!atBottomRef.current) setPending((n) => n + items.length);
     },
-    [visible, atBottom, onUnread],
+    [onUnread],
   );
+  // Scroll the list to one row (a reply to this viewer) once it has rendered.
+  const showRow = (id: number) => requestAnimationFrame(() => document.getElementById(`m${id}`)?.scrollIntoView({ block: "center" }));
 
   // The simulated crowd: the whole history at once on open, then every second what the video's clock has reached.
   useEffect(() => {
@@ -92,6 +101,15 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
             if (j.updated.length) setList((l) => mergeUpdates(l, j.updated) as Item[]);
             if (cursor.current.after && fresh.length && list.length === 0) setList((l) => trimList([...l, ...fresh]) as Item[]);
             else append(fresh.filter((f) => !list.some((x) => x.id === f.id)));
+            // A team line addressed to this viewer: flash it, jump to it if they had scrolled up, and tell the room (C).
+            const toMe = fresh.filter((f) => f.mentionsMe && f.role === "moderator" && f.id !== undefined);
+            if (toMe.length) {
+              const last = toMe[toMe.length - 1];
+              setFlash(last.id!);
+              setTimeout(() => setFlash((f) => (f === last.id ? null : f)), 2_500);
+              if (visibleRef.current && !atBottomRef.current) showRow(last.id!);
+              onReplyToMe?.({ id: last.id!, name: last.name });
+            }
           }
         } catch {
           /* next poll */
@@ -118,6 +136,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     setAtBottom(near);
+    atBottomRef.current = near;
     if (near) setPending(0);
   }
 
@@ -196,6 +215,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
       setText("");
       setPicked([]);
       setAtBottom(true);
+      atBottomRef.current = true;
       setList((l) => trimList([...l, { ...toItem(m), at: Date.now(), mine: true }]) as Item[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Please try again.");
@@ -207,11 +227,11 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
       <div ref={scroller} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {!live && <p className="px-1 py-6 text-center text-base text-muted">The chat opens when the session starts.</p>}
         {list.map((m) => (
-          <Message key={m.key} m={m} mine={mine} onReact={react} onReactLocal={reactLocal} onReply={replyTo} ctaHref={ctaHref} ctaLabel={ctaLabel} token={token} />
+          <Message key={m.key} m={m} flash={flash !== null && m.id === flash} mine={mine} onReact={react} onReactLocal={reactLocal} onReply={replyTo} ctaHref={ctaHref} ctaLabel={ctaLabel} token={token} />
         ))}
       </div>
       {pending > 0 && !atBottom && (
-        <button type="button" onClick={() => { setAtBottom(true); scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }} className="mx-auto -mt-10 mb-2 rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow">
+        <button type="button" onClick={() => { setAtBottom(true); atBottomRef.current = true; scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }} className="mx-auto -mt-10 mb-2 rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white shadow">
           {pending} new message{pending > 1 ? "s" : ""} ↓
         </button>
       )}
@@ -270,14 +290,14 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
   );
 }
 
-function Message({ m, mine, onReact, onReactLocal, onReply, ctaHref, ctaLabel, token }: { m: Item; mine: Set<string>; onReact: (id: number, emoji: string) => void; onReactLocal: (key: string, emoji: string) => void; onReply: (m: Item) => void; ctaHref: string | null; ctaLabel: string; token: string }) {
+function Message({ m, flash, mine, onReact, onReactLocal, onReply, ctaHref, ctaLabel, token }: { m: Item; flash?: boolean; mine: Set<string>; onReact: (id: number, emoji: string) => void; onReactLocal: (key: string, emoji: string) => void; onReply: (m: Item) => void; ctaHref: string | null; ctaLabel: string; token: string }) {
   const time = new Date(m.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const entries = Object.entries(m.reactions).filter(([, n]) => n > 0);
   const real = m.id !== undefined;
   const pressed = (e: string) => (real ? mine.has(`${m.id}:${e}`) : (m.local?.[e] ?? 0) === 1);
   const tap = (e: string) => (real ? onReact(m.id!, e) : onReactLocal(m.key, e));
   return (
-    <div className={`group flex gap-2.5 py-1.5 ${m.mentionsMe ? "-mx-3 bg-brand/10 px-3" : ""}`}>
+    <div id={m.id !== undefined ? `m${m.id}` : undefined} className={`group flex gap-2.5 py-1.5 ${m.mentionsMe ? "-mx-3 bg-brand/10 px-3" : ""} ${flash ? "reply-flash" : ""}`}>
       <Avatar name={m.name} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
