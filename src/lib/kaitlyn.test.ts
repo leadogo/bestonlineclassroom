@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, marketLine, parseDecision, PER_PERSON_MS, postsItself, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
@@ -92,7 +92,7 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   // The ghosts come from the view now (B3), per call, so the prompt only carries them when given.
   assert.ok(systemPrompt(null, [], [], null, [{ line: "Is this a recording lol", context: null, reason: null }]).includes("LINES THE TEAM GHOSTED (the line that got the person ghosted by hand"));
   assert.ok(systemPrompt(null).includes("No fact sheet"));
-  assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
+  assert.ok(s.includes("a bare city or state with no question") && s.includes("gets the count at any minute") && s.includes("Katherine's polls are the usual case"));
   assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));
   assert.ok(s.includes('"sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright') && s.includes("Never a filler reply") && !s.includes("can't answer that one here"));
   // The ghost bullet was rewritten from the audit (SPEC-kaitlyn-ghosts.md, B1): the live test and the honesty exemption are still there, in their new words.
@@ -212,4 +212,13 @@ test("handoffDue: a card left pending 90 s with no hand-off tonight and no human
 test("the ghost bullet carries William's cases and the never-list (SPEC-kaitlyn-ghosts.md, B1)", () => {
   const p = systemPrompt(null);
   for (const phrase of ["you're just watching the comments", "you're avoiding the question", "it's illegal to do that in my market", "my rep didn't show", "why do you keep skipping me", "Never a ghost", "sounds robotic", "can you see it?"]) assert.ok(p.includes(phrase), phrase);
+});
+
+test("rollCallOpen: before the pitch one city line per 30 s room-wide; the prompt answers a bare city at any minute (SPEC-kaitlyn-ghosts.md, D)", () => {
+  const t0 = Date.parse("2026-10-20T23:01:00Z");
+  assert.equal(rollCallOpen(null, t0), true);
+  assert.equal(rollCallOpen(t0 - ROLL_CALL_SLOT_MS, t0), true);
+  assert.equal(rollCallOpen(t0 - ROLL_CALL_SLOT_MS + 1, t0), false);
+  const p = systemPrompt(null);
+  assert.ok(p.includes("gets the count at any minute") && !p.includes("skip it, no count"));
 });

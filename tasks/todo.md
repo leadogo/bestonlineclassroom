@@ -151,7 +151,7 @@
 - [x] T8 B4 reason chip on the desk's Ghost; decision marked. Verify: test-run.
 - [ ] Checkpoint 2: test, lint, build; eval after not below Oct 19 on answer/market/skip.
 - [x] T9 C reply-to-you scroll/flash + pill. Verify: Chrome mobile emulation; William's phone.
-- [ ] T10 D roll-call rule + slot; A5 KB rows (SQL); Katherine's minute-2 line. Verify: npm test; two seats at minute 1.
+- [x] T10 D roll-call rule + slot; A5 KB rows (SQL); Katherine's minute-2 line. Verify: npm test; two seats at minute 1.
 - [ ] T11 E1 audit script + E2 digest lines. Verify: audit reproduces the table; digest dry run.
 - [ ] T12 Deploy before 3:30 PM MT; six production checks; rows cleaned; report.
 - [ ] T13 /review, fixes, docs, memory.

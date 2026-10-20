@@ -41,6 +41,13 @@ export const MAX_TEXT = 300;
 export const PER_PERSON_MS = 120_000;
 /** A "needs you" card nobody acted on for this long gets her hand-off line, desk open or not (SPEC-kaitlyn-ghosts.md, A3: Heather's three cards sat under a background desk tab). */
 export const HANDOFF_AFTER_MS = 90_000;
+/** Before the pitch, one city line per this long room-wide, so the roll-call minute is not ten Kaitlyn lines (SPEC-kaitlyn-ghosts.md, D). ponytail: a global slot; a per-minute budget if it ever matters. */
+export const ROLL_CALL_SLOT_MS = 30_000;
+
+/** Whether a market line before the pitch may post now: nothing of hers in the last slot, or no city line tonight yet. */
+export function rollCallOpen(lastMarketReplyMs: number | null, nowMs: number): boolean {
+  return lastMarketReplyMs === null || nowMs - lastMarketReplyMs >= ROLL_CALL_SLOT_MS;
+}
 const MODEL = process.env.KAITLYN_MODEL ?? "claude-sonnet-5-5";
 const KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
@@ -89,7 +96,7 @@ VARIETY
   he is about to cover it (only when COMING UP shows it): ${q(SHAPES.soon)}
 
 WHAT HE IS SAYING (the turn carries WILLIAM ON SCREEN, COMING UP and SEGMENT whenever the transcript of the presentation is known)
-- Read their line as a reply to him first. An answer to something he just asked the room ("type YES", "where are you from", "S, B or SB", "what do you use AI for") is a skip whatever the words are, with "answering him on screen" in why. Katherine's polls and the bare cities before the pitch are the usual cases of this.
+- Read their line as a reply to him first. An answer to something he just asked the room ("type YES", "S, B or SB", "what do you use AI for") is a skip whatever the words are, with "answering him on screen" in why. Katherine's polls are the usual case. The one exception is a city or state: when he asks where people are from, their answer gets the count (the markets rule).
 - When his words on screen answer the question outright, answer from them in your own words, one sentence, and count it as sure ("he just said the pixel reads the listing pages, not anyone's personal posts"). A product claim must still agree with FACTS and KNOWLEDGE, and a figure he said on screen never posts unless KNOWLEDGE allows it.
 - When COMING UP covers the question, do not answer it yourself: say he is about to, sure, category other, one of the "about to cover it" shapes. Only when it is in COMING UP; otherwise the usual rules.
 - "What was that called?", "what did he just say the budget was?", "can you repeat the three ingredients?": questions about what he just showed are answered from the screen, one sentence in your words, never a quote, same guard.
@@ -104,7 +111,7 @@ HARD RULES
 
 ACTIONS
 - reply: a question about the product, the call, booking, markets, integrations, compliance, the replay email, tech trouble, where the link is; "booked" (celebrate briefly; the team confirms by text and email); a price question (the FACTS sentence, never a figure); a market question (MARKET DATA has the number, the wording is yours; nothing in the directory → nobody there yet and they'd be first; say "exclusive" only when they ask about sharing or competition; no place named → ask which market); a greeting that asks the room something.
-- markets and the clock: before the pitch, a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") is them answering William on screen, who asks where people are from: skip it, no count. A direct market question ("how many in X?", "anyone in X?") gets the count at any minute, and once booking is open every market line does.
+- markets and the clock: a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") gets the count at any minute, one line per person, no "exclusive" talk unless they ask (William, Oct 20: the roll-call on screen can only read some names, so the chat answers everyone). A direct market question ("how many in X?", "anyone in X?") gets the count too, and once booking is open every market line does.
 - skip: one-word agreement ("yes", "ok", "lol"), answers to Katherine AI's polls (what they use AI for, sellers or buyers, S/B/SB, yes/no), chatter between attendees, statements that need no answer, "hi" on its own, anything you would only answer to look busy. The team answers about one message in nine. A quiet room is better than a robotic one.
 - ghost: the line would hurt the room and the person is not asking in good faith. Hide them when you are sure ("sure": true) it is one of these, the way the team does by hand within twenty seconds:
   · the illusion tested or exposed: telling the room it is a recording or fake (claims, not questions), "he just read a comment", "you're just watching the comments", "prepopulated comments", "if you're live say LIVE", "prove it's live", "why are the reminder texts still coming when I'm in here", "why ask us to turn on cameras", "I don't see anyone else", and in the first minutes while he reads names on screen, "you only speak to some people not all".
@@ -460,7 +467,12 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (!out) return;
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
     if (d.kb) await touchKb(reg.event_id, d.kb);
-    const itself = postsItself(eff, d);
+    let itself = postsItself(eff, d);
+    // The roll-call slot (D): before the pitch, a market line only when none of hers posted in the last 30 s; the others skip quietly.
+    if (itself && d.category === "market" && ctx.pitchMinute !== null && ctx.minute < ctx.pitchMinute) {
+      const last = await db().from("kaitlyn_decisions").select("decided_at").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("category", "market").eq("status", "auto").order("id", { ascending: false }).limit(1).maybeSingle();
+      if (!rollCallOpen(last.data?.decided_at ? new Date(last.data.decided_at as string).getTime() : null, Date.now())) { itself = false; d.action = "skip"; d.why = `roll-call slot taken; ${d.why}`.slice(0, 140); }
+    }
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.
     const pending = eff === "shadow" ? d.action !== "skip" || Boolean(d.react) : (d.action === "reply" && !itself) || d.action === "ask_william" || (d.action === "ghost" && !ghostsItself(eff, d));
     const row = await db().from("kaitlyn_decisions").insert({ event_id: reg.event_id, session_date: reg.session_date, message_id: message.id, registrant_id: reg.id, action: d.action, category: d.category, text: d.text, react: d.react, why: d.why, status: pending ? "pending" : "skipped", decided_at: pending ? null : new Date().toISOString(), model: MODEL, ms: out.ms, kb_key: d.kb?.key ?? null, autopilot: auto }).select("id").single();

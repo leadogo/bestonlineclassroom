@@ -46,7 +46,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 
 ### Phase 3: the room, the roll-call, the audit
 - [x] T9 C: reply-to-you scroll + flash in the chat; the pill when the chat is hidden or on the People tab.
-- [ ] T10 D + A5: the roll-call rule with its rate; the KB rows (SQL, recorded here); Katherine's minute-2 line on ailg-r and test-run.
+- [x] T10 D + A5: the roll-call rule with its rate; the KB rows (SQL, recorded here); Katherine's minute-2 line on ailg-r and test-run.
 - [ ] T11 E1 + E2: `scripts/kaitlyn-audit.ts`; two digest lines; dry run against production.
 
 ### Checkpoint 3: production
@@ -148,3 +148,7 @@ with what to click.
 | The pill annoys | Low | 30 s auto-hide, once per reply, only when the row is not visible |
 | The chat panel mounted while hidden costs polls | Low | The poll already stops on hidden tabs; one more fetch per 3 s on an open phone |
 | Deploy after 3:30 PM MT | High | Phase 3 cuts to T9 + T11 if the clock runs out; T10's data part is SQL and can go any time |
+
+## T10 data, applied Oct 20 2026 ~12:40 PM MT (revert = the inverse statements below, or the Knowledge page / Settings)
+- `kaitlyn_kb` (ailg-r): `no-sound-after-refresh` → answer "try another browser or open your join link on your phone, and tap the video once for sound" (approved); `who-are-you`, `thanks` → handling ignore; `other-industries` approved += "More than ten mortgage agents use it too: they handle the pre-approvals first and share the leads with a partner agent."; `offer` approved += "It's for the first 10 who book."
+- `events.prompts` (ailg-r) minute 2: "Drop your city in the chat so William can shout out your market 👇" → "Drop your city in the chat 👇 the team checks how many agents we have near you" (test-run has no minute-2 line).
