@@ -138,3 +138,20 @@
 - [ ] William's walk on test-run (card asks for an email there): wall-test@example.com → 404; own email → room. Then flip Settings → "open link asks for an email" for ailg-r before 3:30 PM (Oct 2 or later).
 - [ ] Watch the 8:50 PM MT open-link line for three blast nights; 🔴 means flip the switch back.
 - [ ] Review after a week: should refunded / dispute statuses stay on the wall; any client appearing as a guest (then the IP layer).
+
+## kaitlyn-ghosts (SPEC-kaitlyn-ghosts.md, William's go Oct 20 2026 ~11 AM MT; plan in tasks/plan.md)
+- [ ] T1 Migration 038: corrections view + `edited`; `kaitlyn_ghosts` view. Verify: migrate; the two selects.
+- [ ] T2 kaitlyn.ts tune: window by key, "honestly," out + shapes-vs-tells test, "see you on the call" out. Verify: npm test.
+- [ ] T3 Hand-off on an idle desk (90 s, no moderator reply or action). Verify: npm test; test-run with a background desk tab.
+- [ ] T4 Eval set ghost class (40 + 10) and script; baseline run → docs/kaitlyn-eval-before-ghosts.md.
+- [ ] Checkpoint 1: test, lint, build clean.
+- [ ] T5 B0 Kaitlyn runs for ghosted people, private posts, "(ghosted)" markers. Verify: two seats on test-run.
+- [ ] T6 B1+B2 ghost bullet, `sure`, sure ghosts act, private line + intel Slack for a client complaint. Verify: npm test.
+- [ ] T7 B3 live GHOSTED block from the view; static list out. Verify: npm test; eval ghost recall ≥ 80%, 0 false.
+- [ ] T8 B4 reason chip on the desk's Ghost; decision marked. Verify: test-run.
+- [ ] Checkpoint 2: test, lint, build; eval after not below Oct 19 on answer/market/skip.
+- [ ] T9 C reply-to-you scroll/flash + pill. Verify: Chrome mobile emulation; William's phone.
+- [ ] T10 D roll-call rule + slot; A5 KB rows (SQL); Katherine's minute-2 line. Verify: npm test; two seats at minute 1.
+- [ ] T11 E1 audit script + E2 digest lines. Verify: audit reproduces the table; digest dry run.
+- [ ] T12 Deploy before 3:30 PM MT; six production checks; rows cleaned; report.
+- [ ] T13 /review, fixes, docs, memory.
