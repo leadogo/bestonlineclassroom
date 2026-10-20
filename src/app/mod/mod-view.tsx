@@ -513,7 +513,7 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
                         )}
                       </div>
                     )}
-                    {m.role === "attendee" && m.id !== undefined && kaitlyn.filter((k) => k.message_id === m.id).map((k) => <KaitlynRow key={k.id} k={k} onAct={kaitlynAct} />)}
+                    {m.role === "attendee" && m.id !== undefined && kaitlyn.filter((k) => k.message_id === m.id).map((k) => <KaitlynRow key={k.id} k={k} ghosted={Boolean(person(m.registrantId)?.ghosted)} onAct={kaitlynAct} />)}
                     {fixing === m.id && m.id !== undefined && !m.deleted && <FixRow m={m} onFix={fix} onClose={() => setFixing(null)} />}
                   </div>
                 </div>
@@ -657,7 +657,7 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
  * a ghost or a reaction to approve with one tap, or a line she wants a human on (the box is there, empty, for the
  * proper answer; it posts as her). Skip drops it; nothing posts on its own.
  */
-function KaitlynRow({ k, onAct }: { k: KPending; onAct: (k: KPending, decision: KDecision, body?: string) => Promise<boolean> }) {
+function KaitlynRow({ k, ghosted, onAct }: { k: KPending; ghosted: boolean; onAct: (k: KPending, decision: KDecision, body?: string) => Promise<boolean> }) {
   const [draft, setDraft] = useState(k.text);
   const [busy, setBusy] = useState(false);
   const go = async (decision: KDecision, body?: string) => { setBusy(true); await onAct(k, decision, body); setBusy(false); };
@@ -669,6 +669,7 @@ function KaitlynRow({ k, onAct }: { k: KPending; onAct: (k: KPending, decision: 
         <Avatar name={KAITLYN} size="h-5 w-5 text-[9px]" />
         <span className="font-bold text-cta">Kaitlyn · {label}</span>
         <span className="rounded bg-panel px-1.5">{k.category}</span>
+        {ghosted && <span className="rounded bg-panel px-1.5" title="They are ghosted: only they see what Kaitlyn or you send them">ghosted</span>}
         <span className="min-w-0 truncate" title={k.why}>{k.why}</span>
       </div>
       {k.screen && <p className="mt-1 text-[12px] italic text-muted" title="What William was saying on screen when they typed">on screen: {k.screen}</p>}

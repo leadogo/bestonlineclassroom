@@ -286,7 +286,8 @@ export async function decide(system: string, turn: string): Promise<{ decision: 
   }
 }
 
-type Reg = { id: string; event_id: string; session_date: string; first_name: string; source: string };
+/** `ghosted`: the room hides their lines and her replies to them are private (SPEC-kaitlyn-ghosts.md, B0: they still get answers). */
+type Reg = { id: string; event_id: string; session_date: string; first_name: string; source: string; ghosted?: boolean };
 
 /** Kaitlyn's row in the room: a reply to one person (hidden from everyone else when that person is a ghost). Returns the new id. */
 export async function postAsKaitlyn(reg: Reg, body: string, offset: number, kind: "kaitlyn" | "autopilot" | "text"): Promise<number | null> {
@@ -408,8 +409,10 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
   try {
     const { reg, message } = a;
     const autopilot = a.event.autopilot ?? "auto";
-    const [recentQ, toThemQ, marketsQ, saidQ, kbQ, fixQ, seen, cues] = await Promise.all([
+    const [recentQ, ownQ, toThemQ, marketsQ, saidQ, kbQ, fixQ, seen, cues] = await Promise.all([
       db().from("chat_messages").select("id, registrant_id, author_name, role, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("visibility", "all").is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(40),
+      // Their own earlier lines whatever their visibility: a ghosted person's are hidden from the room, not from her.
+      db().from("chat_messages").select("body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(5),
       db().from("chat_messages").select("id, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").contains("mentions", [reg.id]).order("id", { ascending: false }).limit(5),
       db().from("market_counts").select("name, clients, live"),
       // Her own lines tonight, drafts included (in shadow nothing posts, and the drafts were still her shapes).
@@ -427,7 +430,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       pitchMinute: a.event.cta_at_seconds === null ? null : Math.floor(a.event.cta_at_seconds / 60),
       name: reg.first_name,
       body: message.body,
-      priorOwn: recent.filter((m) => m.registrant_id === reg.id).map((m) => String(m.body)).slice(-5),
+      priorOwn: (ownQ.data ?? []).reverse().map((m) => String(m.body)),
       modReplies: (toThemQ.data ?? []).reverse().map((m) => String(m.body)),
       said: (saidQ.data ?? []).reverse().map((r) => String(r.text)),
       recent: recent.slice(-25).map((m) => `[${m.role === "attendee" ? "attendee" : m.author_name === KAITLYN ? "Kaitlyn" : "team"}] ${m.author_name}: ${String(m.body).slice(0, 160)}`),
@@ -452,11 +455,13 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (eff === "shadow") return;
     if (d.react) { await reactAsKaitlyn(message.id, d.react); await db().from("kaitlyn_decisions").update({ reacted_at: new Date().toISOString() }).eq("id", did); }
     if (pending) {
-      if (reg.source !== "test") await postToChatChannel(`Kaitlyn needs you · ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} → ${d.action.replace("_", " ")}${d.text ? ` ${JSON.stringify(d.text)}` : ""} (${d.why})`);
+      if (reg.source !== "test") await postToChatChannel(`Kaitlyn needs you · ${reg.ghosted ? "(ghosted) " : ""}${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} → ${d.action.replace("_", " ")}${d.text ? ` ${JSON.stringify(d.text)}` : ""} (${d.why})`);
       if (auto && d.action === "ask_william") await handoff(reg, message, did, out.ms);
       return;
     }
     if (d.action === "ghost") {
+      // Someone already ghosted stays ghosted; the decision is recorded and nobody is told twice.
+      if (reg.ghosted) { await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did); return; }
       await db().from("registrants").update({ ghosted_at: new Date().toISOString(), auto_ghost_reason: `kaitlyn: ${d.why}`.slice(0, 200) }).eq("id", reg.id).is("ghosted_at", null);
       await db().from("chat_messages").update({ visibility: "author", updated_at: new Date().toISOString() }).eq("id", message.id);
       await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did);
