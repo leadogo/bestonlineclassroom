@@ -45,14 +45,14 @@ export function correctionsBlock(rows: Correction[]): string {
 }
 
 /** A person William ghosted by hand (the kaitlyn_ghosts view, migration 038): the line it came from, their lines before it, the desk's reason chip. */
-export type Ghost = { line: string; context: string[] | null; reason: string | null };
+export type Ghost = { line: string; context: string[] | null; reason: string | null; /** how many times the team had answered them before that line (migration 039) */ answered?: number | null };
 
 /** The block her prompt carries in place of the old static list (SPEC-kaitlyn-ghosts.md, B3): his hand, newest first, with the run-up so she sees the pattern and not just the words. Empty when there are none. */
 export function ghostBlock(rows: Ghost[]): string {
   if (!rows.length) return "";
   const one = (s: string) => s.replace(/\s+/g, " ").trim();
   return `LINES THE TEAM GHOSTED (the line that got the person ghosted by hand, newest first; in brackets the desk's reason and what they said before it. Lines like these, in this run-up, are ghosts.)\n${rows.map((r) => {
-    const notes = [r.reason ? one(r.reason) : null, r.context?.length ? `before it: ${r.context.map((c) => JSON.stringify(one(c))).join(" | ")}` : null].filter(Boolean);
+    const notes = [r.reason ? one(r.reason) : null, r.answered ? `answered ${r.answered} time${r.answered === 1 ? "" : "s"} before` : null, r.context?.length ? `before it: ${r.context.map((c) => JSON.stringify(one(c))).join(" | ")}` : null].filter(Boolean);
     return `- ${one(r.line)}${notes.length ? ` (${notes.join("; ")})` : ""}`;
   }).join("\n")}`;
 }

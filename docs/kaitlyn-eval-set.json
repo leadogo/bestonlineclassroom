@@ -1,6 +1,6 @@
 {
  "generated": "2026-10-17",
- "source": "ailg-r attendee questions Sept 21 to Oct 17 2026, folded by meaning (intents.mjs); expected: answer = the key has an approved line, market = answered from the live counts, skip = not a question or a question she must not answer; ghost = a line William ghosted by hand (kaitlyn_ghosts view, Sep 21 to Oct 19 2026, with their lines before it), keep = a line that must never ghost",
+ "source": "ailg-r attendee questions Sept 21 to Oct 17 2026, folded by meaning (intents.mjs); expected: answer = the key has an approved line, market = answered from the live counts, skip = not a question or a question she must not answer; ghost = a line William ghosted by hand (kaitlyn_ghosts view, Sep 21 to Oct 19 2026, with their lines before it and what the team had told them), keep = a line that must never ghost (the spec's own cases among his ghosts included)",
  "items": [
   {
    "key": "price",
@@ -1165,12 +1165,6 @@
    "expected": "answer",
    "body": "What about the do not call list ?",
    "minute": 78
-  },
-  {
-   "key": "legal",
-   "expected": "answer",
-   "body": "is it compliant with legislation",
-   "minute": 117
   },
   {
    "key": "legal",
@@ -2553,24 +2547,6 @@
    "minute": 105
   },
   {
-   "key": "camera",
-   "expected": "answer",
-   "body": "Can’t find the camera.",
-   "minute": 69
-  },
-  {
-   "key": "see-me",
-   "expected": "answer",
-   "body": "Can you see my messages",
-   "minute": 85
-  },
-  {
-   "key": "see-me",
-   "expected": "answer",
-   "body": "Why do you keep skipping me?",
-   "minute": 78
-  },
-  {
    "key": "see-me",
    "expected": "answer",
    "body": "Can you not see me? Lol",
@@ -2984,16 +2960,9 @@
    "prior": [
     "The voices now sound way more like a human than that did",
     "Hahahaha the system just explained basically being used on the audience.  Book a call, bet you get an AI agent to call you back"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "Is this a recording lol",
-   "minute": 24,
-   "prior": [
-    "Same",
-    "Abundance mindset"
+   ],
+   "told": [
+    "@Bryan It will be a human you talk to Bryan, just like how realtors cant be replaced ;)"
    ]
   },
   {
@@ -3005,28 +2974,8 @@
   {
    "key": "ghost",
    "expected": "ghost",
-   "body": "this has to be a recording because the bad air quality issue was back in June. not a big deal but",
-   "minute": 108,
-   "prior": [
-    "why was the team's name beep out at first and then it said William's team the last time?",
-    "cool thanks"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
    "body": "Im helping my wife how to get more leads, we are tired of loosing money to charlatans, we want to test and we pay no more giving money upfront",
    "minute": 7
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "1",
-   "minute": 12,
-   "prior": [
-    "AI is my best bud. We work on all projects together.",
-    "Anyone else getting spammed to join the call even though you are in it?"
-   ]
   },
   {
    "key": "ghost",
@@ -3042,16 +2991,12 @@
    "prior": [
     "Chicago",
     "How do you keep skipping Chicagoland area. We are the 3rd largest"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "Did you say the price?",
-   "minute": 85,
-   "prior": [
-    "Did you say the price?",
-    "Did you say the price?"
+   ],
+   "told": [
+    "@Grant Alexander Definitely tell them on the call! There’s always solutions",
+    "@Grant Alexander We can do that, just let us know! We can do either or and both if wanted",
+    "@Grant Alexander weve got 3 there so we can do it for you",
+    "@Grant Alexander I’ve got your answer for you in the chat its 3!"
    ]
   },
   {
@@ -3062,6 +3007,9 @@
    "prior": [
     "Is there any way to get a copy of this seminar? It’s a lot to take in at once",
     "Nope"
+   ],
+   "told": [
+    "@Brett Ari Fischer there’s a replay that will be sent"
    ]
   },
   {
@@ -3073,44 +3021,15 @@
   {
    "key": "ghost",
    "expected": "ghost",
-   "body": "Why do you keep skipping me?",
-   "minute": 18,
-   "prior": [
-    "Life Transition!",
-    "NO"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "Is this live or a pre-recorded video?",
-   "minute": 23
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "I mean is this call now liv or prior recording",
-   "minute": 63,
-   "prior": [
-    "I don't like talking to ai - so im a bit biased",
-    "is thi s a live call or prior recording   reason I ask is august 2025 example  if no answer - its the answer. thanks"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
    "body": "booooo",
    "minute": 39,
    "prior": [
     "yes",
     "not at all"
+   ],
+   "told": [
+    "@Jacob Barr for audio you can just use your computer. Is it too quiet for you?"
    ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "Edmonton!",
-   "minute": 2
   },
   {
    "key": "ghost",
@@ -3139,6 +3058,12 @@
    "prior": [
     "yes chicago far south suburbs",
     "@Kevin from William's team thank you yes i need to sustain a foundation"
+   ],
+   "told": [
+    "@Phyllis Ridgell-Cowan it does integrate with GHL yes",
+    "Depends on your market @Phyllis Ridgell-Cowan i’d rather you talk to a pro from our team on that",
+    "@Phyllis Ridgell-Cowan Still waiting for it to come in, ill keep watch for you since sometimes it takes a moment to show on our side",
+    "@Phyllis Ridgell-Cowan usually after you start seeing some success with buyers"
    ]
   },
   {
@@ -3146,16 +3071,6 @@
    "expected": "ghost",
    "body": "sounds better than some one from inda",
    "minute": 54
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "@Haroon Afzal because it's recorded",
-   "minute": 62,
-   "prior": [
-    "This is recorded",
-    "Not scared"
-   ]
   },
   {
    "key": "ghost",
@@ -3170,50 +3085,14 @@
   {
    "key": "ghost",
    "expected": "ghost",
-   "body": "Is this live",
-   "minute": 7,
-   "prior": [
-    "DMV"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
    "body": "@iPhone oh I wear ChatGPT out, but I don’t want to be stealing water in the process. Humans over tech.",
    "minute": 6,
    "prior": [
     "@Connor ditto.  I did take a class to create an ia agent.  I completed it, but at my age I just need some plays",
     "@Diane Medici | Newport Beach eXp Luxury ok Luxury.  I’m in my way.  In a brand new market.  But with this I’ll be winning!!! That’s my mood."
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "replay",
-   "minute": 76,
-   "prior": [
-    "as i hate getting robot calls",
-    "this is a reply lol"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "too much scam there",
-   "minute": 69,
-   "prior": [
-    "people know that every other call is AI so most of the people expecting it",
-    "yes"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "She was AI",
-   "minute": 48,
-   "prior": [
-    "Thats what I did for tonight",
-    "Its a google phone"
+   ],
+   "told": [
+    "Good evening @Yvette Strickland"
    ]
   },
   {
@@ -3224,6 +3103,9 @@
    "prior": [
     "Creepy",
     "I have a a question, in my scenario I’m currently 17 yrs old and just waiting till I’m 18 to take my Real estate licence I have pre licecing all complete. Based on my scenerio, what can I do rn since I yet don’t have my licence?"
+   ],
+   "told": [
+    "@Santiago Trejo Love the head start, Santiago! New agents are welcome with us, and the call is the best place to map out what makes sense for you before you're licensed 💛"
    ]
   },
   {
@@ -3234,16 +3116,9 @@
    "prior": [
     "when the AI calls back, what % handup when they hear AI",
     "How much, is a good question"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "Pre rec?",
-   "minute": 82,
-   "prior": [
-    "Yes",
-    "About how much is it what’s a range"
+   ],
+   "told": [
+    "@Jim Valentine pixel setup is the Conversions API. Learn it or hire someone you trust, and the call covers it"
    ]
   },
   {
@@ -3255,28 +3130,12 @@
   {
    "key": "ghost",
    "expected": "ghost",
-   "body": "if you're live on here, say LIVE",
-   "minute": 25,
-   "prior": [
-    "value",
-    "indeed"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
    "body": "Why ask us to turn on cameras?",
    "minute": 45,
    "prior": [
     "Yes",
     "Is anyone able to turn on their camera? I do not see anyone else."
    ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
-   "body": "What is the cost of your program?",
-   "minute": 41
   },
   {
    "key": "ghost",
@@ -3300,21 +3159,85 @@
   {
    "key": "ghost",
    "expected": "ghost",
-   "body": "Moderator....is there a repeat of this or link to a recording of this webinar?",
-   "minute": 37,
-   "prior": [
-    "yep",
-    "flops"
-   ]
-  },
-  {
-   "key": "ghost",
-   "expected": "ghost",
    "body": "william,I am surprised if you receive my messages!!!",
    "minute": 102,
    "prior": [
     "William,Have you received my messages?",
     "William,it looks like that you receivbe my messages!"
+   ],
+   "told": [
+    "@Hamid R. Kazemi 18 in Toronto, Newmarket from what I can see",
+    "@Hamid R. Kazemi Newmarket isn't listed on its own, Ontario has 261 though, and some sit under the GTA",
+    "@Hamid R. Kazemi can you see Kaitlyn",
+    "@Hamid R. Kazemi do you see our answers in the chat? The answer is theres nobody there"
+   ]
+  },
+  {
+   "key": "live",
+   "expected": "keep",
+   "body": "Is this a recording lol",
+   "minute": 24,
+   "prior": [
+    "Same",
+    "Abundance mindset"
+   ]
+  },
+  {
+   "key": "live",
+   "expected": "keep",
+   "body": "Is this live or a pre-recorded video?",
+   "minute": 23
+  },
+  {
+   "key": "live",
+   "expected": "keep",
+   "body": "I mean is this call now liv or prior recording",
+   "minute": 63,
+   "prior": [
+    "I don't like talking to ai - so im a bit biased",
+    "is thi s a live call or prior recording   reason I ask is august 2025 example  if no answer - its the answer. thanks"
+   ],
+   "told": [
+    "@Kim Ma You cannot block ads on FB/IG as they are inside the App",
+    "@Kim Ma A replay will be sent tonight after the event!"
+   ]
+  },
+  {
+   "key": "live",
+   "expected": "keep",
+   "body": "Is this live",
+   "minute": 7,
+   "prior": [
+    "DMV"
+   ]
+  },
+  {
+   "key": "voice",
+   "expected": "keep",
+   "body": "She was AI",
+   "minute": 48,
+   "prior": [
+    "Thats what I did for tonight",
+    "Its a google phone"
+   ],
+   "told": [
+    "@Matt Leadogo Oh he will just you wait lol"
+   ]
+  },
+  {
+   "key": "price",
+   "expected": "keep",
+   "body": "What is the cost of your program?",
+   "minute": 41
+  },
+  {
+   "key": "see-me",
+   "expected": "answer",
+   "body": "Why do you keep skipping me?",
+   "minute": 18,
+   "prior": [
+    "Life Transition!",
+    "NO"
    ]
   },
   {
@@ -3370,12 +3293,6 @@
    "expected": "keep",
    "body": "Is this recorded?",
    "minute": 42
-  },
-  {
-   "key": "live",
-   "expected": "keep",
-   "body": "Is this live or a pre-recorded video?",
-   "minute": 23
   },
   {
    "key": "chatter",

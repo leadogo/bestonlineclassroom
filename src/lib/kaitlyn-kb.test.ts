@@ -94,11 +94,11 @@ test("handoffLine: one of Kevin's shapes, never empty, picks by the draw", () =>
 
 test("ghostBlock: the line that got them ghosted, what they said before it, and the desk's reason; nothing when there are none (SPEC-kaitlyn-ghosts.md, B3)", () => {
   const b = ghostBlock([
-    { line: "william,I am surprised if you receive my messages!!!", context: ["William,Have you received my messages?", "William,it looks like that you receivbe my messages!"], reason: "nag" },
+    { line: "william,I am surprised if you receive my messages!!!", context: ["William,Have you received my messages?", "William,it looks like that you receivbe my messages!"], reason: "nag", answered: 4 },
     { line: "Is this a recording lol", context: null, reason: null },
   ]);
   assert.match(b, /^LINES THE TEAM GHOSTED \(/);
-  assert.match(b, /- william,I am surprised if you receive my messages!!! \(nag; before it: "William,Have you received my messages\?" \| "William,it looks like that you receivbe my messages!"\)/);
+  assert.match(b, /- william,I am surprised if you receive my messages!!! \(nag; answered 4 times before; before it: "William,Have you received my messages\?" \| "William,it looks like that you receivbe my messages!"\)/);
   assert.match(b, /- Is this a recording lol$/m);
   assert.equal(ghostBlock([]), "");
 });
