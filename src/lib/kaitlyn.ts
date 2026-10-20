@@ -38,6 +38,8 @@ export const ASSISTED = new Set<Category>(["market", "booking", "price", "replay
 export const MAX_TEXT = 300;
 /** No second Kaitlyn reply to the same person inside this window. */
 export const PER_PERSON_MS = 120_000;
+/** A "needs you" card nobody acted on for this long gets her hand-off line, desk open or not (SPEC-kaitlyn-ghosts.md, A3: Heather's three cards sat under a background desk tab). */
+export const HANDOFF_AFTER_MS = 90_000;
 const MODEL = process.env.KAITLYN_MODEL ?? "claude-sonnet-5-5";
 const KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
@@ -342,21 +344,61 @@ async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopil
   await postToChatChannel(`Autopilot off: ${name} is back on the desk.`);
 }
 
+/** Whether this person already got her hand-off line tonight (one per person per night, decision 5 of Oct 17). */
+async function handedOff(reg: Reg, did: number): Promise<boolean> {
+  return Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_message_id", "is", null).neq("id", did).limit(1)).data?.length);
+}
+
+/** The hand-off line to this person (private when they are ghosted), recorded on their card. */
+async function postHandoff(reg: Reg, did: number, offset: number): Promise<void> {
+  const body = `@${reg.first_name} ${handoffLine()}`;
+  const mid = await postAsKaitlyn(reg, body, offset, "autopilot");
+  if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
+}
+
 /** When she does not know and nobody is on the desk: one hand-off line per person per night; the question stays pending for a human (decision 5). */
 async function handoff(reg: Reg, message: { id: number; offset: number }, did: number, thought: number): Promise<void> {
-  const priorHandoff = async () => Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_message_id", "is", null).neq("id", did).limit(1)).data?.length);
-  if (await priorHandoff()) return;
-  const line = handoffLine();
+  if (await handedOff(reg, did)) return;
   const t0 = Date.now();
-  const wait = delayMs("auto", Math.random, line.length) - thought;
+  const wait = delayMs("auto", Math.random, 70) - thought;
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   // Checked again after the pause: a second unknown from them seconds later, a moderator's answer, her own reply inside the window, or a moderator back on the desk all mean silence.
-  if ((await priorHandoff()) || (await takenBy(reg, message.id, null))) return;
+  if ((await handedOff(reg, did)) || (await takenBy(reg, message.id, null))) return;
   const back = await lastDeskSeen(reg.event_id, reg.session_date);
   if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
-  const body = `@${reg.first_name} ${line}`;
-  const mid = await postAsKaitlyn(reg, body, message.offset + (Date.now() - t0) / 1000, "autopilot");
-  if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
+  await postHandoff(reg, did, message.offset + (Date.now() - t0) / 1000);
+}
+
+/** A "needs you" card is due her hand-off line when it has sat pending 90 s, nobody handed off to this person tonight, and no moderator answered them. */
+export function handoffDue(card: { status: string; created_at: string }, nowMs: number, handed: boolean, humanReplied: boolean): boolean {
+  return card.status === "pending" && nowMs - new Date(card.created_at).getTime() >= HANDOFF_AFTER_MS && !handed && !humanReplied;
+}
+
+const sweepAt = new Map<string, number>();
+/** Called from the room's heartbeat (SPEC-kaitlyn-ghosts.md, A3): the hand-off line for every card the desk left for 90 s, open tab or not. At most one sweep per event every 10 s per instance; Off on the Autopilot switch means never. */
+export async function sweepHandoffs(eventId: string, sessionDate: string, autopilot: Autopilot, offset: number): Promise<number> {
+  if (autopilot === "off") return 0;
+  const key = `${eventId}:${sessionDate}`;
+  const now = Date.now();
+  if ((sweepAt.get(key) ?? 0) > now - 10_000) return 0;
+  sweepAt.set(key, now);
+  const cards = (await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, status, created_at").eq("event_id", eventId).eq("session_date", sessionDate).eq("action", "ask_william").eq("status", "pending").lt("created_at", new Date(now - HANDOFF_AFTER_MS).toISOString()).order("id").limit(20)).data ?? [];
+  let posted = 0;
+  const seen = new Set<string>();
+  for (const c of cards) {
+    const rid = String(c.registrant_id);
+    if (seen.has(rid)) continue;
+    seen.add(rid);
+    const r = (await db().from("registrants").select("id, event_id, session_date, first_name, source").eq("id", rid).maybeSingle()).data;
+    if (!r) continue;
+    const reg: Reg = { id: r.id as string, event_id: r.event_id as string, session_date: r.session_date as string, first_name: r.first_name as string, source: String(r.source ?? "") };
+    const did = c.id as number;
+    const human = (await takenBy(reg, c.message_id as number, null)) === "a moderator answered first";
+    if (!handoffDue({ status: String(c.status), created_at: String(c.created_at) }, now, await handedOff(reg, did), human)) continue;
+    await postHandoff(reg, did, offset);
+    posted += 1;
+  }
+  return posted;
 }
 
 /** Called after an attendee message is stored. Decides, records the decision, and in assisted/auto (or under autopilot) acts on it. */

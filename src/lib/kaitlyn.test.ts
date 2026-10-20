@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, holdsReply, marketLine, parseDecision, PER_PERSON_MS, postsItself, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, marketLine, parseDecision, PER_PERSON_MS, postsItself, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
@@ -188,4 +188,14 @@ test("the prompt never suggests a shape the bot-tell check refuses, and the shap
   assert.ok(!SHAPES.price.some((s) => /^honestly/i.test(s)));
   assert.ok(!SHAPES.booked.some((s) => /see you on the call/i.test(s)));
   assert.match(systemPrompt(null), /3 in Boston, 7 across the state/);
+});
+
+test("handoffDue: a card left pending 90 s with no hand-off tonight and no human reply gets the line; acted on, answered, or younger cards do not (A3)", () => {
+  const t0 = Date.parse("2026-10-19T23:09:00Z");
+  const card = (status: string, ageMs: number) => ({ status, created_at: new Date(t0 - ageMs).toISOString() });
+  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS), t0, false, false), true);
+  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS - 1), t0, false, false), false);
+  assert.equal(handoffDue(card("edited", HANDOFF_AFTER_MS * 2), t0, false, false), false);
+  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS * 2), t0, true, false), false);
+  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS * 2), t0, false, true), false);
 });

@@ -4,6 +4,7 @@ import { clientIp } from "@/lib/ip";
 import { cleanParams } from "@/lib/params";
 import { TOKEN_RE } from "@/lib/registrants";
 import { postDuePrompts } from "@/lib/prompts";
+import { asAutopilot, sweepHandoffs } from "@/lib/kaitlyn";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   const offset = typeof b.offset === "number" && Number.isFinite(b.offset) ? b.offset : 0;
   const kind = b.kind === "replay" ? "replay" : "live";
 
-  const reg = await db().from("registrants").select("id, event_id, session_date, ip, blocked_at, email, ghosted_at, auto_ghost_reason, event:events(id, katherine_enabled, prompts, cta_prompt_minutes, cta_at_seconds, cta_label, cta_href, kaitlyn_mode)").eq("token", token).maybeSingle();
+  const reg = await db().from("registrants").select("id, event_id, session_date, ip, blocked_at, email, ghosted_at, auto_ghost_reason, event:events(id, katherine_enabled, prompts, cta_prompt_minutes, cta_at_seconds, cta_label, cta_href, kaitlyn_mode, autopilot)").eq("token", token).maybeSingle();
   if (reg.error || !reg.data) return new Response(null, { status: 404 });
   if (reg.data.blocked_at) return new Response(null, { status: 403 });
   const { id, session_date } = reg.data;
@@ -42,10 +43,12 @@ export async function POST(request: Request) {
     console.error("[heartbeat] upsert failed", { code: error.code });
     return new Response(null, { status: 500 });
   }
-  const ev = reg.data.event as unknown as { id: string; katherine_enabled: boolean; prompts: Array<{ minute: number; text: string }> | null; cta_prompt_minutes: number[] | null; cta_at_seconds: number | null; cta_label: string | null; cta_href: string | null; kaitlyn_mode?: string | null } | null;
+  const ev = reg.data.event as unknown as { id: string; katherine_enabled: boolean; prompts: Array<{ minute: number; text: string }> | null; cta_prompt_minutes: number[] | null; cta_at_seconds: number | null; cta_label: string | null; cta_href: string | null; kaitlyn_mode?: string | null; autopilot?: string | null } | null;
   if (kind === "live" && ev) {
     // Katherine's timed lines and the book-now rows ride on the room's clock; once per session each.
     after(() => postDuePrompts(ev, session_date, offset));
+    // Her hand-off line for any card the desk left for 90 s (SPEC-kaitlyn-ghosts.md, A3); nothing to do when Kaitlyn is off.
+    if (ev.kaitlyn_mode && ev.kaitlyn_mode !== "off") after(() => sweepHandoffs(ev.id, session_date, asAutopilot(ev.autopilot), offset));
     // A seat's first heartbeat: who have we seen before under this email? Ghosted or blocked before, or a third night: ghost quietly (they still see their own rows).
     if (!prev.data && reg.data.email && !reg.data.ghosted_at) {
       const email = reg.data.email as string;
