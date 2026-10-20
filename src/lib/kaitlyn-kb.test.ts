@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
+import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
 
 const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, approved_at: p.approved ? "2026-10-17T00:00:00Z" : null, handling: "open", asked: 0, ...p });
 
@@ -110,4 +110,20 @@ test("digestText: last night's unanswered people and the by-hand ghosts ride on 
   const one = digestText({ questions: [{ question: "Do you work with Redfin agents?", asked: 1 }], people: 1, waiting: 0, url, unanswered: ["Heather"], ghosted: [] })!;
   assert.match(one, /Answer it: https[^\n]+\nLast night 1 person went unanswered: Heather\.$/);
   assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, unanswered: [], ghosted: [] }), null);
+});
+
+test("answeredWithin: a moderator line to the person inside 15 minutes counts, her hand-off line does not, nor a line before theirs or too late (SPEC-kaitlyn-ghosts.md, E; review of Oct 20)", () => {
+  const t0 = Date.parse("2026-10-19T23:09:00Z");
+  const at = (ms: number) => new Date(t0 + ms).toISOString();
+  const told = [
+    { id: 1, mentions: ["p1"], created_at: at(60_000) },
+    { id: 2, mentions: ["p2"], created_at: at(60_000) },
+    { id: 3, mentions: ["p3"], created_at: at(ANSWER_WINDOW_MS + 1) },
+    { id: 4, mentions: ["p4"], created_at: at(-1) },
+  ];
+  assert.equal(answeredWithin(t0, "p1", told), true);
+  assert.equal(answeredWithin(t0, "p2", told, new Set([2])), false);
+  assert.equal(answeredWithin(t0, "p3", told), false);
+  assert.equal(answeredWithin(t0, "p4", told), false);
+  assert.equal(answeredWithin(t0, "p5", told), false);
 });

@@ -57,6 +57,19 @@ export function ghostBlock(rows: Ghost[]): string {
   }).join("\n")}`;
 }
 
+/** "Answered" for the digest and the audit (SPEC-kaitlyn-ghosts.md, E): a moderator line mentioning the person inside this window after their line. */
+export const ANSWER_WINDOW_MS = 15 * 60_000;
+
+/** Whether a moderator answered this person within the window of their line at `atMs`; her hand-off line (`handoffIds`) promises an answer and is not one. */
+export function answeredWithin(atMs: number, rid: string, told: Array<{ id?: number; mentions: string[]; created_at: string }>, handoffIds: Set<number> = new Set()): boolean {
+  return told.some((m) => {
+    if (m.id !== undefined && handoffIds.has(m.id)) return false;
+    if (!m.mentions.includes(rid)) return false;
+    const t = new Date(m.created_at).getTime();
+    return t >= atMs && t < atMs + ANSWER_WINDOW_MS;
+  });
+}
+
 /** Whether the 9 AM digest is due: 9 o'clock in the team's zone and not yet sent today. `today` is the local date to record. */
 export function digestDue(now: Date, lastOn: string | null, tz = "America/Edmonton"): { due: boolean; today: string } {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false }).formatToParts(now);

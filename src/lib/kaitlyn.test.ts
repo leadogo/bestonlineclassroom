@@ -218,7 +218,7 @@ test("the ghost bullet carries William's cases and the never-list (SPEC-kaitlyn-
   for (const phrase of ["you're just watching the comments", "you're avoiding the question", "it's illegal to do that in my market", "my rep didn't show", "why do you keep skipping me", "Never a ghost", "sounds robotic", "can you see it?"]) assert.ok(p.includes(phrase), phrase);
 });
 
-test("rollCallOpen: before the pitch one city line per 30 s room-wide; the prompt answers a bare city at any minute (SPEC-kaitlyn-ghosts.md, D)", () => {
+test("rollCallOpen: before the pitch one city line per 10 s room-wide; the prompt answers a bare city at any minute (SPEC-kaitlyn-ghosts.md, D)", () => {
   const t0 = Date.parse("2026-10-20T23:01:00Z");
   assert.equal(rollCallOpen(null, t0), true);
   assert.equal(rollCallOpen(t0 - ROLL_CALL_SLOT_MS, t0), true);

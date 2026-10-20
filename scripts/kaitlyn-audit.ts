@@ -26,7 +26,8 @@ async function query<T>(sql: string): Promise<T[]> {
   return body ? (JSON.parse(body) as T[]) : [];
 }
 
-// Wanted: a line Kaitlyn judged worth a reply or a hand-off. Unanswered: nobody (Kevin or Kaitlyn) mentioned the person in the next 15 minutes.
+// Wanted: a line Kaitlyn judged worth a reply or a hand-off. Unanswered: nobody (Kevin or Kaitlyn) mentioned the person in the next 15 minutes;
+// her hand-off line does not count (the same rule as the digest's answeredWithin in src/lib/kaitlyn-kb.ts).
 const BASE = `
 with q as (
   select m.id, m.event_id, m.session_date, m.registrant_id, m.body, m.offset_seconds, m.created_at, m.visibility, d.action, d.category, d.status
@@ -36,7 +37,8 @@ with q as (
 ), a as (
   select q.*,
     exists (select 1 from chat_messages x where x.event_id = q.event_id and x.session_date = q.session_date and x.role = 'moderator' and x.author_name <> 'Kaitlyn from William''s Team' and q.registrant_id::text = any(x.mentions) and x.id > q.id and x.created_at < q.created_at + interval '15 min') as human,
-    exists (select 1 from chat_messages x where x.event_id = q.event_id and x.session_date = q.session_date and x.role = 'moderator' and x.author_name = 'Kaitlyn from William''s Team' and q.registrant_id::text = any(x.mentions) and x.id > q.id and x.created_at < q.created_at + interval '15 min' and x.deleted_at is null) as kait
+    exists (select 1 from chat_messages x where x.event_id = q.event_id and x.session_date = q.session_date and x.role = 'moderator' and x.author_name = 'Kaitlyn from William''s Team' and q.registrant_id::text = any(x.mentions) and x.id > q.id and x.created_at < q.created_at + interval '15 min' and x.deleted_at is null
+      and not exists (select 1 from kaitlyn_decisions h where h.sent_message_id = x.id and h.action = 'ask_william' and h.status = 'pending')) as kait
   from q
 )`;
 

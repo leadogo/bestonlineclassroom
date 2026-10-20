@@ -41,8 +41,8 @@ export const MAX_TEXT = 300;
 export const PER_PERSON_MS = 120_000;
 /** A "needs you" card nobody acted on for this long gets her hand-off line, desk open or not (SPEC-kaitlyn-ghosts.md, A3: Heather's three cards sat under a background desk tab). */
 export const HANDOFF_AFTER_MS = 90_000;
-/** Before the pitch, one city line per this long room-wide, so the roll-call minute is not ten Kaitlyn lines (SPEC-kaitlyn-ghosts.md, D). ponytail: a global slot; a per-minute budget if it ever matters. */
-export const ROLL_CALL_SLOT_MS = 30_000;
+/** Before the pitch, one city line per this long room-wide, so the roll-call minute is not ten Kaitlyn lines at once (SPEC-kaitlyn-ghosts.md, D; the review of Oct 20 cut it from 30 s to 10 s so a burst still answers most people). ponytail: a global slot; a queue if it ever matters. */
+export const ROLL_CALL_SLOT_MS = 10_000;
 
 /** Whether a market line before the pitch may post now: nothing of hers in the last slot, or no city line tonight yet. */
 export function rollCallOpen(lastMarketReplyMs: number | null, nowMs: number): boolean {
@@ -366,15 +366,19 @@ async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopil
   await postToChatChannel(`Autopilot off: ${name} is back on the desk.`);
 }
 
-/** Whether this person already got her hand-off line tonight, this card included (one per person per night, decision 5 of Oct 17; the sweep of Oct 20 posted three to one person when the card itself was left out). */
-async function handedOff(reg: Reg): Promise<boolean> {
-  return Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_body", "is", null).limit(1)).data?.length);
+/** Whether this person already got (or is about to get) her hand-off line tonight: any of their cards with sent_body set, a claim included; `except` leaves out the caller's own claimed card (one per person per night, decision 5 of Oct 17). */
+async function handedOff(reg: Reg, except = 0): Promise<boolean> {
+  return Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_body", "is", null).neq("id", except).limit(1)).data?.length);
 }
 
-/** The hand-off line to this person (private when they are ghosted), recorded on their card. The card is claimed first (sent_body set where it was null), so two instances sweeping at once post one line, not two. */
-async function postHandoff(reg: Reg, did: number, offset: number): Promise<boolean> {
+/** Claims a card for the hand-off (sent_body set where it was null), so the fast path and a sweep on another instance cannot both post to the same person; false when someone got there first. */
+async function claimHandoff(did: number): Promise<boolean> {
   const claim = await db().from("kaitlyn_decisions").update({ sent_body: "(hand-off)" }).eq("id", did).is("sent_body", null).select("id");
-  if (!claim.data?.length) return false;
+  return Boolean(claim.data?.length);
+}
+
+/** The hand-off line to this person (private when they are ghosted), recorded on the claimed card; a failed post gives the claim back. */
+async function postHandoff(reg: Reg, did: number, offset: number): Promise<boolean> {
   const body = `@${reg.first_name} ${handoffLine()}`;
   const mid = await postAsKaitlyn(reg, body, offset, "autopilot");
   await db().from("kaitlyn_decisions").update({ sent_body: mid ? body : null, sent_message_id: mid }).eq("id", did);
@@ -383,14 +387,16 @@ async function postHandoff(reg: Reg, did: number, offset: number): Promise<boole
 
 /** When she does not know and nobody is on the desk: one hand-off line per person per night; the question stays pending for a human (decision 5). */
 async function handoff(reg: Reg, message: { id: number; offset: number }, did: number, thought: number): Promise<void> {
-  if (await handedOff(reg)) return;
+  if ((await handedOff(reg)) || !(await claimHandoff(did))) return;
   const t0 = Date.now();
   const wait = delayMs("auto", Math.random, 70) - thought;
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  // Checked again after the pause: a second unknown from them seconds later, a moderator's answer, her own reply inside the window, or a moderator back on the desk all mean silence.
-  if ((await handedOff(reg)) || (await takenBy(reg, message.id, null))) return;
+  // Checked again after the pause: another hand-off to them meanwhile, a moderator's answer, her own reply inside the window, or a moderator back on the desk all mean silence (and the claim goes back).
   const back = await lastDeskSeen(reg.event_id, reg.session_date);
-  if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
+  if ((await handedOff(reg, did)) || (await takenBy(reg, message.id, null)) || (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS)) {
+    await db().from("kaitlyn_decisions").update({ sent_body: null }).eq("id", did).eq("sent_body", "(hand-off)");
+    return;
+  }
   await postHandoff(reg, did, message.offset + (Date.now() - t0) / 1000);
 }
 
@@ -420,7 +426,7 @@ export async function sweepHandoffs(eventId: string, sessionDate: string, autopi
     const did = c.id as number;
     const human = (await takenBy(reg, c.message_id as number, null)) === "a moderator answered first";
     if (!handoffDue({ status: String(c.status), created_at: String(c.created_at) }, now, await handedOff(reg), human)) continue;
-    if (await postHandoff(reg, did, offset)) posted += 1;
+    if ((await claimHandoff(did)) && (await postHandoff(reg, did, offset))) posted += 1;
   }
   return posted;
 }
@@ -433,7 +439,8 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     const { reg, message } = a;
     const autopilot = a.event.autopilot ?? "auto";
     const [recentQ, ownQ, toThemQ, marketsQ, saidQ, kbQ, fixQ, ghostQ, seen, cues] = await Promise.all([
-      db().from("chat_messages").select("id, registrant_id, author_name, role, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("visibility", "all").is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(40),
+      // The room as everyone sees it: hidden lines and her private replies to ghosted people (visible_to) stay out of other people's context.
+      db().from("chat_messages").select("id, registrant_id, author_name, role, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("visibility", "all").is("visible_to", null).is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(40),
       // Their own earlier lines whatever their visibility: a ghosted person's are hidden from the room, not from her.
       db().from("chat_messages").select("body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(5),
       db().from("chat_messages").select("id, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").contains("mentions", [reg.id]).order("id", { ascending: false }).limit(5),
@@ -485,12 +492,13 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       return;
     }
     if (d.action === "ghost") {
-      // Someone already ghosted stays ghosted; the decision is recorded and nobody is told twice.
-      if (reg.ghosted) { await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did); return; }
-      await db().from("registrants").update({ ghosted_at: new Date().toISOString(), auto_ghost_reason: `kaitlyn: ${d.why}`.slice(0, 200) }).eq("id", reg.id).is("ghosted_at", null);
-      await db().from("chat_messages").update({ visibility: "author", updated_at: new Date().toISOString() }).eq("id", message.id);
+      // Someone already ghosted stays ghosted and nobody is told twice; the private line and the team's note below still happen.
+      if (!reg.ghosted) {
+        await db().from("registrants").update({ ghosted_at: new Date().toISOString(), auto_ghost_reason: `kaitlyn: ${d.why}`.slice(0, 200) }).eq("id", reg.id).is("ghosted_at", null);
+        await db().from("chat_messages").update({ visibility: "author", updated_at: new Date().toISOString() }).eq("id", message.id);
+      }
       await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did);
-      if (reg.source !== "test") await postToChatChannel(`Kaitlyn ghosted ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} (${d.why}). Unghost on the desk if that was wrong.`);
+      if (reg.source !== "test" && !reg.ghosted) await postToChatChannel(`Kaitlyn ghosted ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} (${d.why}). Unghost on the desk if that was wrong.`);
       // The line they still get, private (postAsKaitlyn reads the ghost); a client complaint also reaches the team so someone follows up.
       if (d.text) {
         const body = `@${reg.first_name} ${d.text}`;
@@ -511,7 +519,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       await db().from("kaitlyn_decisions").update({ status: "skipped", why: `${taken}; ${d.why}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", did);
       return;
     }
-    // The roll-call slot (D), checked after the pause so a burst of city drops lets the first one through and the rest see it: before the pitch, one market line per 30 s room-wide.
+    // The roll-call slot (D), checked after the pause so a burst of city drops lets the first one through and the rest see it: before the pitch, one market line per 10 s room-wide.
     if (d.category === "market" && ctx.pitchMinute !== null && ctx.minute < ctx.pitchMinute) {
       const last = await db().from("kaitlyn_decisions").select("decided_at").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("category", "market").eq("status", "auto").order("id", { ascending: false }).limit(1).maybeSingle();
       if (!rollCallOpen(last.data?.decided_at ? new Date(last.data.decided_at as string).getTime() : null, Date.now())) {

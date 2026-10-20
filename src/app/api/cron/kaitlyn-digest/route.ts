@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { digestDue, digestText } from "@/lib/kaitlyn-kb";
+import { answeredWithin, digestDue, digestText } from "@/lib/kaitlyn-kb";
 import { postToIntel } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
@@ -38,12 +38,14 @@ export async function GET(request: Request) {
     // Last night's audit in two lines (SPEC-kaitlyn-ghosts.md, E2): who Kaitlyn or the desk never answered (a card still pending and
     // no moderator line to them within 15 minutes), and who the desk ghosted by hand, with the reason chip.
     const [pending, told, ghosts] = await Promise.all([
-      db().from("kaitlyn_decisions").select("registrant_id, created_at").eq("event_id", e.id).in("action", ["reply", "ask_william"]).eq("status", "pending").gte("created_at", since).limit(200),
-      db().from("chat_messages").select("mentions, created_at").eq("event_id", e.id).eq("role", "moderator").gte("created_at", since).limit(1000),
+      db().from("kaitlyn_decisions").select("registrant_id, created_at, sent_message_id").eq("event_id", e.id).in("action", ["reply", "ask_william"]).eq("status", "pending").gte("created_at", since).limit(200),
+      db().from("chat_messages").select("id, mentions, created_at").eq("event_id", e.id).eq("role", "moderator").gte("created_at", since).limit(1000),
       db().from("registrants").select("first_name, auto_ghost_reason, source").eq("event_id", e.id).gte("ghosted_at", since).neq("source", "test").limit(50),
     ]);
-    const answeredBy = (rid: string, atMs: number) => (told.data ?? []).some((m) => (m.mentions as string[]).includes(rid) && new Date(m.created_at as string).getTime() >= atMs && new Date(m.created_at as string).getTime() < atMs + 15 * 60_000);
-    const missed = Array.from(new Set((pending.data ?? []).filter((d) => !answeredBy(d.registrant_id as string, new Date(d.created_at as string).getTime())).map((d) => d.registrant_id as string)));
+    // Her hand-off lines sit on the cards as sent_message_id: a promise of an answer, not one.
+    const handoffs = new Set((pending.data ?? []).map((d) => d.sent_message_id as number | null).filter((x): x is number => x !== null));
+    const lines = (told.data ?? []).map((m) => ({ id: m.id as number, mentions: (m.mentions as string[]) ?? [], created_at: m.created_at as string }));
+    const missed = Array.from(new Set((pending.data ?? []).filter((d) => !answeredWithin(new Date(d.created_at as string).getTime(), d.registrant_id as string, lines, handoffs)).map((d) => d.registrant_id as string)));
     const names = missed.length ? ((await db().from("registrants").select("id, first_name").in("id", missed)).data ?? []) : [];
     const byHand = (ghosts.data ?? []).filter((g) => g.auto_ghost_reason === null || String(g.auto_ghost_reason).startsWith("by hand"));
     const text = digestText({

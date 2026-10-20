@@ -19,8 +19,8 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
   different question, or an answer to her own question, posts after the normal pause.
 - **Ghosted people are ordinary people to Kaitlyn**; privacy is `visible_to` at post time (already there), not a branch.
 - **The room keeps the chat panel mounted when hidden** so the poll keeps running and a reply can raise the pill.
-- **Roll-call answers are rate-limited before the pitch** (one city line per 30 s room-wide; `ponytail:` a global slot,
-  per-minute budget if it ever matters) so minute 0 does not become ten Kaitlyn lines.
+- **Roll-call answers are rate-limited before the pitch** (one city line per 10 s room-wide after the review, was 30 s;
+  `ponytail:` a global slot, a queue if it ever matters) so minute 0 does not become ten Kaitlyn lines at once.
 - **The audit script uses the Management API read-only** like `scripts/migrate.ts`, because the SQL needs CTEs that
   supabase-js cannot express.
 
@@ -51,7 +51,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 
 ### Checkpoint 3: production
 - [x] T12 Deployed before noon MT; eight checks on test-run with five seats (see tasks/todo.md); rows cleaned. William's phone walk still his.
-- [ ] T13 `/review` over the diff; fixes; docs (`docs/kaitlyn-eval.md`, `tasks/todo.md`, memory).
+- [x] T13 `/review` (fresh-context reviewer): 0 critical, 2 important (1 fixed, 1 by decision), 5 of 6 suggestions taken; docs and memory updated.
 
 ## Tasks
 

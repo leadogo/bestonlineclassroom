@@ -9,9 +9,16 @@ checks; migrations 038 and 039; plan in `tasks/plan.md`). Every check in the Tes
 test seats, after four fixes the checks found (a mid-line question of hers frees the follow-up; one hand-off per card, the
 card claimed first; the roll-call slot checked after the pause; the room's pill reads the live callback; the re-point filed
 under see-me). Eval after: answer 71%, market 97%, skip 91%, ghost 82% (17 of 18 sure), keep 8 of 9 (`docs/kaitlyn-eval.md`).
+Review (fresh-context reviewer, Oct 20 ~12:30 PM MT): no Critical; two Important, one fixed (her private replies to ghosted
+people stayed out of everyone's RECENT ROOM context) and one kept by decision 1 below (the 90 s hand-off also fires in shadow
+mode with the desk open: Autopilot Off is the switch); five suggestions taken (the hand-off card claimed before the pause,
+two indexes and a scoped count on the ghost view, migration 040; an already ghosted client still gets the private line and the
+team's note; the roll-call slot cut from 30 s to 10 s so a burst still answers most people; one "answered" rule shared by the
+digest and the audit, her hand-off line not counting as an answer).
 Follow-ups noticed, not built: "OC" and other abbreviations do not match the directory's "Orange County, CA" (she said
 "wide open" where the count is 9: a market alias table); a third live-or-recorded push with an ultimatum (Kim Ma) is the one
-line she ghosts that the spec calls sincere, his hand agreed. Decisions below were taken on his go.
+line she ghosts that the spec calls sincere, his hand agreed; the roll-call slot still skips a tie for good (a queue if it
+shows in the audit). Decisions below were taken on his go.
 
 ## Objective
 In William's words, Oct 20: "look at the messages from yesterday and see what we can do to train Kaitlyn even more.
