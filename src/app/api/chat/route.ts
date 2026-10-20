@@ -123,6 +123,6 @@ export async function POST(request: Request) {
   if (r.katherine && !ghosted) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name }, body, offset));
   // Kaitlyn decides what to do with it (switch per event): drafts for the desk in shadow, posts the routine replies herself in assisted and auto.
   // A ghosted person is still answered; her replies to them are private (SPEC-kaitlyn-ghosts.md, B0).
-  if (r.kaitlyn.kaitlyn_mode !== "off") after(() => kaitlynHandle({ reg: { id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name, source: String(r.source ?? ""), ghosted }, event: r.kaitlyn, message: { id: ins.data.id as number, body, offset, sessionMinute: r.sessionStart ? Math.max(0, Math.floor((Date.now() - new Date(r.sessionStart).getTime()) / 60_000)) : null }, katherine: r.katherine }));
+  if (r.kaitlyn.kaitlyn_mode !== "off") after(() => kaitlynHandle({ reg: { id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name, source: String(r.source ?? ""), ghosted, email: r.email }, event: r.kaitlyn, message: { id: ins.data.id as number, body, offset, sessionMinute: r.sessionStart ? Math.max(0, Math.floor((Date.now() - new Date(r.sessionStart).getTime()) / 60_000)) : null }, katherine: r.katherine }));
   return Response.json({ message: ins.data });
 }

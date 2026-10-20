@@ -146,7 +146,7 @@
 - [ ] T4 Eval set ghost class (40 + 10) and script; baseline run → docs/kaitlyn-eval-before-ghosts.md.
 - [ ] Checkpoint 1: test, lint, build clean.
 - [x] T5 B0 Kaitlyn runs for ghosted people, private posts, "(ghosted)" markers. Verify: two seats on test-run.
-- [ ] T6 B1+B2 ghost bullet, `sure`, sure ghosts act, private line + intel Slack for a client complaint. Verify: npm test.
+- [x] T6 B1+B2 ghost bullet, `sure`, sure ghosts act, private line + intel Slack for a client complaint. Verify: npm test.
 - [ ] T7 B3 live GHOSTED block from the view; static list out. Verify: npm test; eval ghost recall ≥ 80%, 0 false.
 - [ ] T8 B4 reason chip on the desk's Ghost; decision marked. Verify: test-run.
 - [ ] Checkpoint 2: test, lint, build; eval after not below Oct 19 on answer/market/skip.

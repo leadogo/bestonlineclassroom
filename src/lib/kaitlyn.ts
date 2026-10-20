@@ -13,7 +13,7 @@ import { asksForReplay } from "./katherine.ts";
 import { asksMarket, findMarkets, findStates, onlyStates, placeOf, rollup, type MarketCount } from "./market-answer.ts";
 import { EMOJIS, isEmoji } from "./moderation.ts";
 import { toggleReaction } from "./reactions.ts";
-import { postToChatChannel } from "./slack.ts";
+import { postToChatChannel, postToIntel } from "./slack.ts";
 import { cuesFor, onScreen, type OnScreen } from "./transcript.ts";
 
 export { KAITLYN };
@@ -23,7 +23,8 @@ export const ACTIONS = ["reply", "skip", "ghost", "ask_william"] as const;
 export type Action = (typeof ACTIONS)[number];
 export const CATEGORIES = ["market", "booking", "price", "product", "integration", "compliance", "replay", "tech", "greeting", "thanks", "chatter", "negative", "support", "other"] as const;
 export type Category = (typeof CATEGORIES)[number];
-export type Decision = { action: Action; category: Category; text: string; react: string; why: string; kb: { key: string; question: string } | null };
+/** `sure`: a reply that reached the room (an unsure one became ask_william) or a ghost the model is sure of; a sure ghost acts on the spot (SPEC-kaitlyn-ghosts.md, B2). */
+export type Decision = { action: Action; category: Category; text: string; react: string; why: string; kb: { key: string; question: string } | null; sure: boolean };
 /** Autopilot (SPEC-kaitlyn-autopilot.md): auto takes over by desk presence, on from the first message, off never. */
 export type Autopilot = "auto" | "on" | "off";
 export const asAutopilot = (v: unknown): Autopilot => (v === "on" || v === "off" ? v : "auto");
@@ -105,11 +106,20 @@ ACTIONS
 - reply: a question about the product, the call, booking, markets, integrations, compliance, the replay email, tech trouble, where the link is; "booked" (celebrate briefly; the team confirms by text and email); a price question (the FACTS sentence, never a figure); a market question (MARKET DATA has the number, the wording is yours; nothing in the directory → nobody there yet and they'd be first; say "exclusive" only when they ask about sharing or competition; no place named → ask which market); a greeting that asks the room something.
 - markets and the clock: before the pitch, a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") is them answering William on screen, who asks where people are from: skip it, no count. A direct market question ("how many in X?", "anyone in X?") gets the count at any minute, and once booking is open every market line does.
 - skip: one-word agreement ("yes", "ok", "lol"), answers to Katherine AI's polls (what they use AI for, sellers or buyers, S/B/SB, yes/no), chatter between attendees, statements that need no answer, "hi" on its own, anything you would only answer to look busy. The team answers about one message in nine. A quiet room is better than a robotic one.
-- ghost: the line would hurt the room and the person is not asking in good faith: soliciting or recruiting, links to other services, profanity or heckling ("booooo", "scam", "this is BS"), telling the room it is a recording or fake (claims, not questions), testing whether the room is live ("if you're live say LIVE", "all the live watchers say BIG", "prove it's live"), challenging the room about cameras ("why ask us to turn on cameras", "I don't see anyone else"), "he just read a comment", sneering at the host or the pitch ("I hate this showing I'm rich thing"), pushing for a price after being told the call covers it ("you're avoiding the question"), repeated spam. Honest reactions to Katherine's voice ("sounds robotic", "she was AI") are welcome, not ghosts: the webinar asks for that honesty. Category "negative" when you are sure; in assisted and auto that ghosts them on the spot, any other category waits for a moderator. Ghosting is invisible to them; they keep chatting and only they see it.
+- ghost: the line would hurt the room and the person is not asking in good faith. Hide them when you are sure ("sure": true) it is one of these, the way the team does by hand within twenty seconds:
+  · the illusion tested or exposed: telling the room it is a recording or fake (claims, not questions), "he just read a comment", "you're just watching the comments", "prepopulated comments", "if you're live say LIVE", "prove it's live", "why are the reminder texts still coming when I'm in here", "why ask us to turn on cameras", "I don't see anyone else".
+  · the price pushed: a second price ask after the price line, a figure named in the open ("monthly cost is CAD $400?"), "you're avoiding the question", "give us an approx cost", "can we skip to how much this costs". The first price ask gets the price line, at any minute.
+  · sneering, heckling, impatience: "waste of time", "booooo", "I'd hang up", "I hate this showing I'm rich thing", "meow", "tell us what you can do instead of how much money you made", a racist or crude line, soliciting or recruiting, a number to call, links to other services, repeated spam.
+  · a legal accusation stated as fact: "it's illegal to do that in my market". A question about legality is answered from KNOWLEDGE (legal).
+  · a client or a booked prospect complaining in the open: "I purchased your program and can't use it", "my rep didn't show", "no one came to my appointment", "tired of losing money to charlatans". Category support; put the support line in text so it still reaches them, privately; the team gets a note.
+  · not a prospect: a minor or someone who cannot be licensed yet. Ghost, with the beginner answer in text so they still get it.
+  · the nag, when MODERATORS TO THEM TONIGHT or YOU ALREADY SAID shows they were answered: "why do you keep skipping me", "you only speak to some people", "I've asked three times", "can you see my messages", "have you received my messages". The first time, reply (not ghost) with one line that gives the answer again and asks if they can see it ("the answer's in the chat, 3 in Michigan, can you see it?"). The second time the same night, ghost. When nobody has answered them yet it is a see-me reply, never a ghost.
+  Never a ghost: honest reactions to Katherine's voice ("sounds robotic", "she was AI", "low energy": the webinar asks for that honesty), a sincere "is this live?" or "is this recorded?" (skip; Katherine answers the replay), a joke, a first price ask, "how do I turn on my camera?" (the camera answer), a bare "can you see me?" from someone nobody answered.
+  Category "negative" for the sneers and the illusion, "price" for the push, "support" for the client, "other" for the rest. In assisted and auto a sure ghost acts on the spot: they keep chatting and only they see their lines; your text, if any, reaches only them. Not sure → "sure": false and a moderator decides.
 - ask_william: any question FACTS or MARKET DATA do not answer outright, anything you are not sure of, an unhappy existing client or a support issue, a booking problem you cannot fix, a complaint, a legal or compliance question with specifics, anything you are unsure should be ghosted. Put a draft in text only if you have a real one; otherwise leave it empty and the moderator writes the answer.
 - react: on a clearly positive, excited or funny line (a win, "love this", "let's go") pick one of ${EMOJIS.join(" ")}, about one such line in four, with or without a reply. Never on a question, never on a negative line. Otherwise empty.
 
-OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright, "why": ten words for the desk, "kb": {"key": one of KEYS YOU MAY NAME when the meaning matches, else a new lowercase-hyphen slug, "question": the question in plain words} on every reply, ghost or ask_william, null on skip}.`;
+OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright, or a ghost matches one of the ghost cases, "why": ten words for the desk, "kb": {"key": one of KEYS YOU MAY NAME when the meaning matches, else a new lowercase-hyphen slug, "question": the question in plain words} on every reply, ghost or ask_william, null on skip}.`;
 
 /** The system prompt: persona and rules, the event's fact sheet, the knowledge table, the team's corrections of her lines, tonight's class by minute, Kevin's real answers, and the lines the team ghosted. Cached by the API. */
 export function systemPrompt(facts: string | null, kb: KbRow[] = [], corrections: Correction[] = [], outline: string | null = null): string {
@@ -219,7 +229,9 @@ export function parseDecision(input: unknown): Decision {
   const kbo = o.kb && typeof o.kb === "object" ? (o.kb as Record<string, unknown>) : null;
   const key = kbKey(kbo?.key);
   const kb = key && action !== "skip" ? { key, question: kbQuestion(kbo?.question) } : null;
-  return { action, category, text: action === "skip" || action === "ghost" ? "" : text, react, why, kb };
+  // A ghost's text is the private line they still get; it clears the same guard and tells as a reply, or the ghost stands without it.
+  const ghostText = action === "ghost" && text && !guard(text) && !tells(text).length ? text : "";
+  return { action, category, text: action === "skip" ? "" : action === "ghost" ? ghostText : text, react, why, kb, sure: action === "reply" || (action === "ghost" && o.sure === true) };
 }
 
 /** Whether this decision posts without a moderator in this mode. */
@@ -240,9 +252,9 @@ export function engaged(autopilot: Autopilot, lastModSeenMs: number | null, sess
   return lastModSeenMs === null ? sessionMinute >= AUTOPILOT_FROM_MINUTE : nowMs - lastModSeenMs >= AUTOPILOT_AFTER_MS;
 }
 
-/** Whether a ghost decision acts without a moderator: assisted and auto ghost on the spot when she is sure (category negative); anything less certain waits on the desk. Shadow never acts. */
+/** Whether a ghost decision acts without a moderator: assisted and auto ghost on the spot when she is sure, whatever the case (SPEC-kaitlyn-ghosts.md, B2); an unsure ghost waits on the desk. Shadow never acts. */
 export function ghostsItself(mode: Mode, d: Decision): boolean {
-  return d.action === "ghost" && d.category === "negative" && (mode === "assisted" || mode === "auto");
+  return d.action === "ghost" && d.sure && (mode === "assisted" || mode === "auto");
 }
 
 /** The one JSON object in the model's text, code fence or stray words around it ignored; null when there is none. */
@@ -287,7 +299,7 @@ export async function decide(system: string, turn: string): Promise<{ decision: 
 }
 
 /** `ghosted`: the room hides their lines and her replies to them are private (SPEC-kaitlyn-ghosts.md, B0: they still get answers). */
-type Reg = { id: string; event_id: string; session_date: string; first_name: string; source: string; ghosted?: boolean };
+type Reg = { id: string; event_id: string; session_date: string; first_name: string; source: string; ghosted?: boolean; email?: string | null };
 
 /** Kaitlyn's row in the room: a reply to one person (hidden from everyone else when that person is a ghost). Returns the new id. */
 export async function postAsKaitlyn(reg: Reg, body: string, offset: number, kind: "kaitlyn" | "autopilot" | "text"): Promise<number | null> {
@@ -466,6 +478,13 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       await db().from("chat_messages").update({ visibility: "author", updated_at: new Date().toISOString() }).eq("id", message.id);
       await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did);
       if (reg.source !== "test") await postToChatChannel(`Kaitlyn ghosted ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} (${d.why}). Unghost on the desk if that was wrong.`);
+      // The line they still get, private (postAsKaitlyn reads the ghost); a client complaint also reaches the team so someone follows up.
+      if (d.text) {
+        const body = `@${reg.first_name} ${d.text}`;
+        const mid = await postAsKaitlyn(reg, body, message.offset, auto ? "autopilot" : "kaitlyn");
+        if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
+      }
+      if (d.category === "support" && reg.source !== "test") await postToIntel(`A client complaint in the room tonight, hidden from the chat and answered privately: ${reg.first_name}${reg.email ? ` (${reg.email})` : ""}: ${JSON.stringify(message.body.slice(0, 300))}. Someone should follow up tomorrow.`);
       return;
     }
     if (!itself) return;

@@ -5,12 +5,17 @@ import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
 test("parseDecision: the tool input checked; a wordless reply skips, a guarded reply becomes ask_william with the draft kept", () => {
-  assert.deepEqual(parseDecision({ action: "reply", category: "market", text: "  weve got 10 in LA,   youre good 🙌 ", react: "🔥", why: "named a market" }), { action: "reply", category: "market", text: "weve got 10 in LA, youre good 🙌", react: "🔥", why: "named a market", kb: null });
+  assert.deepEqual(parseDecision({ action: "reply", category: "market", text: "  weve got 10 in LA,   youre good 🙌 ", react: "🔥", why: "named a market" }), { action: "reply", category: "market", text: "weve got 10 in LA, youre good 🙌", react: "🔥", why: "named a market", kb: null, sure: true });
   assert.equal(parseDecision({ action: "reply", category: "market", text: "", react: "", why: "" }).action, "skip");
   assert.equal(parseDecision({ action: "dance", category: "nope", text: "x", react: "🎉", why: "" }).action, "skip");
   assert.equal(parseDecision({ action: "skip", category: "nope", text: "x", react: "🎉", why: "" }).react, "");
   assert.equal(parseDecision({ action: "skip", category: "chatter", text: "ignored", react: "👍", why: "" }).text, "");
-  assert.equal(parseDecision({ action: "ghost", category: "negative", text: "ignored", react: "", why: "heckling" }).text, "");
+  // A ghost's text is the private line they still get (SPEC-kaitlyn-ghosts.md, B1 and B2); a line the guard refuses is dropped, the ghost stands.
+  assert.deepEqual(parseDecision({ action: "ghost", category: "support", text: "I'll have the team reach out to you", sure: true, react: "", why: "client complaint" }), { action: "ghost", category: "support", text: "I'll have the team reach out to you", react: "", why: "client complaint", kb: null, sure: true });
+  assert.equal(parseDecision({ action: "ghost", category: "negative", text: "it's $400 a month", sure: true, react: "", why: "price push" }).text, "");
+  assert.equal(parseDecision({ action: "ghost", category: "negative", text: "", react: "", why: "heckling" }).sure, false);
+  assert.equal(parseDecision({ action: "reply", category: "market", text: "3 in Boston", sure: true, react: "", why: "" }).sure, true);
+  assert.equal(parseDecision({ action: "ask_william", category: "product", text: "", react: "", why: "" }).sure, false);
   const priced = parseDecision({ action: "reply", category: "price", text: "it's $400 a month", react: "", why: "asked the price" });
   assert.equal(priced.action, "ask_william");
   assert.equal(priced.text, "it's $400 a month");
@@ -38,21 +43,22 @@ test("guard: prices, guarantees, live or recorded, dates and bot talk never reac
 });
 
 test("postsItself and delayMs: shadow never posts, assisted posts the routine categories, auto posts every reply", () => {
-  const reply = (category: (typeof ASSISTED extends Set<infer C> ? C : never)) => ({ action: "reply" as const, category, text: "x", react: "", why: "", kb: null });
+  const reply = (category: (typeof ASSISTED extends Set<infer C> ? C : never)) => ({ action: "reply" as const, category, text: "x", react: "", why: "", kb: null, sure: true });
   assert.equal(postsItself("shadow", reply("market")), false);
   assert.equal(postsItself("assisted", reply("market")), true);
   assert.equal(postsItself("assisted", reply("product")), false);
   assert.equal(postsItself("assisted", reply("price")), true);
   assert.equal(postsItself("auto", reply("product")), true);
-  assert.equal(postsItself("auto", { action: "ghost", category: "negative", text: "", react: "", why: "", kb: null }), false);
+  assert.equal(postsItself("auto", { action: "ghost", category: "negative", text: "", react: "", why: "", kb: null, sure: true }), false);
   assert.equal(delayMs("shadow"), 0);
   assert.equal(delayMs("assisted", () => 0), 8_000);
   assert.equal(delayMs("auto", () => 0.999), 14_993);
-  const ghost = (category: "negative" | "other") => ({ action: "ghost" as const, category, text: "", react: "", why: "", kb: null });
-  assert.equal(ghostsItself("shadow", ghost("negative")), false);
-  assert.equal(ghostsItself("assisted", ghost("negative")), true);
-  assert.equal(ghostsItself("auto", ghost("negative")), true);
-  assert.equal(ghostsItself("assisted", ghost("other")), false);
+  // A ghost she is sure of acts in assisted and auto whatever its category; an unsure one waits on the desk; shadow never acts (B2).
+  const ghost = (sure: boolean, category: "negative" | "support" = "negative") => ({ action: "ghost" as const, category, text: "", react: "", why: "", kb: null, sure });
+  assert.equal(ghostsItself("shadow", ghost(true)), false);
+  assert.equal(ghostsItself("assisted", ghost(true)), true);
+  assert.equal(ghostsItself("auto", ghost(true, "support")), true);
+  assert.equal(ghostsItself("assisted", ghost(false)), false);
   assert.equal(ghostsItself("assisted", reply("market")), false);
   assert.equal(asMode("assisted"), "assisted");
   assert.equal(asMode("sideways"), "off");
@@ -87,7 +93,8 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
   assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));
   assert.ok(s.includes('"sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright') && s.includes("Never a filler reply") && !s.includes("can't answer that one here"));
-  assert.ok(s.includes("testing whether the room is live") && s.includes('("sounds robotic", "she was AI") are welcome, not ghosts'));
+  // The ghost bullet was rewritten from the audit (SPEC-kaitlyn-ghosts.md, B1): the live test and the honesty exemption are still there, in their new words.
+  assert.ok(s.includes("if you're live say LIVE") && s.includes("the webinar asks for that honesty"));
   const t = userTurn({ minute: 82, pitchMinute: 75, name: "Ana", body: "LA", priorOwn: ["hi from LA"], modReplies: [], said: ["7 in Massachusetts so you're good", "nobody in Chelan yet"], recent: ["[attendee] Bo: Chicago"], market: "directory says 10 clients in Los Angeles, CA", katherine: false });
   assert.match(t, /minute 82, the pitch started at minute 75/);
   assert.match(t, /PERSON: Ana, earlier tonight: "hi from LA"/);
@@ -198,4 +205,9 @@ test("handoffDue: a card left pending 90 s with no hand-off tonight and no human
   assert.equal(handoffDue(card("edited", HANDOFF_AFTER_MS * 2), t0, false, false), false);
   assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS * 2), t0, true, false), false);
   assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS * 2), t0, false, true), false);
+});
+
+test("the ghost bullet carries William's cases and the never-list (SPEC-kaitlyn-ghosts.md, B1)", () => {
+  const p = systemPrompt(null);
+  for (const phrase of ["you're just watching the comments", "you're avoiding the question", "it's illegal to do that in my market", "my rep didn't show", "why do you keep skipping me", "Never a ghost", "sounds robotic", "can you see it?"]) assert.ok(p.includes(phrase), phrase);
 });
