@@ -188,6 +188,8 @@ test("holdsReply: a repeat of the same question inside the window holds; a diffe
   assert.equal(holdsReply(null, "market-count", 1_000), false);
   // Cindy, Oct 19: "OC" → her "Orange County in California, or another OC?" → "OC california" 7 s later must post.
   assert.equal(holdsReply({ kb_key: "market-count", text: "@Cindy Orange County in California, or another OC?" }, "market-count", 7_000), false);
+  // The same when her question sits mid-line (test-run, Oct 20: "Orange County in California? Tell me which OC and I'll check the count").
+  assert.equal(holdsReply({ kb_key: "market-count", text: "@Fast Sample Orange County in California? Tell me which OC and I'll check the count" }, "market-count", 20_000), false);
   // A line with no key (a bare thanks) inside the window still holds against the same person.
   assert.equal(holdsReply(last, null, 30_000), true);
 });

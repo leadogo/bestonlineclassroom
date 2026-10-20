@@ -339,7 +339,8 @@ async function touchKb(eventId: string, kb: { key: string; question: string }): 
 /** Whether her last reply to this person holds a new line of theirs: only a repeat of the same question inside the window (SPEC-kaitlyn-ghosts.md, A1; Oct 19 the window ate three follow-ups). A different question, an answer to a question she asked them, or nothing recent posts after the usual pause. */
 export function holdsReply(last: { kb_key: string | null; text: string } | null, nextKey: string | null, ageMs: number): boolean {
   if (!last || ageMs >= PER_PERSON_MS) return false;
-  if (last.text.trim().endsWith("?")) return false;
+  // A question of hers anywhere in the line: their next line is the answer to it.
+  if (last.text.includes("?")) return false;
   return nextKey === null || nextKey === last.kb_key;
 }
 
