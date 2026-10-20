@@ -43,10 +43,13 @@ test("correctionsBlock: the question, her line and William's; a removed line as 
   const b = correctionsBlock([
     { asked: "is it per lead or  monthly?", said: "You need to book a call because it depends on your market area", fixed: "per lead, and the call works out the number for your market" },
     { asked: "do you do rentals?", said: "yep, rentals work too", fixed: null },
+    // An edit of a card she sent to the desk without a draft (migration 038): his answer with nothing of hers to unlearn.
+    { asked: "Do you deal with the North East ??? Pittsburgh", said: "", fixed: "I believe we have 1 there, so you'll be fine" },
   ]);
   assert.match(b, /^CORRECTIONS \(/);
   assert.match(b, /Q: is it per lead or monthly\?\n\s*you said: You need to book a call[^\n]*\n\s*William: per lead, and the call/);
   assert.match(b, /Q: do you do rentals\?\n\s*you said: yep, rentals work too\n\s*removed by the team/);
+  assert.match(b, /Q: Do you deal with the North East \?\?\? Pittsburgh\n\s*you said: \(nothing, you handed it to the desk\)\n\s*William: I believe we have 1 there/);
   assert.equal(correctionsBlock([]), "");
 });
 

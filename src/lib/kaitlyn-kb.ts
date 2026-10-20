@@ -41,7 +41,7 @@ export type Correction = { asked: string; said: string; fixed: string | null };
 export function correctionsBlock(rows: Correction[]): string {
   if (!rows.length) return "";
   const one = (s: string) => s.replace(/\s+/g, " ").trim();
-  return `CORRECTIONS (lines of yours the team fixed or removed, newest first. On a question like one of these, answer the way William did, in his words and his length, never the way you did. A removed line means say nothing like it.)\n${rows.map((r) => `Q: ${one(r.asked)}\n   you said: ${one(r.said)}\n   ${r.fixed ? `William: ${one(r.fixed)}` : "removed by the team"}`).join("\n")}`;
+  return `CORRECTIONS (lines of yours the team fixed, reworded or removed, newest first. On a question like one of these, answer the way William did, in his words and his length, never the way you did. A removed line means say nothing like it.)\n${rows.map((r) => `Q: ${one(r.asked)}\n   you said: ${one(r.said) || "(nothing, you handed it to the desk)"}\n   ${r.fixed ? `William: ${one(r.fixed)}` : "removed by the team"}`).join("\n")}`;
 }
 
 /** Whether the 9 AM digest is due: 9 o'clock in the team's zone and not yet sent today. `today` is the local date to record. */

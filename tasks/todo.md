@@ -140,7 +140,7 @@
 - [ ] Review after a week: should refunded / dispute statuses stay on the wall; any client appearing as a guest (then the IP layer).
 
 ## kaitlyn-ghosts (SPEC-kaitlyn-ghosts.md, William's go Oct 20 2026 ~11 AM MT; plan in tasks/plan.md)
-- [ ] T1 Migration 038: corrections view + `edited`; `kaitlyn_ghosts` view. Verify: migrate; the two selects.
+- [x] T1 Migration 038: corrections view + `edited`; `kaitlyn_ghosts` view. Verify: migrate; the two selects.
 - [ ] T2 kaitlyn.ts tune: window by key, "honestly," out + shapes-vs-tells test, "see you on the call" out. Verify: npm test.
 - [ ] T3 Hand-off on an idle desk (90 s, no moderator reply or action). Verify: npm test; test-run with a background desk tab.
 - [ ] T4 Eval set ghost class (40 + 10) and script; baseline run → docs/kaitlyn-eval-before-ghosts.md.

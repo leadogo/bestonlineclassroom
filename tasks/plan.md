@@ -27,7 +27,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 ## Task list
 
 ### Phase 1: foundations and last night's misses
-- [ ] T1 Migration 038: `kaitlyn_corrections` + `edited`; view `kaitlyn_ghosts`; applied.
+- [x] T1 Migration 038: `kaitlyn_corrections` + `edited`; view `kaitlyn_ghosts`; applied.
 - [ ] T2 `kaitlyn.ts` tune: window by key (A1), "honestly," out and a shapes-vs-tells test (A2), "see you on the call" out (A6).
 - [ ] T3 Hand-off on an idle desk (A3): pending 90 s with no moderator reply or action → the line, once per person.
 - [ ] T4 Eval set + script: `ghost` class from the view (40 triggers with prior lines) + 10 must-nots; baseline run saved.
