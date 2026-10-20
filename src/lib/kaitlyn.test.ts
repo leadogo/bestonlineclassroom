@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, marketLine, parseDecision, postsItself, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, holdsReply, marketLine, parseDecision, PER_PERSON_MS, postsItself, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
 test("parseDecision: the tool input checked; a wordless reply skips, a guarded reply becomes ask_william with the draft kept", () => {
@@ -168,4 +169,23 @@ test("systemPrompt: tonight's class by minute rides in the prompt when the event
   assert.ok(s.includes("TONIGHT'S CLASS (what William covers") && s.includes("minute 75: the offer and how to book"));
   assert.ok(s.indexOf("TONIGHT'S CLASS (what William covers") < s.indexOf("HOW THE TEAM HAS ANSWERED"));
   assert.ok(!systemPrompt("PRICE: never in chat.", [], [], "  ").includes("TONIGHT'S CLASS (what William covers"));
+});
+
+test("holdsReply: a repeat of the same question inside the window holds; a different question, an answer to her own question, or an old one posts (SPEC-kaitlyn-ghosts.md, A1)", () => {
+  const last = { kb_key: "market-count", text: "@Frankie 3 across Michigan" };
+  assert.equal(holdsReply(last, "market-count", 30_000), true);
+  assert.equal(holdsReply(last, "price", 30_000), false);
+  assert.equal(holdsReply(last, "market-count", PER_PERSON_MS), false);
+  assert.equal(holdsReply(null, "market-count", 1_000), false);
+  // Cindy, Oct 19: "OC" → her "Orange County in California, or another OC?" → "OC california" 7 s later must post.
+  assert.equal(holdsReply({ kb_key: "market-count", text: "@Cindy Orange County in California, or another OC?" }, "market-count", 7_000), false);
+  // A line with no key (a bare thanks) inside the window still holds against the same person.
+  assert.equal(holdsReply(last, null, 30_000), true);
+});
+
+test("the prompt never suggests a shape the bot-tell check refuses, and the shapes she is not on the call for are gone (A2, A6)", () => {
+  for (const [group, list] of Object.entries(SHAPES)) for (const s of list) assert.deepEqual(tells(s), [], `${group}: ${s}`);
+  assert.ok(!SHAPES.price.some((s) => /^honestly/i.test(s)));
+  assert.ok(!SHAPES.booked.some((s) => /see you on the call/i.test(s)));
+  assert.match(systemPrompt(null), /3 in Boston, 7 across the state/);
 });

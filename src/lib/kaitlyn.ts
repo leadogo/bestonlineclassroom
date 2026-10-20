@@ -43,6 +43,18 @@ const KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
 export const asMode = (v: unknown): Mode => (MODES as readonly string[]).includes(String(v)) ? (v as Mode) : "off";
 
+/** The shapes her VARIETY block offers. A test runs each through the bot-tell check, so the prompt never suggests what the room refuses (SPEC-kaitlyn-ghosts.md, A2: "honestly," was tripping it); "see you on the call" is out because she is not on the call (A6). */
+export const SHAPES = {
+  market: ["7 in Massachusetts so you're good", "we've got 3 in Boston", "Boston's at 3 right now, lots of room", "yep, 5 in Chicago already", "LA has 10, biggest one we've got", "3 in Boston, 7 across the state"],
+  empty: ["nobody in Chelan yet, you'd be first", "Irvine's wide open", "none in DC so far", "Waukesha County is open, nobody in Wisconsin yet", "no one there yet", "Hollywood's empty, 60 across Florida though"],
+  booked: ["nice, the team texts and emails to confirm", "got it 🙌 watch your phone for the confirmation", "booked, the team confirms by text", "love it, confirmation's on its way", "awesome, keep an eye on your email", "that's the move 🔥"],
+  price: ["short answer:", "depends,"],
+  call: ["the call covers setup step by step", "they go through that on the call for your market", "William gets to that in a bit"],
+  thanks: ["anytime", "of course", "💛", "glad it helped", "you got it", "no problem at all"],
+  soon: ["he's getting to that in a sec", "he covers that in a minute, hang on", "coming up right now, keep watching", "that's literally the next thing he shows"],
+};
+const q = (list: string[]) => list.map((s) => JSON.stringify(s)).join(" · ");
+
 const PERSONA = `You are Kaitlyn, a moderator in the live chat of William's "AI For Agents Masterclass" (Book More Showings, Edmonton). You post as "${KAITLYN}". Real estate agents are watching William present on screen; you answer the way a teammate who knows the product does: short, plain, friendly, never salesy.
 
 VOICE
@@ -65,13 +77,13 @@ WRITING (the humanizer rules; a line that breaks them reads as a bot and goes to
 VARIETY
 - YOU ALREADY SAID TONIGHT is in every turn. Do not open the way any of the last three did, do not close the way any of the last three did, do not reuse a phrase from that list tonight, and no emoji if the last one had one. When the fact is the same as before (a market count, a booking, the price line), give it a new shape: a fragment ("3 in Boston"), a plain statement, a short aside, a question back.
 - Shapes to draw on, never the same one twice in a night:
-  market with a count: "7 in Massachusetts so you're good" · "we've got 3 in Boston" · "Boston's at 3 right now, lots of room" · "yep, 5 in Chicago already" · "LA has 10, biggest one we've got" · "3 in Boston, 7 across the state"
-  nothing in the directory: "nobody in Chelan yet, you'd be first" · "Irvine's wide open" · "none in DC so far" · "Waukesha County is open, nobody in Wisconsin yet" · "no one there yet" · "Hollywood's empty, 60 across Florida though"
-  booked: "nice, the team texts and emails to confirm" · "got it 🙌 watch your phone for the confirmation" · "booked, see you on the call" · "love it, confirmation's on its way" · "awesome, keep an eye on your email" · "that's the move 🔥"
-  price: the FACTS sentence word for word, with at most a two-word lead-in that changes each time ("short answer:", "depends,", "honestly,", or nothing).
-  FACTS say the call handles it (pricing levels, compliance specifics, setup for their market): "the call covers setup step by step" · "they go through that on the call for your market" · "William gets to that in a bit" (only when FACTS say the presentation covers it)
-  thanks: "anytime" · "of course" · "💛" · "glad it helped" · "you got it" · "no problem at all"
-  he is about to cover it (only when COMING UP shows it): "he's getting to that in a sec" · "he covers that in a minute, hang on" · "coming up right now, keep watching" · "that's literally the next thing he shows"
+  market with a count: ${q(SHAPES.market)}
+  nothing in the directory: ${q(SHAPES.empty)}
+  booked: ${q(SHAPES.booked)}
+  price: the FACTS sentence word for word, with at most a two-word lead-in that changes each time (${q(SHAPES.price)}, or nothing).
+  FACTS say the call handles it (pricing levels, compliance specifics, setup for their market): ${q(SHAPES.call)} (only when FACTS say the presentation covers it)
+  thanks: ${q(SHAPES.thanks)}
+  he is about to cover it (only when COMING UP shows it): ${q(SHAPES.soon)}
 
 WHAT HE IS SAYING (the turn carries WILLIAM ON SCREEN, COMING UP and SEGMENT whenever the transcript of the presentation is known)
 - Read their line as a reply to him first. An answer to something he just asked the room ("type YES", "where are you from", "S, B or SB", "what do you use AI for") is a skip whatever the words are, with "answering him on screen" in why. Katherine's polls and the bare cities before the pitch are the usual cases of this.
@@ -301,13 +313,23 @@ async function touchKb(eventId: string, kb: { key: string; question: string }): 
   if (error) console.error("[kaitlyn] kb touch failed", { code: error.code });
 }
 
+/** Whether her last reply to this person holds a new line of theirs: only a repeat of the same question inside the window (SPEC-kaitlyn-ghosts.md, A1; Oct 19 the window ate three follow-ups). A different question, an answer to a question she asked them, or nothing recent posts after the usual pause. */
+export function holdsReply(last: { kb_key: string | null; text: string } | null, nextKey: string | null, ageMs: number): boolean {
+  if (!last || ageMs >= PER_PERSON_MS) return false;
+  if (last.text.trim().endsWith("?")) return false;
+  return nextKey === null || nextKey === last.kb_key;
+}
+
 /** After the pause, whether the reply is still hers to post: null when it is, otherwise who got there first. */
-async function takenBy(reg: Reg, messageId: number): Promise<"a moderator answered first" | "she replied to them a moment ago" | null> {
+async function takenBy(reg: Reg, messageId: number, nextKey: string | null): Promise<"a moderator answered first" | "she replied to them a moment ago" | null> {
   const [human, hers] = await Promise.all([
     db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("role", "moderator").neq("author_name", KAITLYN).contains("mentions", [reg.id]).gt("id", messageId).limit(1),
-    db().from("chat_messages").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("author_name", KAITLYN).contains("mentions", [reg.id]).gte("created_at", new Date(Date.now() - PER_PERSON_MS).toISOString()).limit(1),
+    db().from("kaitlyn_decisions").select("kb_key, sent_body, decided_at").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).in("status", ["auto", "sent", "edited"]).not("sent_message_id", "is", null).order("id", { ascending: false }).limit(1).maybeSingle(),
   ]);
-  return human.data?.length ? "a moderator answered first" : hers.data?.length ? "she replied to them a moment ago" : null;
+  if (human.data?.length) return "a moderator answered first";
+  const h = hers.data;
+  const age = h?.decided_at ? Date.now() - new Date(h.decided_at as string).getTime() : Infinity;
+  return h && holdsReply({ kb_key: (h.kb_key as string | null) ?? null, text: String(h.sent_body ?? "") }, nextKey, age) ? "she replied to them a moment ago" : null;
 }
 
 /** One Slack line when autopilot takes over or hands back; the previous decision tonight says which way it went. */
@@ -329,7 +351,7 @@ async function handoff(reg: Reg, message: { id: number; offset: number }, did: n
   const wait = delayMs("auto", Math.random, line.length) - thought;
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   // Checked again after the pause: a second unknown from them seconds later, a moderator's answer, her own reply inside the window, or a moderator back on the desk all mean silence.
-  if ((await priorHandoff()) || (await takenBy(reg, message.id))) return;
+  if ((await priorHandoff()) || (await takenBy(reg, message.id, null))) return;
   const back = await lastDeskSeen(reg.event_id, reg.session_date);
   if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
   const body = `@${reg.first_name} ${line}`;
@@ -405,7 +427,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     const wait = delayMs(eff, Math.random, d.text.length) - out.ms;
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     // Still hers to answer? A moderator may have replied meanwhile, or she replied to them a moment ago.
-    const taken = await takenBy(reg, message.id);
+    const taken = await takenBy(reg, message.id, d.kb?.key ?? null);
     if (taken) {
       await db().from("kaitlyn_decisions").update({ status: "skipped", why: `${taken}; ${d.why}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", did);
       return;
