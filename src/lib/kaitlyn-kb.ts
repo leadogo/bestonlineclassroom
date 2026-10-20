@@ -65,18 +65,24 @@ export function digestDue(now: Date, lastOn: string | null, tz = "America/Edmont
   return { due: Number(get("hour")) % 24 === 9 && lastOn !== today, today };
 }
 
-/** The Slack line for #autoweb-intel; null when there is nothing to say. */
-export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string }): string | null {
+/** The Slack line for #autoweb-intel; null when there is nothing to say. `unanswered` and `ghosted` (SPEC-kaitlyn-ghosts.md, E2): who got no answer last night and who was ghosted by hand, so the audit is read every morning. */
+export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }> }): string | null {
   const n = o.questions.length;
   const plural = (k: number, one: string, many: string) => (k === 1 ? one : many);
-  if (!n) return o.waiting ? `${o.waiting} of Kaitlyn's answers ${plural(o.waiting, "is", "are")} waiting for your OK: ${o.url}` : null;
-  const lines = [
-    `Kaitlyn couldn't answer ${n} ${plural(n, "question", "questions")} last night (${o.people} ${plural(o.people, "person", "people")} asked):`,
-    ...o.questions.map((q) => `• ${q.question}${q.asked > 1 ? ` (×${q.asked})` : ""}`),
-    `Answer ${plural(n, "it", "them")}: ${o.url}`,
-  ];
-  if (o.waiting) lines.push(`${o.waiting} ${plural(o.waiting, "answer is", "answers are")} waiting for your OK.`);
-  return lines.join("\n");
+  const lines: string[] = [];
+  if (n) {
+    lines.push(
+      `Kaitlyn couldn't answer ${n} ${plural(n, "question", "questions")} last night (${o.people} ${plural(o.people, "person", "people")} asked):`,
+      ...o.questions.map((q) => `• ${q.question}${q.asked > 1 ? ` (×${q.asked})` : ""}`),
+      `Answer ${plural(n, "it", "them")}: ${o.url}`,
+    );
+    if (o.waiting) lines.push(`${o.waiting} ${plural(o.waiting, "answer is", "answers are")} waiting for your OK.`);
+  } else if (o.waiting) lines.push(`${o.waiting} of Kaitlyn's answers ${plural(o.waiting, "is", "are")} waiting for your OK: ${o.url}`);
+  const u = o.unanswered ?? [];
+  if (u.length) lines.push(`Last night ${u.length} ${plural(u.length, "person", "people")} went unanswered: ${u.join(", ")}.`);
+  const g = o.ghosted ?? [];
+  if (g.length) lines.push(`You ghosted ${g.length} by hand: ${g.map((x) => (x.reason ? `${x.name} (${x.reason})` : x.name)).join(", ")}.`);
+  return lines.length ? lines.join("\n") : null;
 }
 
 /** Facts in William's words that a rewrite dropped: numbers, dollar figures, links, and names (capitalised words that do not start a sentence). Empty when the rewrite kept them all. */

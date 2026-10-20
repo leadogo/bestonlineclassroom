@@ -35,11 +35,24 @@ export async function GET(request: Request) {
     const asks = keys.length ? ((await db().from("kaitlyn_decisions").select("kb_key, registrant_id").eq("event_id", e.id).in("kb_key", keys).gte("created_at", since)).data ?? []) : [];
     const perKey = new Map<string, number>();
     for (const a of asks) perKey.set(a.kb_key as string, (perKey.get(a.kb_key as string) ?? 0) + 1);
+    // Last night's audit in two lines (SPEC-kaitlyn-ghosts.md, E2): who Kaitlyn or the desk never answered (a card still pending and
+    // no moderator line to them within 15 minutes), and who the desk ghosted by hand, with the reason chip.
+    const [pending, told, ghosts] = await Promise.all([
+      db().from("kaitlyn_decisions").select("registrant_id, created_at").eq("event_id", e.id).in("action", ["reply", "ask_william"]).eq("status", "pending").gte("created_at", since).limit(200),
+      db().from("chat_messages").select("mentions, created_at").eq("event_id", e.id).eq("role", "moderator").gte("created_at", since).limit(1000),
+      db().from("registrants").select("first_name, auto_ghost_reason, source").eq("event_id", e.id).gte("ghosted_at", since).neq("source", "test").limit(50),
+    ]);
+    const answeredBy = (rid: string, atMs: number) => (told.data ?? []).some((m) => (m.mentions as string[]).includes(rid) && new Date(m.created_at as string).getTime() >= atMs && new Date(m.created_at as string).getTime() < atMs + 15 * 60_000);
+    const missed = Array.from(new Set((pending.data ?? []).filter((d) => !answeredBy(d.registrant_id as string, new Date(d.created_at as string).getTime())).map((d) => d.registrant_id as string)));
+    const names = missed.length ? ((await db().from("registrants").select("id, first_name").in("id", missed)).data ?? []) : [];
+    const byHand = (ghosts.data ?? []).filter((g) => g.auto_ghost_reason === null || String(g.auto_ghost_reason).startsWith("by hand"));
     const text = digestText({
       questions: (open.data ?? []).map((r) => ({ question: r.question as string, asked: perKey.get(r.key as string) ?? 1 })),
       people: new Set(asks.map((a) => a.registrant_id as string)).size,
       waiting: waiting.count ?? 0,
       url: `${SITE}/admin/knowledge?event=${e.slug}`,
+      unanswered: names.map((r) => r.first_name as string),
+      ghosted: byHand.map((g) => ({ name: g.first_name as string, reason: String(g.auto_ghost_reason ?? "").startsWith("by hand: ") ? String(g.auto_ghost_reason).slice(9) : null })),
     });
     if (!dry) {
       const sent = text ? await postToIntel(text) : { ok: true };

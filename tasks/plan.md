@@ -47,7 +47,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 ### Phase 3: the room, the roll-call, the audit
 - [x] T9 C: reply-to-you scroll + flash in the chat; the pill when the chat is hidden or on the People tab.
 - [x] T10 D + A5: the roll-call rule with its rate; the KB rows (SQL, recorded here); Katherine's minute-2 line on ailg-r and test-run.
-- [ ] T11 E1 + E2: `scripts/kaitlyn-audit.ts`; two digest lines; dry run against production.
+- [x] T11 E1 + E2: `scripts/kaitlyn-audit.ts`; two digest lines; dry run against production.
 
 ### Checkpoint 3: production
 - [ ] T12 Deploy before 3:30 PM MT; the five checks on test-run with two seats; rows cleaned; William's phone walk.

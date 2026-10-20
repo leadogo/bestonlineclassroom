@@ -102,3 +102,12 @@ test("ghostBlock: the line that got them ghosted, what they said before it, and 
   assert.match(b, /- Is this a recording lol$/m);
   assert.equal(ghostBlock([]), "");
 });
+
+test("digestText: last night's unanswered people and the by-hand ghosts ride on the digest, with or without open questions (SPEC-kaitlyn-ghosts.md, E2)", () => {
+  const url = "https://www.bestonlineclassroom.com/admin/knowledge";
+  const quiet = digestText({ questions: [], people: 0, waiting: 0, url, unanswered: ["Heather", "Cindy", "Glenn"], ghosted: [{ name: "Hamid", reason: "nag" }, { name: "Teri", reason: null }] })!;
+  assert.equal(quiet, "Last night 3 people went unanswered: Heather, Cindy, Glenn.\nYou ghosted 2 by hand: Hamid (nag), Teri.");
+  const one = digestText({ questions: [{ question: "Do you work with Redfin agents?", asked: 1 }], people: 1, waiting: 0, url, unanswered: ["Heather"], ghosted: [] })!;
+  assert.match(one, /Answer it: https[^\n]+\nLast night 1 person went unanswered: Heather\.$/);
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, unanswered: [], ghosted: [] }), null);
+});
