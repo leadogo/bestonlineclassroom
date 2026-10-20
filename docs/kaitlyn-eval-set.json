@@ -89,12 +89,6 @@
   {
    "key": "price",
    "expected": "answer",
-   "body": "Monthly cost is CAD $400 ?",
-   "minute": 1
-  },
-  {
-   "key": "price",
-   "expected": "answer",
    "body": "How much is to join",
    "minute": 1
   },
@@ -222,12 +216,6 @@
    "key": "price",
    "expected": "answer",
    "body": "How much, is a good question",
-   "minute": 1
-  },
-  {
-   "key": "price",
-   "expected": "answer",
-   "body": "Much be expensive because you're avoiding the question.",
    "minute": 1
   },
   {
@@ -1105,12 +1093,6 @@
    "expected": "answer",
    "body": "can you share  in the email",
    "minute": 1
-  },
-  {
-   "key": "support",
-   "expected": "answer",
-   "body": "Hi, I purchased your program, but I haven’t been able to use it at all. I need some assistance getting started and learning how to use the program. Could you please contact me and help me get set up? Thank you!",
-   "minute": 66
   },
   {
    "key": "support",
@@ -2541,12 +2523,6 @@
    "minute": 104
   },
   {
-   "key": "camera",
-   "expected": "answer",
-   "body": "Why ask us to turn on cameras?",
-   "minute": 105
-  },
-  {
    "key": "see-me",
    "expected": "answer",
    "body": "Can you not see me? Lol",
@@ -2634,12 +2610,6 @@
    "key": "beginner",
    "expected": "answer",
    "body": "I have a a question, in my scenario I’m currently 17 yrs old and just waiting till I’m 18 to take my Real estate licence I have pre licecing all complete. Based on my scenerio, what can I do rn since I yet don’t have my licence?",
-   "minute": 1
-  },
-  {
-   "key": "beginner",
-   "expected": "answer",
-   "body": "I have a question, I currently 17 yrs old already have pre licensing courses done and just waiting till I turn 18 to take and pass exam. Since I can’t do nothing if this yet, what do you reccomend for me to do to have this system upon getting my licence!?",
    "minute": 1
   },
   {

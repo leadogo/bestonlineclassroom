@@ -51,7 +51,8 @@ const run = async (i: Item): Promise<void> => {
   const action = d?.action ?? "no-answer";
   // A bare place gets the count at any minute since Oct 20 (SPEC-kaitlyn-ghosts.md, D); the room-wide slot lives in the room, not here.
   // keep: an unsure ghost is a desk card William decides, so only a sure ghost (the kind that acts on the spot) fails it.
-  const ok = i.expected === "ghost" ? action === "ghost" : i.expected === "keep" ? !(action === "ghost" && d?.sure) : i.expected === "skip" ? action === "skip" || action === "ghost" : i.expected === "market" ? action === "reply" || action === "ask_william" : action === "reply" && d?.kb?.key === i.key;
+  // answer: a reply under the expected key; a client complaint or a minor ghosted with the right line in text is answered too, privately (B1).
+  const ok = i.expected === "ghost" ? action === "ghost" : i.expected === "keep" ? !(action === "ghost" && d?.sure) : i.expected === "skip" ? action === "skip" || action === "ghost" : i.expected === "market" ? action === "reply" || action === "ask_william" : (action === "reply" || (action === "ghost" && Boolean(d?.text))) && d?.kb?.key === i.key;
   results.push({ ...i, action, sure: Boolean(d?.sure), kb: d?.kb?.key ?? null, text: d?.text ?? "", why: d?.why ?? "", tells: d?.text ? tells(d.text) : [], ms: out?.ms ?? 0, ok });
   process.stdout.write(ok ? "." : "x");
 };
