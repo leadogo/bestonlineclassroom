@@ -27,6 +27,8 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
   const atBottomRef = useRef(true);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
+  const replyRef = useRef(onReplyToMe);
+  replyRef.current = onReplyToMe;
   const [mine, setMine] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Mentionable[]>([]);
   // A phone number in the box: ask whether they want a call before anything posts (phase 6.4).
@@ -108,7 +110,7 @@ export function ChatPanel({ token, registrantId, simulated, live, expected, visi
               setFlash(last.id!);
               setTimeout(() => setFlash((f) => (f === last.id ? null : f)), 2_500);
               if (visibleRef.current && !atBottomRef.current) showRow(last.id!);
-              onReplyToMe?.({ id: last.id!, name: last.name });
+              replyRef.current?.({ id: last.id!, name: last.name });
             }
           }
         } catch {

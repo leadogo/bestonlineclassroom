@@ -366,26 +366,29 @@ async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopil
   await postToChatChannel(`Autopilot off: ${name} is back on the desk.`);
 }
 
-/** Whether this person already got her hand-off line tonight (one per person per night, decision 5 of Oct 17). */
-async function handedOff(reg: Reg, did: number): Promise<boolean> {
-  return Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_message_id", "is", null).neq("id", did).limit(1)).data?.length);
+/** Whether this person already got her hand-off line tonight, this card included (one per person per night, decision 5 of Oct 17; the sweep of Oct 20 posted three to one person when the card itself was left out). */
+async function handedOff(reg: Reg): Promise<boolean> {
+  return Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_body", "is", null).limit(1)).data?.length);
 }
 
-/** The hand-off line to this person (private when they are ghosted), recorded on their card. */
-async function postHandoff(reg: Reg, did: number, offset: number): Promise<void> {
+/** The hand-off line to this person (private when they are ghosted), recorded on their card. The card is claimed first (sent_body set where it was null), so two instances sweeping at once post one line, not two. */
+async function postHandoff(reg: Reg, did: number, offset: number): Promise<boolean> {
+  const claim = await db().from("kaitlyn_decisions").update({ sent_body: "(hand-off)" }).eq("id", did).is("sent_body", null).select("id");
+  if (!claim.data?.length) return false;
   const body = `@${reg.first_name} ${handoffLine()}`;
   const mid = await postAsKaitlyn(reg, body, offset, "autopilot");
-  if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
+  await db().from("kaitlyn_decisions").update({ sent_body: mid ? body : null, sent_message_id: mid }).eq("id", did);
+  return Boolean(mid);
 }
 
 /** When she does not know and nobody is on the desk: one hand-off line per person per night; the question stays pending for a human (decision 5). */
 async function handoff(reg: Reg, message: { id: number; offset: number }, did: number, thought: number): Promise<void> {
-  if (await handedOff(reg, did)) return;
+  if (await handedOff(reg)) return;
   const t0 = Date.now();
   const wait = delayMs("auto", Math.random, 70) - thought;
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   // Checked again after the pause: a second unknown from them seconds later, a moderator's answer, her own reply inside the window, or a moderator back on the desk all mean silence.
-  if ((await handedOff(reg, did)) || (await takenBy(reg, message.id, null))) return;
+  if ((await handedOff(reg)) || (await takenBy(reg, message.id, null))) return;
   const back = await lastDeskSeen(reg.event_id, reg.session_date);
   if (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS) return;
   await postHandoff(reg, did, message.offset + (Date.now() - t0) / 1000);
@@ -404,7 +407,7 @@ export async function sweepHandoffs(eventId: string, sessionDate: string, autopi
   const now = Date.now();
   if ((sweepAt.get(key) ?? 0) > now - 10_000) return 0;
   sweepAt.set(key, now);
-  const cards = (await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, status, created_at").eq("event_id", eventId).eq("session_date", sessionDate).eq("action", "ask_william").eq("status", "pending").lt("created_at", new Date(now - HANDOFF_AFTER_MS).toISOString()).order("id").limit(20)).data ?? [];
+  const cards = (await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, status, created_at").eq("event_id", eventId).eq("session_date", sessionDate).eq("action", "ask_william").eq("status", "pending").is("sent_body", null).lt("created_at", new Date(now - HANDOFF_AFTER_MS).toISOString()).order("id").limit(20)).data ?? [];
   let posted = 0;
   const seen = new Set<string>();
   for (const c of cards) {
@@ -416,9 +419,8 @@ export async function sweepHandoffs(eventId: string, sessionDate: string, autopi
     const reg: Reg = { id: r.id as string, event_id: r.event_id as string, session_date: r.session_date as string, first_name: r.first_name as string, source: String(r.source ?? "") };
     const did = c.id as number;
     const human = (await takenBy(reg, c.message_id as number, null)) === "a moderator answered first";
-    if (!handoffDue({ status: String(c.status), created_at: String(c.created_at) }, now, await handedOff(reg, did), human)) continue;
-    await postHandoff(reg, did, offset);
-    posted += 1;
+    if (!handoffDue({ status: String(c.status), created_at: String(c.created_at) }, now, await handedOff(reg), human)) continue;
+    if (await postHandoff(reg, did, offset)) posted += 1;
   }
   return posted;
 }
@@ -468,12 +470,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (!out) return;
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
     if (d.kb) await touchKb(reg.event_id, d.kb);
-    let itself = postsItself(eff, d);
-    // The roll-call slot (D): before the pitch, a market line only when none of hers posted in the last 30 s; the others skip quietly.
-    if (itself && d.category === "market" && ctx.pitchMinute !== null && ctx.minute < ctx.pitchMinute) {
-      const last = await db().from("kaitlyn_decisions").select("decided_at").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("category", "market").eq("status", "auto").order("id", { ascending: false }).limit(1).maybeSingle();
-      if (!rollCallOpen(last.data?.decided_at ? new Date(last.data.decided_at as string).getTime() : null, Date.now())) { itself = false; d.action = "skip"; d.why = `roll-call slot taken; ${d.why}`.slice(0, 140); }
-    }
+    const itself = postsItself(eff, d);
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.
     const pending = eff === "shadow" ? d.action !== "skip" || Boolean(d.react) : (d.action === "reply" && !itself) || d.action === "ask_william" || (d.action === "ghost" && !ghostsItself(eff, d));
     const row = await db().from("kaitlyn_decisions").insert({ event_id: reg.event_id, session_date: reg.session_date, message_id: message.id, registrant_id: reg.id, action: d.action, category: d.category, text: d.text, react: d.react, why: d.why, status: pending ? "pending" : "skipped", decided_at: pending ? null : new Date().toISOString(), model: MODEL, ms: out.ms, kb_key: d.kb?.key ?? null, autopilot: auto }).select("id").single();
@@ -513,6 +510,14 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (taken) {
       await db().from("kaitlyn_decisions").update({ status: "skipped", why: `${taken}; ${d.why}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", did);
       return;
+    }
+    // The roll-call slot (D), checked after the pause so a burst of city drops lets the first one through and the rest see it: before the pitch, one market line per 30 s room-wide.
+    if (d.category === "market" && ctx.pitchMinute !== null && ctx.minute < ctx.pitchMinute) {
+      const last = await db().from("kaitlyn_decisions").select("decided_at").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("category", "market").eq("status", "auto").order("id", { ascending: false }).limit(1).maybeSingle();
+      if (!rollCallOpen(last.data?.decided_at ? new Date(last.data.decided_at as string).getTime() : null, Date.now())) {
+        await db().from("kaitlyn_decisions").update({ status: "skipped", why: `roll-call slot taken; ${d.why}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", did);
+        return;
+      }
     }
     // Auto hands back the moment a moderator is looking again: the line waits on the desk instead of posting.
     if (auto && autopilot === "auto" && mode !== "auto") {
