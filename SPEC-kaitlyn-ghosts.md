@@ -2,8 +2,16 @@
 
 Module of [SPEC.md](SPEC.md). Depends on `kaitlyn-transcript` (Kaitlyn as shipped Oct 19), `moderator` (the desk),
 `room` (the chat panel), `admin` (the Knowledge page, the digest). Proposed Oct 20 2026 from
-[docs/kaitlyn-ghost-audit-2026-10-20.md](docs/kaitlyn-ghost-audit-2026-10-20.md). Nothing here changes until William
-approves it; the open questions at the end decide the parts marked (ask).
+[docs/kaitlyn-ghost-audit-2026-10-20.md](docs/kaitlyn-ghost-audit-2026-10-20.md).
+
+**Status: BUILT AND SHIPPED Oct 20 2026, 11:30 AM to 12:15 PM MT** (commits fb0420e to the fixes after the production
+checks; migrations 038 and 039; plan in `tasks/plan.md`). Every check in the Testing section passed on test-run with five
+test seats, after four fixes the checks found (a mid-line question of hers frees the follow-up; one hand-off per card, the
+card claimed first; the roll-call slot checked after the pause; the room's pill reads the live callback; the re-point filed
+under see-me). Eval after: answer 71%, market 97%, skip 91%, ghost 82% (17 of 18 sure), keep 8 of 9 (`docs/kaitlyn-eval.md`).
+Follow-ups noticed, not built: "OC" and other abbreviations do not match the directory's "Orange County, CA" (she said
+"wide open" where the count is 9: a market alias table); a third live-or-recorded push with an ultimatum (Kim Ma) is the one
+line she ghosts that the spec calls sincere, his hand agreed. Decisions below were taken on his go.
 
 ## Objective
 In William's words, Oct 20: "look at the messages from yesterday and see what we can do to train Kaitlyn even more.

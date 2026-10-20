@@ -153,5 +153,5 @@
 - [x] T9 C reply-to-you scroll/flash + pill. Verify: Chrome mobile emulation; William's phone.
 - [x] T10 D roll-call rule + slot; A5 KB rows (SQL); Katherine's minute-2 line. Verify: npm test; two seats at minute 1.
 - [x] T11 E1 audit script + E2 digest lines. Verify: audit reproduces the table; digest dry run.
-- [ ] T12 Deploy before 3:30 PM MT; six production checks; rows cleaned; report.
+- [x] T12 Deployed 11:3x AM MT (f7mhqp3c8, then four fixes from the checks: mid-line question frees the follow-up, one hand-off per card with a claim, slot after the pause, pill callback via a ref, re-point under see-me). test-run at 11:55 with five test seats: OC → her question → follow-up answered after the fix; price push → ghosted on the spot, invisible to the other seat; ghosted seat's market line answered privately; hand-off after ~2 min with the desk tab open, once per person after the fix; Dallas before the pitch answered, Miami/Chicago 2 s apart → one posted, one "roll-call slot taken"; the pill over the video, tap → chat at her line; desk Ghost → chips → "by hand: price". Nag sequence rerun on a fifth seat. Rows cleaned after.
 - [ ] T13 /review, fixes, docs, memory.

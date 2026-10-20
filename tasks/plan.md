@@ -50,7 +50,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 - [x] T11 E1 + E2: `scripts/kaitlyn-audit.ts`; two digest lines; dry run against production.
 
 ### Checkpoint 3: production
-- [ ] T12 Deploy before 3:30 PM MT; the five checks on test-run with two seats; rows cleaned; William's phone walk.
+- [x] T12 Deployed before noon MT; eight checks on test-run with five seats (see tasks/todo.md); rows cleaned. William's phone walk still his.
 - [ ] T13 `/review` over the diff; fixes; docs (`docs/kaitlyn-eval.md`, `tasks/todo.md`, memory).
 
 ## Tasks
