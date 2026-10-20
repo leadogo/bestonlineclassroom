@@ -87,8 +87,10 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   const s = systemPrompt("PRICE: never in chat.");
   assert.ok(s.includes("PRICE: never in chat."));
   assert.ok(s.includes("Kaitlyn from William's Team"));
-  assert.ok(EXAMPLES.qa.length > 150 && EXAMPLES.ghosts.length > 15);
-  assert.ok(s.includes(EXAMPLES.qa[0].a) && s.includes(EXAMPLES.ghosts[0]));
+  assert.ok(EXAMPLES.qa.length > 150);
+  assert.ok(s.includes(EXAMPLES.qa[0].a) && !s.includes("LINES THE TEAM GHOSTED"));
+  // The ghosts come from the view now (B3), per call, so the prompt only carries them when given.
+  assert.ok(systemPrompt(null, [], [], null, [{ line: "Is this a recording lol", context: null, reason: null }]).includes("LINES THE TEAM GHOSTED (the line that got the person ghosted by hand"));
   assert.ok(systemPrompt(null).includes("No fact sheet"));
   assert.ok(s.includes("before the pitch, a bare city or state with no question") && s.includes("Katherine AI's polls"));
   assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));

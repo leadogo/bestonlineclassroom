@@ -44,6 +44,19 @@ export function correctionsBlock(rows: Correction[]): string {
   return `CORRECTIONS (lines of yours the team fixed, reworded or removed, newest first. On a question like one of these, answer the way William did, in his words and his length, never the way you did. A removed line means say nothing like it.)\n${rows.map((r) => `Q: ${one(r.asked)}\n   you said: ${one(r.said) || "(nothing, you handed it to the desk)"}\n   ${r.fixed ? `William: ${one(r.fixed)}` : "removed by the team"}`).join("\n")}`;
 }
 
+/** A person William ghosted by hand (the kaitlyn_ghosts view, migration 038): the line it came from, their lines before it, the desk's reason chip. */
+export type Ghost = { line: string; context: string[] | null; reason: string | null };
+
+/** The block her prompt carries in place of the old static list (SPEC-kaitlyn-ghosts.md, B3): his hand, newest first, with the run-up so she sees the pattern and not just the words. Empty when there are none. */
+export function ghostBlock(rows: Ghost[]): string {
+  if (!rows.length) return "";
+  const one = (s: string) => s.replace(/\s+/g, " ").trim();
+  return `LINES THE TEAM GHOSTED (the line that got the person ghosted by hand, newest first; in brackets the desk's reason and what they said before it. Lines like these, in this run-up, are ghosts.)\n${rows.map((r) => {
+    const notes = [r.reason ? one(r.reason) : null, r.context?.length ? `before it: ${r.context.map((c) => JSON.stringify(one(c))).join(" | ")}` : null].filter(Boolean);
+    return `- ${one(r.line)}${notes.length ? ` (${notes.join("; ")})` : ""}`;
+  }).join("\n")}`;
+}
+
 /** Whether the 9 AM digest is due: 9 o'clock in the team's zone and not yet sent today. `today` is the local date to record. */
 export function digestDue(now: Date, lastOn: string | null, tz = "America/Edmonton"): { due: boolean; today: string } {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false }).formatToParts(now);

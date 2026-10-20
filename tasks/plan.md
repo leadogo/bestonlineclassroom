@@ -30,7 +30,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 - [x] T1 Migration 038: `kaitlyn_corrections` + `edited`; view `kaitlyn_ghosts`; applied.
 - [x] T2 `kaitlyn.ts` tune: window by key (A1), "honestly," out and a shapes-vs-tells test (A2), "see you on the call" out (A6).
 - [x] T3 Hand-off on an idle desk (A3): pending 90 s with no moderator reply or action → the line, once per person.
-- [ ] T4 Eval set + script: `ghost` class from the view (40 triggers with prior lines) + 10 must-nots; baseline run saved.
+- [x] T4 Eval set + script: `ghost` class from the view (40 triggers with prior lines) + 10 must-nots; baseline run saved.
 
 ### Checkpoint 1
 - [ ] `npm test`, `npm run lint`, `npm run build` clean; baseline eval written to `docs/kaitlyn-eval-before-ghosts.md`.
@@ -38,7 +38,7 @@ audit in the morning digest. Every rule is pure and tested; every behaviour is c
 ### Phase 2: ghosting the way he does
 - [x] T5 B0: Kaitlyn runs for ghosted people; private posts; "(ghosted)" on the desk card and the Slack line.
 - [x] T6 B1 + B2: the ghost bullet from the audit; `sure` on decisions; sure ghosts act; private line + intel Slack for a client complaint.
-- [ ] T7 B3: `kaitlyn_ghosts` → GHOSTED block in the prompt; the static list leaves `kaitlyn-examples.ts`.
+- [x] T7 B3: `kaitlyn_ghosts` → GHOSTED block in the prompt; the static list leaves `kaitlyn-examples.ts`.
 - [ ] T8 B4: the reason chip on the desk's Ghost (message row and people row); the decision row marked.
 
 ### Checkpoint 2

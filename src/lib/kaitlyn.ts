@@ -8,7 +8,7 @@ import { KAITLYN, KAITLYN_MODES, type KaitlynMode } from "./chat.ts";
 import { db } from "./db.ts";
 import { tells, tidy } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
-import { correctionsBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type Correction, type KbRow } from "./kaitlyn-kb.ts";
+import { correctionsBlock, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type Correction, type Ghost, type KbRow } from "./kaitlyn-kb.ts";
 import { asksForReplay } from "./katherine.ts";
 import { asksMarket, findMarkets, findStates, onlyStates, placeOf, rollup, type MarketCount } from "./market-answer.ts";
 import { EMOJIS, isEmoji } from "./moderation.ts";
@@ -121,14 +121,15 @@ ACTIONS
 
 OUTPUT: one JSON object and nothing else, no prose, no code fence: {"action": "reply" | "skip" | "ghost" | "ask_william", "category": one of ${CATEGORIES.join(" | ")}, "text": the reply to post (empty unless reply; a draft is welcome with ask_william), "react": one emoji or "", "sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright, or a ghost matches one of the ghost cases, "why": ten words for the desk, "kb": {"key": one of KEYS YOU MAY NAME when the meaning matches, else a new lowercase-hyphen slug, "question": the question in plain words} on every reply, ghost or ask_william, null on skip}.`;
 
-/** The system prompt: persona and rules, the event's fact sheet, the knowledge table, the team's corrections of her lines, tonight's class by minute, Kevin's real answers, and the lines the team ghosted. Cached by the API. */
-export function systemPrompt(facts: string | null, kb: KbRow[] = [], corrections: Correction[] = [], outline: string | null = null): string {
+/** The system prompt: persona and rules, the event's fact sheet, the knowledge table, the team's corrections of her lines, tonight's class by minute, Kevin's real answers, and the lines William ghosted by hand (the kaitlyn_ghosts view). Cached by the API. */
+export function systemPrompt(facts: string | null, kb: KbRow[] = [], corrections: Correction[] = [], outline: string | null = null, ghosts: Ghost[] = []): string {
   const f = facts?.trim() ? facts.trim() : "(No fact sheet for this event: answer only about markets, booking, the replay email and tech trouble; everything else is ask_william.)";
   const qa = EXAMPLES.qa.map((x) => `[${x.m}m] Q: ${x.q}\n   A: ${x.a}`).join("\n");
   const k = knowledgeBlock(kb);
   const c = correctionsBlock(corrections);
+  const g = ghostBlock(ghosts);
   const o = outline?.trim() ? `TONIGHT'S CLASS (what William covers, by minute of the recording; "he gets to that around minute N" comes only from here)\n${outline.trim()}` : "";
-  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}${k ? `\n\n${k}` : ""}${c ? `\n\n${c}` : ""}${o ? `\n\n${o}` : ""}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first: this is the voice to match, its length and plainness; the substance where FACTS agree)\n${qa}\n\nLINES THE TEAM GHOSTED ON THE SPOT\n${EXAMPLES.ghosts.map((g) => `- ${g}`).join("\n")}`;
+  return `${PERSONA}\n\nFACTS (the only product claims you may make)\n${f}${k ? `\n\n${k}` : ""}${c ? `\n\n${c}` : ""}${o ? `\n\n${o}` : ""}\n\nHOW THE TEAM HAS ANSWERED (Kevin's real replies, minute into the session first: this is the voice to match, its length and plainness; the substance where FACTS agree)\n${qa}${g ? `\n\n${g}` : ""}`;
 }
 
 export type Context = {
@@ -421,7 +422,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
   try {
     const { reg, message } = a;
     const autopilot = a.event.autopilot ?? "auto";
-    const [recentQ, ownQ, toThemQ, marketsQ, saidQ, kbQ, fixQ, seen, cues] = await Promise.all([
+    const [recentQ, ownQ, toThemQ, marketsQ, saidQ, kbQ, fixQ, ghostQ, seen, cues] = await Promise.all([
       db().from("chat_messages").select("id, registrant_id, author_name, role, body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("visibility", "all").is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(40),
       // Their own earlier lines whatever their visibility: a ghosted person's are hidden from the room, not from her.
       db().from("chat_messages").select("body").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).is("deleted_at", null).lt("id", message.id).order("id", { ascending: false }).limit(5),
@@ -433,6 +434,8 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
       db().from("kaitlyn_kb").select("key, question, answer, approved, approved_at, handling, asked").eq("event_id", reg.event_id).order("key"),
       // The team's Fix and Delete on her lines, newest first (migration 036): what she said and what William said instead.
       db().from("kaitlyn_corrections").select("asked, said, fixed").eq("event_id", reg.event_id).order("id", { ascending: false }).limit(40),
+      // William's by-hand ghosts from any webinar (his hand is the same everywhere), newest first.
+      db().from("kaitlyn_ghosts").select("line, context, reason").order("ghosted_at", { ascending: false }).limit(40),
       lastDeskSeen(reg.event_id, reg.session_date),
       cuesFor(a.event.captions_url),
     ]);
@@ -453,7 +456,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     // Autopilot: with nobody on the desk, shadow and assisted act as auto for this message; her unsure lines still wait (SPEC-kaitlyn-autopilot.md, C).
     const auto = engaged(autopilot, seen, a.message.sessionMinute ?? ctx.minute, Date.now());
     const eff: Mode = auto && mode !== "auto" ? "auto" : mode;
-    const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[], (fixQ.data ?? []) as Correction[], a.event.outline ?? null), userTurn(ctx));
+    const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[], (fixQ.data ?? []) as Correction[], a.event.outline ?? null, (ghostQ.data ?? []) as Ghost[]), userTurn(ctx));
     if (!out) return;
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
     if (d.kb) await touchKb(reg.event_id, d.kb);

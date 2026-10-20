@@ -8,10 +8,11 @@ import { parseArgs } from "node:util";
 import { db } from "../src/lib/db.ts";
 import { tells } from "../src/lib/humanize.ts";
 import { decide, marketLine, systemPrompt, userTurn, type Context } from "../src/lib/kaitlyn.ts";
-import type { Correction, KbRow } from "../src/lib/kaitlyn-kb.ts";
+import type { Correction, Ghost, KbRow } from "../src/lib/kaitlyn-kb.ts";
 import { cuesFor, onScreen } from "../src/lib/transcript.ts";
 
-type Item = { key: string; expected: "answer" | "market" | "skip"; body: string; minute: number };
+// ghost: a line William ghosted by hand (SPEC-kaitlyn-ghosts.md, B5; `prior` = their lines before it); keep: a line that must never ghost.
+type Item = { key: string; expected: "answer" | "market" | "skip" | "ghost" | "keep"; body: string; minute: number; prior?: string[] };
 const { values } = parseArgs({ options: { n: { type: "string" }, seed: { type: "string", default: "7" }, concurrency: { type: "string", default: "4" }, "no-screen": { type: "boolean", default: false }, out: { type: "string", default: "docs/kaitlyn-eval.md" } } });
 const set = JSON.parse(readFileSync(new URL("../docs/kaitlyn-eval-set.json", import.meta.url), "utf8")) as { items: Item[] };
 
@@ -21,8 +22,9 @@ const rand = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const want = values.n ? Number(values.n) : set.items.length;
 const byKey = new Map<string, Item[]>();
 for (const i of set.items) byKey.set(i.key, [...(byKey.get(i.key) ?? []), i]);
-let items: Item[] = [];
-for (const list of byKey.values()) items.push(...list.slice(0, 2));
+// Every ghost and keep line runs every time (the ghost score is the point); --n samples the rest.
+let items: Item[] = set.items.filter((i) => i.expected === "ghost" || i.expected === "keep");
+for (const [k, list] of byKey) if (k !== "ghost") items.push(...list.filter((i) => !items.includes(i)).slice(0, 2));
 const rest = set.items.filter((i) => !items.includes(i)).sort(() => rand() - 0.5);
 items = [...items, ...rest].slice(0, want);
 
@@ -30,8 +32,10 @@ const ev = (await db().from("events").select("id, kaitlyn_facts, cta_at_seconds,
 const kb = ((await db().from("kaitlyn_kb").select("key, question, answer, approved, approved_at, handling, asked").eq("event_id", ev.id).order("key")).data ?? []) as KbRow[];
 const fixes = ((await db().from("kaitlyn_corrections").select("asked, said, fixed").eq("event_id", ev.id).order("id", { ascending: false }).limit(40)).data ?? []) as Correction[];
 const markets = (await db().from("market_counts").select("name, clients, live")).data ?? [];
-// The same prompt the room uses: facts, knowledge, corrections and tonight's class; the screen per item unless --no-screen.
-const system = systemPrompt(ev.kaitlyn_facts, kb, fixes, ev.outline as string | null);
+const ghosts = ((await db().from("kaitlyn_ghosts").select("line, context, reason").order("ghosted_at", { ascending: false }).limit(40)).data ?? []) as Ghost[];
+// The same prompt the room uses: facts, knowledge, corrections, tonight's class and William's by-hand ghosts; the screen per item unless --no-screen.
+// A ghost item is scored against a prompt without its own line (leave one out), so the number is her judgement and not her memory.
+const systemFor = (i: Item) => systemPrompt(ev.kaitlyn_facts, kb, fixes, ev.outline as string | null, i.expected === "ghost" ? ghosts.filter((g) => g.line !== i.body) : ghosts);
 const cues = values["no-screen"] ? [] : await cuesFor(ev.captions_url as string | null);
 const chapters = (ev.chapters ?? []) as Array<{ at: number; label: string }>;
 const shift = Number(ev.captions_offset_seconds ?? 0) || 0;
@@ -40,12 +44,12 @@ const pitch = ev.cta_at_seconds === null ? null : Math.floor(ev.cta_at_seconds /
 type Result = Item & { action: string; kb: string | null; text: string; why: string; tells: string[]; ms: number; ok: boolean };
 const results: Result[] = [];
 const run = async (i: Item): Promise<void> => {
-  const ctx: Context = { minute: i.minute, pitchMinute: pitch, name: "Sam", body: i.body, priorOwn: [], modReplies: [], said: [], recent: [], market: marketLine(i.body, markets as never), katherine: false, onScreen: onScreen(cues, chapters, i.minute * 60 + 30, (ev.video_seconds as number | null) ?? null, shift) };
-  const out = await decide(system, userTurn(ctx));
+  const ctx: Context = { minute: i.minute, pitchMinute: pitch, name: "Sam", body: i.body, priorOwn: i.prior ?? [], modReplies: [], said: [], recent: [], market: marketLine(i.body, markets as never), katherine: false, onScreen: onScreen(cues, chapters, i.minute * 60 + 30, (ev.video_seconds as number | null) ?? null, shift) };
+  const out = await decide(systemFor(i), userTurn(ctx));
   const d = out?.decision;
   const action = d?.action ?? "no-answer";
   // A bare place before the pitch is skipped by design (they are answering William's where-are-you-from), so that counts as expected.
-  const ok = i.expected === "skip" ? action === "skip" || action === "ghost" : i.expected === "market" ? action === "reply" || action === "ask_william" || (action === "skip" && pitch !== null && i.minute < pitch) : action === "reply" && d?.kb?.key === i.key;
+  const ok = i.expected === "ghost" ? action === "ghost" : i.expected === "keep" ? action !== "ghost" : i.expected === "skip" ? action === "skip" || action === "ghost" : i.expected === "market" ? action === "reply" || action === "ask_william" || (action === "skip" && pitch !== null && i.minute < pitch) : action === "reply" && d?.kb?.key === i.key;
   results.push({ ...i, action, kb: d?.kb?.key ?? null, text: d?.text ?? "", why: d?.why ?? "", tells: d?.text ? tells(d.text) : [], ms: out?.ms ?? 0, ok });
   process.stdout.write(ok ? "." : "x");
 };
@@ -54,8 +58,8 @@ await Promise.all(Array.from({ length: Number(values.concurrency) || 4 }, async 
 console.log();
 
 const pct = (a: number, b: number) => (b ? `${Math.round((100 * a) / b)}%` : "—");
-const groups = ["answer", "market", "skip"] as const;
-const lines: string[] = [`# Kaitlyn eval, ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`, "", `${results.length} of ${set.items.length} lines from docs/kaitlyn-eval-set.json, seed ${values.seed}, against the live fact sheet, ${kb.length} knowledge rows, ${fixes.length} corrections, ${ev.outline ? "the class outline" : "no outline"}, and ${cues.length ? "what William is saying on screen at each line's minute" : "no transcript (--no-screen)"}.`, "", "| expected | lines | as expected | replied | asked William | skipped | ghosted | median ms |", "|---|---|---|---|---|---|---|---|"];
+const groups = ["answer", "market", "skip", "ghost", "keep"] as const;
+const lines: string[] = [`# Kaitlyn eval, ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`, "", `${results.length} of ${set.items.length} lines from docs/kaitlyn-eval-set.json, seed ${values.seed}, against the live fact sheet, ${kb.length} knowledge rows, ${fixes.length} corrections, ${ghosts.length} by-hand ghosts (each ghost line scored without itself in the prompt), ${ev.outline ? "the class outline" : "no outline"}, and ${cues.length ? "what William is saying on screen at each line's minute" : "no transcript (--no-screen)"}.`, "", "| expected | lines | as expected | replied | asked William | skipped | ghosted | median ms |", "|---|---|---|---|---|---|---|---|"];
 for (const g of groups) {
   const r = results.filter((x) => x.expected === g);
   const med = r.map((x) => x.ms).sort((a, b) => a - b)[Math.floor(r.length / 2)] ?? 0;

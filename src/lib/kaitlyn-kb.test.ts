@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { correctionsBlock, digestDue, digestText, factsLost, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
+import { correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
 
 const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, approved_at: p.approved ? "2026-10-17T00:00:00Z" : null, handling: "open", asked: 0, ...p });
 
@@ -90,4 +90,15 @@ test("handoffLine: one of Kevin's shapes, never empty, picks by the draw", () =>
   assert.ok(a.length > 10 && b.length > 10);
   assert.notEqual(a, b);
   assert.match(a + b, /team/);
+});
+
+test("ghostBlock: the line that got them ghosted, what they said before it, and the desk's reason; nothing when there are none (SPEC-kaitlyn-ghosts.md, B3)", () => {
+  const b = ghostBlock([
+    { line: "william,I am surprised if you receive my messages!!!", context: ["William,Have you received my messages?", "William,it looks like that you receivbe my messages!"], reason: "nag" },
+    { line: "Is this a recording lol", context: null, reason: null },
+  ]);
+  assert.match(b, /^LINES THE TEAM GHOSTED \(/);
+  assert.match(b, /- william,I am surprised if you receive my messages!!! \(nag; before it: "William,Have you received my messages\?" \| "William,it looks like that you receivbe my messages!"\)/);
+  assert.match(b, /- Is this a recording lol$/m);
+  assert.equal(ghostBlock([]), "");
 });
