@@ -192,6 +192,8 @@ test("holdsReply: a repeat of the same question inside the window holds; a diffe
   assert.equal(holdsReply({ kb_key: "market-count", text: "@Fast Sample Orange County in California? Tell me which OC and I'll check the count" }, "market-count", 20_000), false);
   // A line with no key (a bare thanks) inside the window still holds against the same person.
   assert.equal(holdsReply(last, null, 30_000), true);
+  // The re-point after a nag is a second answer on purpose (test-run, Oct 20: it was held under the market key).
+  assert.equal(holdsReply(last, "see-me", 30_000), false);
 });
 
 test("the prompt never suggests a shape the bot-tell check refuses, and the shapes she is not on the call for are gone (A2, A6)", () => {
