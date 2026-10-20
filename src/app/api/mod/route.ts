@@ -8,6 +8,7 @@ import { toggleReaction } from "@/lib/reactions";
 import { asAutopilot, asMode, KAITLYN, postAsKaitlyn, reactAsKaitlyn, withoutMention } from "@/lib/kaitlyn";
 import { postToChatChannel } from "@/lib/slack";
 import { withQuery } from "@/lib/params";
+import { ghostReason } from "@/lib/moderation";
 import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
 import { cuesFor, windowAt } from "@/lib/transcript";
 
@@ -275,12 +276,17 @@ export async function POST(request: Request) {
     case "unghost": {
       const rid = String(b.registrant_id ?? "");
       if (!/^[0-9a-f-]{36}$/i.test(rid)) return Response.json({ error: "Which person?" }, { status: 422 });
-      const { error } = await db().from("registrants").update({ ghosted_at: b.action === "ghost" ? now : null }).eq("id", rid).eq("event_id", s.event.id);
+      // The reason chip (SPEC-kaitlyn-ghosts.md, B4) rides on the row; an Unghost clears it, so the view Kaitlyn learns from forgets the person.
+      const { error } = await db().from("registrants").update(b.action === "ghost" ? { ghosted_at: now, auto_ghost_reason: ghostReason(b.reason) } : { ghosted_at: null, auto_ghost_reason: null }).eq("id", rid).eq("event_id", s.event.id);
       if (error) return Response.json({ error: "Could not change that." }, { status: 500 });
       // Ghosting from a message row hides that line from the room too (William, Oct 15: David's "say LIVE" stayed up for
       // 98 s after the ghost). The author still sees it; Kaitlyn's approved ghost already does the same.
       const mid = Number(b.id);
-      if (b.action === "ghost" && mid) await db().from("chat_messages").update({ visibility: "author", updated_at: now }).eq("id", mid).eq("event_id", s.event.id).eq("registrant_id", rid);
+      if (b.action === "ghost" && mid) {
+        await db().from("chat_messages").update({ visibility: "author", updated_at: now }).eq("id", mid).eq("event_id", s.event.id).eq("registrant_id", rid);
+        // Her decision on that line, if she made one, is marked ghosted by hand, so the audit and the eval see his call.
+        await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_by: member.id, decided_at: now }).eq("message_id", mid).eq("event_id", s.event.id).in("status", ["pending", "skipped"]);
+      }
       return Response.json({ ok: true });
     }
     case "block_ip": {

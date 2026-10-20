@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "../login/actions";
 import { KAITLYN, mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, type ChatUpdate, type KaitlynMode, type SimulatedRow } from "@/lib/chat";
-import { EMOJIS } from "@/lib/moderation";
+import { EMOJIS, GHOST_REASONS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
 import { asksMarket, findMarkets, findStates, marketDraft, NO_MATCH_DRAFT, onlyStates, placeOf, rollup, rollupDraft, type MarketCount } from "@/lib/market-answer";
@@ -50,6 +50,8 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
   const [teamText, setTeamText] = useState("");
   const [error, setError] = useState("");
   const [confirmBlock, setConfirmBlock] = useState<string | null>(null);
+  // The Ghost button opens the reason chips (SPEC-kaitlyn-ghosts.md, B4); `mid` is set when the ghost comes from a message row.
+  const [confirmGhost, setConfirmGhost] = useState<{ rid: string; mid?: number } | null>(null);
   const [onlyMentions, setOnlyMentions] = useState(false);
   const [edge, setEdge] = useState(true);
   const [bookingHref, setBookingHref] = useState<string | null>(null);
@@ -317,7 +319,7 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
   const messages = chat.filter((m) => m.role === "attendee" && !m.deleted).length;
 
   const panes = (which: Exclude<Tab, "chat">) =>
-    which === "people" ? <PeoplePane people={people} msgCount={msgCount} confirmBlock={confirmBlock} setConfirmBlock={setConfirmBlock} act={act} edge={edge} />
+    which === "people" ? <PeoplePane people={people} msgCount={msgCount} confirmBlock={confirmBlock} setConfirmBlock={setConfirmBlock} confirmGhost={confirmGhost} setConfirmGhost={setConfirmGhost} act={act} edge={edge} />
     : which === "team" ? <TeamPane msgs={teamMsgs} me={name} text={teamText} setText={setTeamText} onSend={sendTeam} scroller={teamScroller} />
     : which === "engagement" ? <EngagementPane people={people} msgCount={msgCount} beliefCount={beliefCount} pitchMinutes={event.ctaAt !== null ? event.ctaAt / 60 : 75} />
     : <StatsPane stats={stats} chatters={msgCount.size} messages={messages} now={now} ctaAt={event.ctaAt} startsAt={session.startsAt} history={history} live={live} />;
@@ -500,9 +502,13 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
                               <button type="button" onClick={() => setConfirmBlock(m.registrantId!)} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-live">
                                 Block
                               </button>
-                              <button type="button" onClick={() => act({ action: person(m.registrantId)?.ghosted ? "unghost" : "ghost", registrant_id: m.registrantId, id: m.id })} className={`min-h-8 rounded-full px-2 text-sm ${person(m.registrantId)?.ghosted ? "bg-live/15 font-bold text-live" : "text-muted hover:text-ink"}`} title="They keep chatting; only they see it">
-                                {person(m.registrantId)?.ghosted ? "Unghost" : "Ghost"}
-                              </button>
+                              {confirmGhost?.rid === m.registrantId && confirmGhost.mid === m.id ? (
+                                <GhostChips onPick={async (reason) => { await act({ action: "ghost", registrant_id: m.registrantId, id: m.id, reason }); setConfirmGhost(null); }} onCancel={() => setConfirmGhost(null)} />
+                              ) : (
+                                <button type="button" onClick={() => (person(m.registrantId)?.ghosted ? act({ action: "unghost", registrant_id: m.registrantId }) : setConfirmGhost({ rid: m.registrantId!, mid: m.id }))} className={`min-h-8 rounded-full px-2 text-sm ${person(m.registrantId)?.ghosted ? "bg-live/15 font-bold text-live" : "text-muted hover:text-ink"}`} title="They keep chatting; only they see it">
+                                  {person(m.registrantId)?.ghosted ? "Unghost" : "Ghost"}
+                                </button>
+                              )}
                               {person(m.registrantId)?.ip_blocked && (
                                 <button type="button" onClick={() => act({ action: "unblock_ip", registrant_id: m.registrantId })} className="min-h-8 rounded-full px-2 text-sm text-live hover:text-ink">
                                   Unblock IP
@@ -600,7 +606,7 @@ function Monitor({ url, live, offset, open, onToggle }: { url: string; live: boo
   );
 }
 
-function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge }: { people: Person[]; msgCount: Map<string, number>; confirmBlock: string | null; setConfirmBlock: (v: string | null) => void; act: (b: object) => Promise<boolean>; edge: boolean }) {
+function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, confirmGhost, setConfirmGhost, act, edge }: { people: Person[]; msgCount: Map<string, number>; confirmBlock: string | null; setConfirmBlock: (v: string | null) => void; confirmGhost: { rid: string; mid?: number } | null; setConfirmGhost: (v: { rid: string; mid?: number } | null) => void; act: (b: object) => Promise<boolean>; edge: boolean }) {
   const [q, setQ] = useState("");
   const hit = (p: Person) => !q.trim() || `${p.first_name} ${p.email_masked}`.toLowerCase().includes(q.trim().toLowerCase());
   const here = people.filter((p) => p.in_room && hit(p)).sort((a, b) => a.joined_at.localeCompare(b.joined_at));
@@ -612,7 +618,7 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
         <p className="truncate text-[15px] font-bold">
           {p.first_name}
           <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] font-bold text-muted">{p.source === "zapier" ? "zap" : p.source}</span>
-          {p.ghosted && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted line-through" title={p.auto_ghost_reason ? `auto: ${p.auto_ghost_reason}` : undefined}>{p.auto_ghost_reason ? "auto-ghosted" : "ghosted"}</span>}
+          {p.ghosted && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted line-through" title={p.auto_ghost_reason ? (p.auto_ghost_reason.startsWith("by hand") ? p.auto_ghost_reason : `auto: ${p.auto_ghost_reason}`) : undefined}>{p.auto_ghost_reason && !p.auto_ghost_reason.startsWith("by hand") ? "auto-ghosted" : "ghosted"}</span>}
           {p.prior_sessions ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted">watched before ×{p.prior_sessions}</span> : null}
           {p.hot ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted" title={`Watched ${p.training_minutes ?? 0} min of the free training before the session`}>{p.ultra_hot ? "🔥🔥 ultra-hot" : "🔥 hot"}</span> : null}
           {p.ip_blocked && <span className="ml-1.5 rounded bg-live/20 px-1.5 text-[11px] font-bold text-live">IP blocked</span>}
@@ -629,10 +635,14 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, act, edge
             <button type="button" onClick={() => setConfirmBlock(null)} className="min-h-8 px-1.5 text-xs text-muted">Cancel</button>
           </span>
         ) : (
+          confirmGhost?.rid === p.registrant_id && confirmGhost.mid === undefined ? (
+          <GhostChips onPick={async (reason) => { await act({ action: "ghost", registrant_id: p.registrant_id, reason }); setConfirmGhost(null); }} onCancel={() => setConfirmGhost(null)} />
+        ) : (
           <span className="flex shrink-0 gap-1">
-            <button type="button" onClick={() => act({ action: p.ghosted ? "unghost" : "ghost", registrant_id: p.registrant_id })} className={`min-h-8 rounded-full border px-2.5 text-xs ${p.ghosted ? "border-live bg-live/15 font-bold text-live" : "border-line text-muted hover:text-ink"}`}>{p.ghosted ? "Unghost" : "Ghost"}</button>
+            <button type="button" onClick={() => (p.ghosted ? act({ action: "unghost", registrant_id: p.registrant_id }) : setConfirmGhost({ rid: p.registrant_id }))} className={`min-h-8 rounded-full border px-2.5 text-xs ${p.ghosted ? "border-live bg-live/15 font-bold text-live" : "border-line text-muted hover:text-ink"}`}>{p.ghosted ? "Unghost" : "Ghost"}</button>
             <button type="button" onClick={() => setConfirmBlock(p.registrant_id)} className="min-h-8 rounded-full border border-line px-2.5 text-xs text-muted hover:border-live hover:text-live">Block</button>
           </span>
+        )
         )
       )}
     </li>
@@ -850,5 +860,17 @@ function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history, l
         return rate === null ? tile("–", "projected bookings", false, "no past sessions with bookings yet") : tile(`≈ ${Math.round(base * rate)}`, "projected bookings", true, `${Math.round(rate * 100)}% of ${stats.at_pitch !== null ? "those at the pitch" : "the room now"} · ${same.length >= 4 ? "this weekday" : "all days"}, ${pool.length} session${pool.length === 1 ? "" : "s"}`);
       })()}
     </div>
+  );
+}
+
+/** Why (SPEC-kaitlyn-ghosts.md, B4): one tap, and the reason rides into the ghost view Kaitlyn learns from and into the morning digest. "other" ghosts without one. */
+function GhostChips({ onPick, onCancel }: { onPick: (reason: string) => void | Promise<void>; onCancel: () => void }) {
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {[...GHOST_REASONS, "other"].map((r) => (
+        <button key={r} type="button" onClick={() => void onPick(r)} className="min-h-8 rounded-full bg-live px-2.5 text-xs font-bold text-white" title="Ghost them, with this as the reason">{r}</button>
+      ))}
+      <button type="button" onClick={onCancel} className="min-h-8 px-1.5 text-xs text-muted">Cancel</button>
+    </span>
   );
 }
