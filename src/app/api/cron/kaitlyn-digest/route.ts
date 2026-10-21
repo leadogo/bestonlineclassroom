@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     if (e.slug.startsWith("test")) continue;
     const { due, today } = digestDue(now, e.kaitlyn_digest_on, e.timezone || "America/Edmonton");
     if (!due && !force && !dry) { report.push({ event: e.slug, due: false, text: null }); continue; }
-    if (owed === undefined) owed = (await planOutcomeTags().catch(() => [])).length;
+    if (owed === undefined) owed = await planOutcomeTags().then((p) => p.length).catch(() => -1);
     const since = new Date(now.getTime() - DAY_MS).toISOString();
     const [open, waiting] = await Promise.all([
       db().from("kaitlyn_kb").select("key, question").eq("event_id", e.id).eq("handling", "open").gte("last_asked_at", since).order("asked", { ascending: false }).limit(12),

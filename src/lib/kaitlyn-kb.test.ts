@@ -53,13 +53,14 @@ test("correctionsBlock: the question, her line and William's; a removed line as 
   assert.equal(correctionsBlock([]), "");
 });
 
-test("digestDue: 9 AM in Edmonton, once a day, across the clock change", () => {
+test("digestDue: from 9 AM in Edmonton for the rest of the day (a failed 9 AM post is retried at 10), once a day, across the clock change", () => {
   // 2026-10-18 15:00 UTC is 9:00 AM MDT
   assert.deepEqual(digestDue(new Date("2026-10-18T15:00:00Z"), null), { due: true, today: "2026-10-18" });
   assert.deepEqual(digestDue(new Date("2026-10-18T15:40:00Z"), null), { due: true, today: "2026-10-18" });
   assert.deepEqual(digestDue(new Date("2026-10-18T15:00:00Z"), "2026-10-18"), { due: false, today: "2026-10-18" });
   assert.equal(digestDue(new Date("2026-10-18T14:00:00Z"), null).due, false);
-  assert.equal(digestDue(new Date("2026-10-18T16:00:00Z"), null).due, false);
+  assert.equal(digestDue(new Date("2026-10-18T16:00:00Z"), null).due, true, "10 AM still posts when 9 failed");
+  assert.equal(digestDue(new Date("2026-10-18T16:00:00Z"), "2026-10-18").due, false, "but once a day");
   // After Nov 1 Edmonton is MST: 9 AM is 16:00 UTC
   assert.equal(digestDue(new Date("2026-11-03T15:00:00Z"), null).due, false);
   assert.deepEqual(digestDue(new Date("2026-11-03T16:00:00Z"), null), { due: true, today: "2026-11-03" });
@@ -125,6 +126,7 @@ test("digestText and postedFrom: the agreement line and the stale staged answers
   assert.equal(OWED_FLOOR, 50);
   assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, owed: 49 }), null);
   assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, owed: 2700 }), "Outcome tags owed to ActiveCampaign: 2700 (the push is behind).");
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, owed: -1 }), "Outcome tags owed to ActiveCampaign: unknown (the plan failed; check the push).");
   assert.match(digestText({ questions: [], people: 0, waiting: 0, url, unanswered: ["Heather"], posted: postedFrom([{ status: "sent" }]), stale: ["brokers"] })!, /^Last night 1 person went unanswered: Heather\.\nKaitlyn posted 1 last night: 1 stood \(agreement 100%\)\.\n1 answer has waited over a week/);
 });
 

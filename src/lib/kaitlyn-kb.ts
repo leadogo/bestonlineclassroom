@@ -75,7 +75,8 @@ export function digestDue(now: Date, lastOn: string | null, tz = "America/Edmont
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   const today = `${get("year")}-${get("month")}-${get("day")}`;
-  return { due: Number(get("hour")) % 24 === 9 && lastOn !== today, today };
+  // From 9 for the rest of the day: a Slack hiccup at 9 is retried at 10, and the once-a-day guard keeps it to one post (review of Oct 21).
+  return { due: Number(get("hour")) % 24 >= 9 && lastOn !== today, today };
 }
 
 /** Last night's lines by what became of them (SPEC-kaitlyn-solo.md, F): `stood` = posted and left alone (auto, sent as drafted); the rest the desk changed. `posted` is the sum. */
@@ -123,7 +124,8 @@ export function digestText(o: { questions: Array<{ question: string; asked: numb
   }
   const st = o.stale ?? [];
   if (st.length) lines.push(`${st.length} ${plural(st.length, "answer has", "answers have")} waited over a week for your OK: ${st.join(", ")}. ${o.url}`);
-  if (o.owed !== undefined && o.owed >= OWED_FLOOR) lines.push(`Outcome tags owed to ActiveCampaign: ${o.owed} (the push is behind).`);
+  if (o.owed === -1) lines.push("Outcome tags owed to ActiveCampaign: unknown (the plan failed; check the push).");
+  else if (o.owed !== undefined && o.owed >= OWED_FLOOR) lines.push(`Outcome tags owed to ActiveCampaign: ${o.owed} (the push is behind).`);
   return lines.length ? lines.join("\n") : null;
 }
 

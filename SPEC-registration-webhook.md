@@ -34,8 +34,8 @@ Response `200`:
 ## After a new registration (2026-09-20 evening additions, all in `after()`, none blocks the response)
 - The confirmation email with the calendar invite (`SPEC-reminders.md`).
 - The `registered` tag in ActiveCampaign (`SPEC-analytics.md`).
-- A Skool invite through the group's custom webhook (`SKOOL_INVITE_WEBHOOK?email=`), once per registrant
-  (`skool_invited_at`), never for a Test Sample.
+- ~~A Skool invite through the group's custom webhook~~ Removed Oct 21 2026 (SPEC-post-session.md, E): the webhook
+  answered 405 from the first day and Zapier invites every opt-in on its own; `skool_invited_at` stays, unused.
 
 ## Registrants from before the cutover (`scripts/import-legacy.ts`)
 EasyWebinar's registrant list joined with leadogo's opt-in events (the site's registration id by email hash),

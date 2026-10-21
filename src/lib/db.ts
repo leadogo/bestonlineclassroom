@@ -23,10 +23,12 @@ export function db(): SupabaseClient {
 /** PostgREST answers at most 1,000 rows whatever the limit (Oct 21: the outcome push read 1,000 of 1,688 rows and never knew). Every read that can pass that goes through here: `make(from, to)` builds the query with `.range(from, to)`. */
 export async function pageAll<T>(make: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>, pageSize = 1000): Promise<T[]> {
   const out: T[] = [];
-  for (let from = 0; ; from += pageSize) {
+  // Reads until an empty page (one extra, cheap call), so a server cap below the page size still returns everything.
+  for (let from = 0; ; ) {
     const { data, error } = await make(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < pageSize) return out;
+    if (!data || data.length === 0) return out;
+    out.push(...data);
+    from += data.length;
   }
 }

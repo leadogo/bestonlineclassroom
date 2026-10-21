@@ -17,18 +17,24 @@ async function paced(): Promise<void> {
   if (at > now) await new Promise((r) => setTimeout(r, at - now));
 }
 
-async function api<T>(path: string, init: RequestInit = {}, retried = false): Promise<T | null> {
+/** One call: the status and the parsed body (null when not OK). A 429 is retried once after a breath that also holds every other caller on this instance. */
+async function apiRaw<T>(path: string, init: RequestInit = {}, retried = false): Promise<{ status: number; body: T | null }> {
   await paced();
   const res = await fetch(`${BASE}/api/3${path}`, { ...init, headers: { "Api-Token": KEY, "content-type": "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(10_000) });
   if (res.status === 429 && !retried) {
+    nextSlot = Date.now() + 1500;
     await new Promise((r) => setTimeout(r, 1500));
-    return api<T>(path, init, true);
+    return apiRaw<T>(path, init, true);
   }
   if (!res.ok) {
     if (res.status !== 404 && res.status !== 422) console.error("[activecampaign]", path, res.status);
-    return null;
+    return { status: res.status, body: null };
   }
-  return (await res.json()) as T;
+  return { status: res.status, body: (await res.json()) as T };
+}
+
+async function api<T>(path: string, init: RequestInit = {}): Promise<T | null> {
+  return (await apiRaw<T>(path, init)).body;
 }
 
 const tagIds = new Map<string, string>();
@@ -69,6 +75,7 @@ export async function tagContact(email: string, tag: string): Promise<boolean> {
 /** Attaches a tag by ids (the outcome push looks the contact up once per email and reuses it). true when the tag is on the contact afterwards. */
 export async function addTag(cid: string, tid: string): Promise<boolean> {
   if (!activeCampaignConfigured()) return false;
-  const r = await api<{ contactTag?: { id: string } }>("/contactTags", { method: "POST", body: JSON.stringify({ contactTag: { contact: cid, tag: tid } }) });
-  return Boolean(r?.contactTag) || r === null; // a repeat returns 422/null: the tag is there
+  const r = await apiRaw<{ contactTag?: { id: string } }>("/contactTags", { method: "POST", body: JSON.stringify({ contactTag: { contact: cid, tag: tid } }) });
+  // A repeat answers 422: the tag is there. Any other failure (a second 429, a 5xx, a timeout) is not a landed tag.
+  return Boolean(r.body?.contactTag) || r.status === 422;
 }

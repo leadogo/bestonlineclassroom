@@ -1,6 +1,7 @@
 // The night report (SPEC-post-session.md, C): the session's numbers in one Slack line at 7:50 PM, from the room's own
 // rows and the two-minute rule William's Oct 20 report used. Pure; the cron route reads and posts.
 import { peakConcurrent, PRESENCE_GRACE_MS } from "./outcomes.ts";
+import { partsInTz } from "./tz.ts";
 
 /** A person watched two minutes or clicked the offer (SPEC-link-opens.md: scanners average 40 s with the video playing). */
 export const PERSON_SECONDS = 120;
@@ -34,20 +35,19 @@ export function median(xs: number[]): number | null {
 
 export type Emails = { taps: number; watched: number; booked: number };
 
-/** One line, two when promo email taps exist that afternoon. */
-export function nightReportText(o: { label: string; counts: NightCounts; booked: number; medians: { people: number | null; booked: number | null }; emails?: Emails | null }): string {
+/** One line, two when promo email taps exist that afternoon. The median names how many nights it covers (fewer than seven in the first week or on a two-night schedule). */
+export function nightReportText(o: { label: string; counts: NightCounts; booked: number; medians: { people: number | null; booked: number | null; nights: number }; emails?: Emails | null }): string {
   const c = o.counts;
-  const med = (n: number | null) => (n === null ? "" : ` (7-night median ${n})`);
+  const med = (n: number | null) => (n === null || !o.medians.nights ? "" : ` (${o.medians.nights}-night median ${n})`);
   const parts = [`${c.people} people${med(o.medians.people)}`, `peak ${c.peak}`, ...(c.at_pitch !== null ? [`${c.at_pitch} at the pitch`] : []), `${c.clicked} offer clicks`, `${c.stayed_40} stayed 40+`, `${o.booked} booked${med(o.medians.booked)}`];
   const line = `${o.label} · ${parts.join(" · ")}`;
   return o.emails && o.emails.taps ? `${line}\nEmails: ${o.emails.taps} human taps → ${o.emails.watched} watched → ${o.emails.booked} booked` : line;
 }
 
-/** Due at 7:45 PM or later in the event's zone, once the session has ended, once a day. `today` is the local date to record. */
+/** Due from 7:45 PM in the event's zone for the rest of that day (so a failed 7:50 post is retried at 8:50), once the session has ended, once a day. `today` is the local date to record. */
 export function nightReportDue(now: Date, lastOn: string | null, sessionEndMs: number, tz: string): { due: boolean; today: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const today = `${get("year")}-${get("month")}-${get("day")}`;
-  const due = Number(get("hour")) % 24 === 19 && Number(get("minute")) >= 45 && now.getTime() >= sessionEndMs && lastOn !== today;
+  const p = partsInTz(now, tz);
+  const today = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+  const due = (p.hour > 19 || (p.hour === 19 && p.minute >= 45)) && now.getTime() >= sessionEndMs && lastOn !== today;
   return { due, today };
 }
