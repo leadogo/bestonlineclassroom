@@ -13,9 +13,9 @@ import { rankEngagement } from "@/lib/engagement";
 import { asksMarket, findMarkets, findStates, marketDraft, NO_MATCH_DRAFT, onlyStates, placeOf, rollup, rollupDraft, type MarketCount } from "@/lib/market-answer";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[]; belief?: boolean; is_question?: boolean; kind?: string; visible_to?: string | null };
-type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; /** two minutes, a click or a chat line (SPEC-link-opens.md); absent on an older desk payload */ person?: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
+type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; /** two minutes or a click (SPEC-link-opens.md); absent on an older desk payload */ person?: boolean; /** an older link brought them in today */ moved_in?: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
 type Desk = { member_id: string; name: string; tab: string | null; replying_to: string | null; last_seen_at: string };
-type Stats = { registered: number; moved_in?: number; joined: number; visits?: number; in_room: number; arriving?: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
+type Stats = { registered: number; moved_in?: number; joined: number; joined_tonight?: number; visits?: number; in_room: number; arriving?: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
 type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
 type Mentionable = { id: string; name: string; sub?: string };
 /** One of Kaitlyn's open suggestions (kaitlyn_decisions, status pending): a draft to send, a ghost or a reaction to approve, or a line she wants a human on. */
@@ -629,7 +629,7 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, confirmGh
         <p className="truncate text-[15px] font-bold">
           {p.first_name}
           <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] font-bold text-muted">{p.source === "zapier" ? "zap" : p.source}</span>
-          {p.person === false && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted" title="Here under two minutes and no line or click yet: not a person until then (SPEC-link-opens.md)">arriving</span>}
+          {p.in_room && p.person === false && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted" title="Here under two minutes and no click yet: not a person until then (SPEC-link-opens.md)">arriving</span>}
           {p.ghosted && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted line-through" title={p.auto_ghost_reason ? (p.auto_ghost_reason.startsWith("by hand") ? p.auto_ghost_reason : `auto: ${p.auto_ghost_reason}`) : undefined}>{p.auto_ghost_reason && !p.auto_ghost_reason.startsWith("by hand") ? "auto-ghosted" : "ghosted"}</span>}
           {p.prior_sessions ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted">watched before ×{p.prior_sessions}</span> : null}
           {p.hot ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted" title={`Watched ${p.training_minutes ?? 0} min of the free training before the session`}>{p.ultra_hot ? "🔥🔥 ultra-hot" : "🔥 hot"}</span> : null}
@@ -848,7 +848,7 @@ function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history, l
   return (
     <div className="grid grid-cols-2 gap-2 p-4">
       {tile(stats.registered - (stats.moved_in ?? 0), "registered tonight", false, stats.moved_in ? `+ ${stats.moved_in} moved in today from an older link` : undefined)}
-      {tile(stats.joined, `people · ${pct(stats.joined, stats.registered - (stats.moved_in ?? 0))} of tonight's`, false, stats.visits !== undefined ? `${stats.visits} link opens` : undefined)}
+      {tile(stats.joined, `people · ${pct(stats.joined_tonight ?? stats.joined, stats.registered - (stats.moved_in ?? 0))} of tonight's`, false, [stats.visits !== undefined ? `${stats.visits} link opens` : null, stats.joined_tonight !== undefined && stats.joined - stats.joined_tonight ? `${stats.joined - stats.joined_tonight} moved in today` : null].filter(Boolean).join(" · ") || undefined)}
       <div className="rounded-xl border border-emerald-500/40 bg-panel px-3 py-2.5">
         <div className="text-[22px] font-bold leading-tight text-emerald-400 tabular-nums">{stats.in_room}</div>
         <div className="text-xs text-muted">in the room now{stats.arriving ? ` · ${stats.arriving} arriving` : ""}</div>

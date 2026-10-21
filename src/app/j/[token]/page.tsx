@@ -14,6 +14,7 @@ import { headers } from "next/headers";
 import { pickRunningOrNext } from "@/lib/daily-schedule";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { isScannerAgent } from "@/lib/scanner";
+import { renderMove } from "@/lib/outcomes";
 
 export const dynamic = "force-dynamic";
 
@@ -71,12 +72,13 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     after(() => logClick({ path: "j", outcome: "ended", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua, bot: scanner }));
     redirect(outcome.to);
   }
-  // An old link used for a later session: the person now belongs to that session (chat, presence, numbers). A scanner open moves nobody: its beats land under tonight's date on its own row, and the heartbeat, the chat and the offer click move a person the render misread (SPEC-link-opens.md, A and B).
-  if (outcome.rejoinDate && !outcome.props.preview && !scanner) {
-    await db().from("registrants").update({ session_date: outcome.rejoinDate, moved_in_at: new Date().toISOString() }).eq("id", r.id);
-    r.session_date = outcome.rejoinDate;
+  // An old link used for a later session: the person now belongs to that session (chat, presence, numbers). A scanner open moves nobody and its beats are dropped; a person the render misread is moved by their first line or their offer click (SPEC-link-opens.md, A and B).
+  const to = outcome.rejoinDate;
+  if (to && renderMove(to, Boolean(outcome.props.preview), scanner)) {
+    await db().from("registrants").update({ session_date: to, moved_in_at: new Date().toISOString() }).eq("id", r.id);
+    r.session_date = to;
   }
-  if (!outcome.props.preview) after(() => logClick({ path: "j", outcome: outcome.props.state, token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua, bot: scanner }));
+  if (!outcome.props.preview) after(() => logClick({ path: "j", outcome: outcome.props.state, token, registrantId: r.id, eventId: r.event_id, sessionDate: outcome.rejoinDate ?? r.session_date, src, userAgent: ua, bot: scanner }));
   const simulated = await getSimulatedRows(r.event.id).catch(() => []);
   // ponytail: the site's /join records room_join for leadogo, the ritual sheet and Slack; calling it once here keeps
   // all three without a new contract. Replace with a direct leadogo event when analytics N2 lands.

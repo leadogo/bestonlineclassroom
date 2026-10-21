@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { backstopMove, concurrentAt, isPerson, PERSON_SECONDS, retentionCurve, tagsFor, peakConcurrent } from "./outcomes.ts";
+import { concurrentAt, isPerson, PERSON_SECONDS, renderMove, retentionCurve, tagsFor, peakConcurrent } from "./outcomes.ts";
 
 const names = { registered: "reg", attended: "a", missed: "m", watched_replay: "r", left_early: "le", stayed_40min: "w40", asked_question: "q", clicked_offer: "c", saw_offer_no_click: "s" };
 
@@ -53,12 +53,9 @@ test("isPerson: two minutes or a click (SPEC-link-opens.md); a scanner's 40 s wi
   assert.equal(isPerson({ seconds_watched: null, cta_clicked_at: null }), false);
 });
 
-test("backstopMove: a live row still sitting on another date becomes tonight's when its own beats (never an older row's) make a person; never before, never once the room is not live", () => {
-  const live = { state: "live", date: "2026-10-20" };
-  assert.equal(backstopMove("2026-09-21", live, { seconds_watched: 120, cta_clicked_at: null }), true);
-  assert.equal(backstopMove("2026-09-21", live, { seconds_watched: 119, cta_clicked_at: null }), false);
-  assert.equal(backstopMove("2026-09-21", live, { seconds_watched: 30, cta_clicked_at: "2026-10-20T23:40:00Z" }), true, "a click is a person");
-  assert.equal(backstopMove("2026-10-20", live, { seconds_watched: 500, cta_clicked_at: null }), false, "already tonight's");
-  assert.equal(backstopMove("2026-09-21", { state: "countdown", date: "2026-10-20" }, { seconds_watched: 500, cta_clicked_at: null }), false);
-  assert.equal(backstopMove("2026-09-21", { state: "ended", date: "2026-10-20" }, { seconds_watched: 500, cta_clicked_at: null }), false);
+test("renderMove: an old link opened for a later session moves the person, never a preview, never a scanner's open (SPEC-link-opens.md, A)", () => {
+  assert.equal(renderMove("2026-10-20", false, false), true);
+  assert.equal(renderMove("2026-10-20", false, true), false, "a scanner's open moves nobody");
+  assert.equal(renderMove("2026-10-20", true, false), false, "a preview moves nobody");
+  assert.equal(renderMove(undefined, false, false), false, "their own session: nothing to move");
 });

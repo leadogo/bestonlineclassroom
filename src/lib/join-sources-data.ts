@@ -5,7 +5,7 @@ import { joinSources, type JoinSourcesResult } from "@/lib/join-sources";
 
 export async function loadJoinSources(eventId: string, sessionDate: string, ctaAtSeconds: number): Promise<JoinSourcesResult> {
   const [clicks, joins, bookings] = await Promise.all([
-    db().from("link_clicks").select("registrant_id, at, src, outcome").eq("event_id", eventId).eq("session_date", sessionDate).eq("path", "j"),
+    db().from("link_clicks").select("registrant_id, at, src, outcome").eq("event_id", eventId).eq("session_date", sessionDate).eq("path", "j").eq("bot", false),
     db().from("attendance").select("registrant_id, joined_at, max_offset, seconds_watched, cta_clicked_at, registrant:registrants!inner(source)").eq("session_date", sessionDate).eq("kind", "live").eq("registrants.event_id", eventId),
     db().from("bookings").select("registrant_id").eq("event_id", eventId).eq("session_date", sessionDate).eq("status", "scheduled"),
   ]);

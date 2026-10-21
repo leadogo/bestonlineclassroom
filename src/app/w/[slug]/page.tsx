@@ -79,7 +79,7 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
     watching = 1 + (count ?? 0) + Math.round((crowd - 1) * (event.people_curve_enabled ? crowdShare(elapsed, event.cta_at_seconds ?? null, event.video_seconds ?? 0) : 1));
   } else if (minutesToStart > 0 && minutesToStart <= 15) {
     // Real people who opened their link in the last fifteen minutes join the waiting number.
-    const { data } = await db().from("link_clicks").select("registrant_id").eq("event_id", event.id).eq("session_date", session.date).eq("outcome", "countdown").gte("at", new Date(session.start.getTime() - 15 * 60_000).toISOString()).limit(2000);
+    const { data } = await db().from("link_clicks").select("registrant_id").eq("event_id", event.id).eq("session_date", session.date).eq("outcome", "countdown").eq("bot", false).gte("at", new Date(session.start.getTime() - 15 * 60_000).toISOString()).limit(2000);
     realOpeners = new Set((data ?? []).map((c) => c.registrant_id).filter(Boolean)).size;
   }
   const when = live ? `Started ${startLabel} Mountain · you'll join at the live minute` : `${isToday ? "Today" : dayLabel} · ${startLabel} Mountain · ${others}`;

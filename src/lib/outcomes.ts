@@ -60,9 +60,9 @@ export function isPerson(r: { seconds_watched: number | null; cta_clicked_at: st
   return (r.seconds_watched ?? 0) >= PERSON_SECONDS || r.cta_clicked_at !== null;
 }
 
-/** The backstop move (SPEC-link-opens.md, B): a live row whose registrant still sits on another date (the render saw a scanner, or misread a person) becomes tonight's the moment its own beats under tonight's date make a person. */
-export function backstopMove(rowDate: string, running: { state: string; date: string }, row: { seconds_watched: number | null; cta_clicked_at: string | null }): boolean {
-  return running.state === "live" && running.date !== rowDate && isPerson(row);
+/** The render's move (SPEC-link-opens.md, A): an old link opened for a later session moves the person to it, unless this is a preview or a scanner's open. A scanner's beats are dropped at the heartbeat; a person the render misread is moved by their first chat line or their offer click (B). */
+export function renderMove(rejoinDate: string | undefined, preview: boolean, scanner: boolean): boolean {
+  return Boolean(rejoinDate) && !preview && !scanner;
 }
 
 /** How many intervals cover the instant `at`, each extended by the grace. */

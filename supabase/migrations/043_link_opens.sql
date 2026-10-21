@@ -1,7 +1,8 @@
 -- SPEC-link-opens.md, A, B, D and G: a link open is not a person.
--- A scanner open is logged as such; a row moved into a session records when; the views count persons (two minutes, a
--- click, or a chat line in that session) as "joined" and keep every row as "visited"/"visits", so Oct 20 reads 131 people
--- from 259 rows from now on. A sub-two-minute row no longer "saw the offer" either (the session-end tag went to scanners).
+-- A scanner open is logged as such; a row moved into a session records when; the views count persons (two minutes or a
+-- click; Oct 13 to 20 had no chat-only person under two minutes) as "joined" and keep every row as "visited"/"visits", so
+-- Oct 20 reads 131 people from 259 rows from now on. A sub-two-minute row no longer "saw the offer" either (the session-end
+-- tag went to scanners). joined_moved_in is the part of joined an older link brought in today, for the show-up rate.
 alter table link_clicks add column if not exists bot boolean not null default false;
 alter table registrants add column if not exists moved_in_at timestamptz;
 
@@ -25,8 +26,7 @@ select
   (coalesce(l.cta_clicked_at, rp.cta_clicked_at) is not null) as clicked_offer,
   (l.registrant_id is not null and (coalesce(l.seconds_watched, 0) >= 120 or l.cta_clicked_at is not null) and e.cta_at_seconds is not null and l.max_offset >= e.cta_at_seconds and coalesce(l.cta_clicked_at, rp.cta_clicked_at) is null) as saw_offer_no_click,
   (l.registrant_id is not null and (coalesce(l.seconds_watched, 0) >= 120 or l.cta_clicked_at is not null) and e.cta_at_seconds is not null and l.max_offset >= e.cta_at_seconds) as live_at_pitch,
-  (l.registrant_id is not null and (coalesce(l.seconds_watched, 0) >= 120 or l.cta_clicked_at is not null
-    or exists (select 1 from chat_messages c where c.registrant_id = r.id and c.session_date = r.session_date and c.role = 'attendee'))) as joined,
+  (l.registrant_id is not null and (coalesce(l.seconds_watched, 0) >= 120 or l.cta_clicked_at is not null)) as joined,
   coalesce(l.seconds_watched, 0) as live_seconds,
   coalesce(l.max_offset, 0) as live_max_offset,
   l.joined_at as live_joined_at,
@@ -55,7 +55,8 @@ select
   count(*) filter (where left_early) as left_early,
   coalesce(avg(live_seconds) filter (where joined), 0)::int as avg_live_seconds,
   count(*) filter (where visited) as visits,
-  count(*) filter (where moved_in_at is not null) as moved_in
+  count(*) filter (where moved_in_at is not null) as moved_in,
+  count(*) filter (where joined and moved_in_at is not null) as joined_moved_in
 from registrant_outcomes
 where source <> 'test'
 group by event_id, session_date;
