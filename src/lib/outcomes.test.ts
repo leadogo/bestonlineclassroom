@@ -53,9 +53,8 @@ test("isPerson: two minutes or a click (SPEC-link-opens.md); a scanner's 40 s wi
   assert.equal(isPerson({ seconds_watched: null, cta_clicked_at: null }), false);
 });
 
-test("renderMove: an old link opened for a later session moves the person, never a preview, never a scanner's open (SPEC-link-opens.md, A)", () => {
-  assert.equal(renderMove("2026-10-20", false, false), true);
-  assert.equal(renderMove("2026-10-20", false, true), false, "a scanner's open moves nobody");
-  assert.equal(renderMove("2026-10-20", true, false), false, "a preview moves nobody");
-  assert.equal(renderMove(undefined, false, false), false, "their own session: nothing to move");
+test("renderMove: an old link opened for a later session moves the person (a scanner's open too: the reminder touch), never a preview (SPEC-link-opens.md, A)", () => {
+  assert.equal(renderMove("2026-10-20", false), true);
+  assert.equal(renderMove("2026-10-20", true), false, "a preview moves nobody");
+  assert.equal(renderMove(undefined, false), false, "their own session: nothing to move");
 });

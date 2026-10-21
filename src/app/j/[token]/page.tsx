@@ -73,9 +73,9 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     after(() => logClick({ path: "j", outcome: "ended", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua, bot: scanner }));
     redirect(outcome.to);
   }
-  // An old link used for a later session: the person now belongs to that session (chat, presence, numbers). A scanner open moves nobody and its beats are dropped; a person the render misread is moved by their first line or their offer click (SPEC-link-opens.md, A and B).
+  // An old link used for a later session: the person now belongs to that session (chat, presence, numbers). A scanner's open moves the row too (William, Oct 21: that move is the reminder touch that fed 30 people and 4 bookings on Oct 20); its beats are dropped at the heartbeat and it reports no room_join (SPEC-link-opens.md, A).
   const to = outcome.rejoinDate;
-  if (to && renderMove(to, Boolean(outcome.props.preview), scanner)) {
+  if (to && renderMove(to, Boolean(outcome.props.preview))) {
     const mv = await db().from("registrants").update({ session_date: to, moved_in_at: new Date().toISOString() }).eq("id", r.id);
     if (mv.error) console.error("[join] move failed", { code: mv.error.code });
     r.session_date = to;
