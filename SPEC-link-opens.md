@@ -5,6 +5,8 @@ Module of [SPEC.md](SPEC.md). Depends on: `room` (the `/j` page, the heartbeat),
 `SPEC-show-rate-recovery.md`, and leadogo's room-count post. Proposed Oct 20 2026 late, from the Tuesday session's
 numbers (report doc: "Tuesday Oct 20 Session Report"). Nothing here changes until William approves this spec.
 
+**Status.** Oct 21 midday, William: build "all other smaller things" → A, B, D and G are approved and scheduled for Thursday Oct 22 morning (SPEC-post-session.md, batch 2); C (leadogo `room_join` at the two-minute mark) stays a decision for him; F is running (7,143 contacts, started 9:41 AM, 0 failures so far); E unchanged. The Oct 20 "missed" tags include about 300 scanner-moved rows; William chose to let the tag push run as is (Oct 21) and have A and B stop it recurring Thursday.
+
 ## What happened (Tue Oct 20)
 - The room wrote 259 live attendance rows; 131 were people (watched two minutes or more, chatted, or clicked the
   offer). The other 128 lasted under two minutes with no action.
