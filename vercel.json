@@ -25,6 +25,10 @@
     {
       "path": "/api/cron/skool-broadcast",
       "schedule": "58 22,23 * * 0,3"
+    },
+    {
+      "path": "/api/cron/night-report",
+      "schedule": "50 * * * *"
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, postedFrom, type KbRow } from "./kaitlyn-kb.ts";
+import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, OWED_FLOOR, postedFrom, type KbRow } from "./kaitlyn-kb.ts";
 
 const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, approved_at: p.approved ? "2026-10-17T00:00:00Z" : null, handling: "open", asked: 0, ...p });
 
@@ -121,6 +121,10 @@ test("digestText and postedFrom: the agreement line and the stale staged answers
   assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, posted: postedFrom([{ status: "auto" }, { status: "auto" }]) }), "Kaitlyn posted 2 last night: 2 stood (agreement 100%).");
   assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, posted: postedFrom([{ status: "pending" }]) }), null, "nothing posted, nothing said");
   assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, stale: ["brokers", "contact-number"] }), `2 answers have waited over a week for your OK: brokers, contact-number. ${url}`);
+  // The owed line (SPEC-post-session.md, B): only from the floor.
+  assert.equal(OWED_FLOOR, 50);
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, owed: 49 }), null);
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, owed: 2700 }), "Outcome tags owed to ActiveCampaign: 2700 (the push is behind).");
   assert.match(digestText({ questions: [], people: 0, waiting: 0, url, unanswered: ["Heather"], posted: postedFrom([{ status: "sent" }]), stale: ["brokers"] })!, /^Last night 1 person went unanswered: Heather\.\nKaitlyn posted 1 last night: 1 stood \(agreement 100%\)\.\n1 answer has waited over a week/);
 });
 

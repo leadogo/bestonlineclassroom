@@ -1,3 +1,4 @@
+import { roomState, scheduleOf } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
 import { FLAG_CAP, MIN_SNAPSHOT, normalizeClients } from "@/lib/client-wall";
 import { MIN_MARKETS, normalizeMarkets } from "@/lib/market-answer";
@@ -44,6 +45,12 @@ export async function POST(request: Request) {
   }
   // Anyone not in this snapshot has left the directory; test rows (seeded by hand for a walk) stay.
   const gone = await db().from("client_wall").update({ released_at: now }).lt("seen_at", now).is("released_at", null).neq("status", "test").select("client_id");
+  // The apply is a 3 to 8 s query; while a session is live it waits for the next push (SPEC-post-session.md, D), the wall rows and the market counts are stored now.
+  const { data: events } = await db().from("events").select("timezone, start_time, video_seconds, days");
+  if ((events ?? []).some((e) => roomState(scheduleOf(e), new Date()).state === "live")) {
+    const markets = body.markets === undefined ? undefined : await storeMarkets(body.markets, now).catch((e: unknown) => String(e));
+    return Response.json({ deferred: true, clients: rows.length, released_clients: gone.data?.length ?? 0, markets }, { status: 202, headers: { "cache-control": "no-store" } });
+  }
   const applied = await db().rpc("client_wall_apply", { cap: FLAG_CAP });
   if (applied.error) return Response.json({ error: `Apply failed: ${applied.error.message}` }, { status: 500 });
   const result = (applied.data ?? {}) as { error?: string; would_flag?: number; flagged?: number; released?: number };
