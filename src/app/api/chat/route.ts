@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { mine } from "@/lib/reactions";
 import { TOKEN_RE } from "@/lib/registrants";
-import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
+import { roomState, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { postToChatChannel } from "@/lib/slack";
 import { tagNow } from "@/lib/tagging";
 import { katherineReply } from "@/lib/katherine";
@@ -20,11 +20,19 @@ export const maxDuration = 60;
 const HISTORY = 300;
 const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offset_seconds, reactions, mentions, mention_names, kind, created_at";
 
-async function registrant(token: string) {
+async function registrant(token: string, moveIfBehind = false) {
   if (!TOKEN_RE.test(token)) return null;
   const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases, kaitlyn_mode, kaitlyn_facts, cta_at_seconds, autopilot, captions_url, captions_offset_seconds, chapters, outline)").eq("token", token).maybeSingle();
   if (!data) return null;
   const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean; belief_phrases?: string[]; kaitlyn_mode?: string | null; kaitlyn_facts?: string | null; cta_at_seconds?: number | null; autopilot?: string | null; captions_url?: string | null; captions_offset_seconds?: number | string | null; chapters?: Array<{ at: number; label: string }>; outline?: string | null } | null;
+  // A chat line is a person (SPEC-link-opens.md, B): a row the render did not move (a scanner-looking open) becomes tonight's on its first line, so the line lands in tonight's room. Polls (GET) never move anyone.
+  if (moveIfBehind && ev) {
+    const running = roomState(scheduleOf(ev), new Date());
+    if (running.state === "live" && data.session_date !== running.session.date) {
+      const moved = await db().from("registrants").update({ session_date: running.session.date, moved_in_at: new Date().toISOString() }).eq("id", data.id).eq("session_date", data.session_date).select("id");
+      if (moved.data?.length) data.session_date = running.session.date;
+    }
+  }
   const start = ev ? sessionFor(scheduleOf(ev), data.session_date as string)?.start ?? null : null;
   // Kaitlyn's view of the event: her mode and switches, the fact sheet, and the transcript of the presentation (the room's captions) so she knows what William is saying when they type.
   return { ...data, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled), beliefPhrases: ev?.belief_phrases ?? undefined, kaitlyn: { kaitlyn_mode: asMode(ev?.kaitlyn_mode), kaitlyn_facts: ev?.kaitlyn_facts ?? null, cta_at_seconds: ev?.cta_at_seconds ?? null, autopilot: asAutopilot(ev?.autopilot), captions_url: ev?.captions_url ?? null, captions_offset_seconds: ev?.captions_offset_seconds ?? 0, chapters: Array.isArray(ev?.chapters) ? ev!.chapters : [], video_seconds: ev?.video_seconds ?? null, outline: ev?.outline ?? null } };
@@ -68,7 +76,7 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  const r = await registrant(String(b.token ?? ""));
+  const r = await registrant(String(b.token ?? ""), true);
   if (!r) return Response.json({ error: "Not found" }, { status: 404 });
   const ip = clientIp(request.headers);
   if (r.blocked_at || (await ipBlocked(ip))) return Response.json({ error: "Chat is unavailable." }, { status: 403 });

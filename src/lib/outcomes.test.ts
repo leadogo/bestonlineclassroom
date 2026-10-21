@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { concurrentAt, retentionCurve, tagsFor, peakConcurrent } from "./outcomes.ts";
+import { backstopMove, concurrentAt, isPerson, PERSON_SECONDS, retentionCurve, tagsFor, peakConcurrent } from "./outcomes.ts";
 
 const names = { registered: "reg", attended: "a", missed: "m", watched_replay: "r", left_early: "le", stayed_40min: "w40", asked_question: "q", clicked_offer: "c", saw_offer_no_click: "s" };
 
@@ -42,4 +42,23 @@ test("presence rule: the same grace for the instant count and the peak, so the p
   assert.equal(peakConcurrent(iv), 3);
   assert.equal(peakConcurrent(iv, 15_000, 0), 3);
   assert.equal(peakConcurrent([]), 0);
+});
+
+test("isPerson: two minutes or a click (SPEC-link-opens.md); a scanner's 40 s with the video playing is not", () => {
+  assert.equal(PERSON_SECONDS, 120);
+  assert.equal(isPerson({ seconds_watched: 40, cta_clicked_at: null }), false);
+  assert.equal(isPerson({ seconds_watched: 119, cta_clicked_at: null }), false);
+  assert.equal(isPerson({ seconds_watched: 120, cta_clicked_at: null }), true);
+  assert.equal(isPerson({ seconds_watched: 5, cta_clicked_at: "2026-10-20T23:40:00Z" }), true);
+  assert.equal(isPerson({ seconds_watched: null, cta_clicked_at: null }), false);
+});
+
+test("backstopMove: a live row still sitting on another date becomes tonight's when its own beats (never an older row's) make a person; never before, never once the room is not live", () => {
+  const live = { state: "live", date: "2026-10-20" };
+  assert.equal(backstopMove("2026-09-21", live, { seconds_watched: 120, cta_clicked_at: null }), true);
+  assert.equal(backstopMove("2026-09-21", live, { seconds_watched: 119, cta_clicked_at: null }), false);
+  assert.equal(backstopMove("2026-09-21", live, { seconds_watched: 30, cta_clicked_at: "2026-10-20T23:40:00Z" }), true, "a click is a person");
+  assert.equal(backstopMove("2026-10-20", live, { seconds_watched: 500, cta_clicked_at: null }), false, "already tonight's");
+  assert.equal(backstopMove("2026-09-21", { state: "countdown", date: "2026-10-20" }, { seconds_watched: 500, cta_clicked_at: null }), false);
+  assert.equal(backstopMove("2026-09-21", { state: "ended", date: "2026-10-20" }, { seconds_watched: 500, cta_clicked_at: null }), false);
 });

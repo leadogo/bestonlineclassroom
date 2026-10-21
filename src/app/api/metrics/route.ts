@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
-import { peakConcurrent, PRESENCE_GRACE_MS, retentionCurve } from "@/lib/outcomes";
+import { isPerson, peakConcurrent, PRESENCE_GRACE_MS, retentionCurve } from "@/lib/outcomes";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { loadHistory, projectBookings, typicalNight } from "@/lib/history";
 import { loadJoinSources } from "@/lib/join-sources-data";
@@ -27,8 +27,12 @@ export async function GET(request: Request) {
   if (error) return Response.json({ error: "Lookup failed" }, { status: 500 });
   const sessions = [];
   for (const row of data ?? []) {
-    const att = await db().from("attendance").select("max_offset, joined_at, last_seen_at, registrant:registrants!inner(source)").eq("session_date", row.session_date).eq("kind", "live").eq("registrant.event_id", event.id);
-    const real = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test");
+    const att = await db().from("attendance").select("registrant_id, max_offset, joined_at, last_seen_at, seconds_watched, cta_clicked_at, registrant:registrants!inner(source)").eq("session_date", row.session_date).eq("kind", "live").eq("registrant.event_id", event.id);
+    // Every count is persons (SPEC-link-opens.md, D): two minutes, a click, or a chat line; `visits` is every row and `arriving` who is here under two minutes.
+    const visits = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test");
+    const chatted = new Set(((await db().from("chat_messages").select("registrant_id").eq("event_id", event.id).eq("session_date", row.session_date).eq("role", "attendee").not("registrant_id", "is", null).limit(1000)).data ?? []).map((m) => m.registrant_id as string));
+    const person = (a: Record<string, unknown>) => isPerson({ seconds_watched: (a.seconds_watched as number | null) ?? 0, cta_clicked_at: (a.cta_clicked_at as string | null) ?? null }) || chatted.has(a.registrant_id as string);
+    const real = visits.filter(person);
     const offsets = real.map((a) => a.max_offset as number);
     const peak_live = peakConcurrent(real.map((a) => ({ from: new Date(a.joined_at as string).getTime(), to: new Date(a.last_seen_at as string).getTime() })));
     // Opt-ins: people who registered themselves for this session (site or Zap), not imports, Skool links or guests.
@@ -43,6 +47,8 @@ export async function GET(request: Request) {
     const at_pitch = pitchAt === null ? null : real.filter((a) => new Date(a.joined_at as string).getTime() <= pitchAt && new Date(a.last_seen_at as string).getTime() + PRESENCE_GRACE_MS >= pitchAt).length;
     const nowMs = Date.now();
     const in_room = real.filter((a) => nowMs - new Date(a.last_seen_at as string).getTime() < 120_000).length;
+    const arriving = visits.filter((a) => !person(a) && nowMs - new Date(a.last_seen_at as string).getTime() < 120_000).length;
+    const registered_tonight = Number(row.registered) - Number(row.moved_in ?? 0);
     const site_joined = real.filter((a) => (a.registrant as unknown as { source: string }).source === "site").length;
     const booked = await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", row.session_date).eq("status", "scheduled");
     // One session asked for by date: Brandon's post also wants minutes to the pitch, the projection and the typical night.
@@ -54,7 +60,7 @@ export async function GET(request: Request) {
       extras = { until_pitch_minutes: pitchAt !== null && pitchAt > nowMs ? Math.round((pitchAt - nowMs) / 60_000) : null, projected: proj, typical: typicalNight(history.map((h) => h.curve).filter((c): c is number[] => Array.isArray(c)), minuteNow), minute: minuteNow };
     }
     const by_source = await loadJoinSources(event.id, row.session_date as string, event.cta_at_seconds ?? 4500);
-    sessions.push({ ...row, by_source, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, site_joined, in_room, at_pitch, peak_live, booked: booked.count ?? 0, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: row.registered ? row.joined / row.registered : 0, ...extras });
+    sessions.push({ ...row, by_source, arriving, registered_tonight, optins: opt.count ?? 0, site_optins: siteRows.length, ad_optins, site_joined, in_room, at_pitch, peak_live, booked: booked.count ?? 0, retention: retentionCurve(offsets, event.video_seconds ?? 0), show_up_rate: registered_tonight > 0 ? row.joined / registered_tonight : 0, ...extras });
   }
   return Response.json({ event: event.slug, sessions }, { headers: { "cache-control": "no-store" } });
 }

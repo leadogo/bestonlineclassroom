@@ -1,12 +1,10 @@
 // The night report (SPEC-post-session.md, C): the session's numbers in one Slack line at 7:50 PM, from the room's own
 // rows and the two-minute rule William's Oct 20 report used. Pure; the cron route reads and posts.
-import { peakConcurrent, PRESENCE_GRACE_MS } from "./outcomes.ts";
+import { isPerson, peakConcurrent, PERSON_SECONDS, PRESENCE_GRACE_MS } from "./outcomes.ts";
 import { partsInTz } from "./tz.ts";
 
-/** A person watched two minutes or clicked the offer (SPEC-link-opens.md: scanners average 40 s with the video playing). */
-export const PERSON_SECONDS = 120;
+export { isPerson, PERSON_SECONDS };
 export type LiveRow = { registrant_id: string; joined_at: string; last_seen_at: string; seconds_watched: number; cta_clicked_at: string | null; source?: string | null };
-export const isPerson = (r: { seconds_watched: number; cta_clicked_at: string | null }): boolean => r.seconds_watched >= PERSON_SECONDS || r.cta_clicked_at !== null;
 
 export type NightCounts = { people: number; visits: number; peak: number; at_pitch: number | null; clicked: number; stayed_40: number; people_ids: Set<string> };
 

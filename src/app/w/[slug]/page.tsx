@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { isScannerAgent } from "@/lib/scanner";
 import { GuestForm } from "./guest-form";
 import { WaitingCount } from "./waiting-count";
 import { resolveForSession } from "@/lib/attendees";
@@ -53,7 +54,7 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
     if (made) redirect(`/j/${made.token}${toQuery(passthrough)}`);
   }
   const ua = (await headers()).get("user-agent");
-  after(() => logClick({ path: "w", outcome: "prompt", eventId: event.id, sessionDate, src, userAgent: ua }));
+  after(() => logClick({ path: "w", outcome: "prompt", eventId: event.id, sessionDate, src, userAgent: ua, bot: isScannerAgent(ua) }));
 
   // The join card (William, Sep 23: it has to look like something you trust): what they are joining, who is on
   // stage, when, who is in the room now, and one field.
