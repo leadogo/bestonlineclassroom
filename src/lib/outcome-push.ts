@@ -4,7 +4,7 @@
 // contact lookup per email per run, and the run returns when the budget is spent; the next run continues.
 import { addTag, contactId, tagId } from "./activecampaign.ts";
 import { scheduleOf, sessionFor } from "./daily-schedule.ts";
-import { db } from "./db.ts";
+import { db, pageAll } from "./db.ts";
 import { tagsFor, type Outcome, type TagNames } from "./outcomes.ts";
 
 export const PUSH_BUDGET_MS = 240_000;
@@ -25,14 +25,16 @@ export async function planOutcomeTags(now = Date.now()): Promise<Planned[]> {
   for (const e of (events ?? []) as Array<{ id: string; timezone: string; start_time: string; video_seconds: number | null; days?: number[] | null; tags?: TagNames | null }>) {
     const names = (e.tags ?? {}) as TagNames;
     const endNames = new Set(SESSION_END_KEYS.map((k) => names[k]).filter((n): n is string => Boolean(n)));
-    const { data: rows } = await db().from("registrant_outcomes").select("*").eq("event_id", e.id).gte("session_date", since).neq("source", "test").not("email", "is", null);
-    const ids = (rows ?? []).map((r) => r.registrant_id as string);
+    // Paged: a Tuesday night alone can put the 8-day window past the 1,000-row answer cap.
+    const rows = await pageAll<Record<string, unknown>>((from, to) => db().from("registrant_outcomes").select("*").eq("event_id", e.id).gte("session_date", since).neq("source", "test").not("email", "is", null).order("session_date", { ascending: false }).order("registrant_id").range(from, to));
+    const ids = rows.map((r) => r.registrant_id as string);
     const have = new Set<string>();
-    for (let i = 0; i < ids.length; i += 500) {
-      const { data: done } = await db().from("outcome_tags").select("registrant_id, tag").in("registrant_id", ids.slice(i, i + 500));
+    // 100 ids a time: at most nine tags each keeps every answer under the cap.
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data: done } = await db().from("outcome_tags").select("registrant_id, tag").in("registrant_id", ids.slice(i, i + 100));
       for (const d of done ?? []) have.add(`${d.registrant_id}:${d.tag}`);
     }
-    for (const r of rows ?? []) {
+    for (const r of rows) {
       const session = sessionFor(scheduleOf(e), r.session_date as string);
       const over = Boolean(session && now >= session.end.getTime() + 30 * 60_000);
       for (const tag of tagsFor(r as unknown as Outcome, names, over)) {
