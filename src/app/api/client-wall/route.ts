@@ -1,3 +1,4 @@
+import { roomState, scheduleOf } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
 import { FLAG_CAP, MIN_SNAPSHOT, normalizeClients } from "@/lib/client-wall";
 import { MIN_MARKETS, normalizeMarkets } from "@/lib/market-answer";
@@ -25,7 +26,8 @@ async function storeMarkets(raw: unknown, now: string): Promise<number | string>
  * POST { clients: [{ id, name, status, emails: [], phones: [], since }], markets?: [{ name, clients, live }] }
  * (Bearer REGISTER_SECRET), the whole BMS directory every time (SPEC-phase7.md): upserts the wall, releases clients
  * that left the directory, then walls and releases registrants in the database; stores the market counts when sent.
- * Returns { clients, kept, released_clients, flagged, released, markets }.
+ * Returns { clients, kept, released_clients, flagged, released, markets }; while a session is live, 202 { deferred: true, clients,
+ * released_clients, markets } and the apply waits for the next push (SPEC-post-session.md, D).
  */
 export async function POST(request: Request) {
   if (!SECRET || request.headers.get("authorization") !== `Bearer ${SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,6 +46,12 @@ export async function POST(request: Request) {
   }
   // Anyone not in this snapshot has left the directory; test rows (seeded by hand for a walk) stay.
   const gone = await db().from("client_wall").update({ released_at: now }).lt("seen_at", now).is("released_at", null).neq("status", "test").select("client_id");
+  // The apply is a 3 to 8 s query; while a session is live it waits for the next push (SPEC-post-session.md, D), the wall rows and the market counts are stored now.
+  const { data: events } = await db().from("events").select("slug, timezone, start_time, video_seconds, days");
+  if ((events ?? []).some((e) => !String(e.slug).startsWith("test") && roomState(scheduleOf(e), new Date()).state === "live")) {
+    const markets = body.markets === undefined ? undefined : await storeMarkets(body.markets, now).catch((e: unknown) => String(e));
+    return Response.json({ deferred: true, clients: rows.length, released_clients: gone.data?.length ?? 0, markets }, { status: 202, headers: { "cache-control": "no-store" } });
+  }
   const applied = await db().rpc("client_wall_apply", { cap: FLAG_CAP });
   if (applied.error) return Response.json({ error: `Apply failed: ${applied.error.message}` }, { status: 500 });
   const result = (applied.data ?? {}) as { error?: string; would_flag?: number; flagged?: number; released?: number };

@@ -75,7 +75,8 @@ export function digestDue(now: Date, lastOn: string | null, tz = "America/Edmont
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   const today = `${get("year")}-${get("month")}-${get("day")}`;
-  return { due: Number(get("hour")) % 24 === 9 && lastOn !== today, today };
+  // From 9 for the rest of the day: a Slack hiccup at 9 is retried at 10, and the once-a-day guard keeps it to one post (review of Oct 21).
+  return { due: Number(get("hour")) % 24 >= 9 && lastOn !== today, today };
 }
 
 /** Last night's lines by what became of them (SPEC-kaitlyn-solo.md, F): `stood` = posted and left alone (auto, sent as drafted); the rest the desk changed. `posted` is the sum. */
@@ -97,7 +98,10 @@ export function postedFrom(rows: Array<{ status: string; skip_reason?: string | 
 }
 
 /** The Slack line for #autoweb-intel; null when there is nothing to say. `unanswered` and `ghosted` (SPEC-kaitlyn-ghosts.md, E2): who got no answer last night and who was ghosted by hand, so the audit is read every morning. `posted` (SPEC-kaitlyn-solo.md, F) is the agreement line; `stale` (G) names staged answers older than a week. */
-export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[] }): string | null {
+/** The owed line only from here (SPEC-post-session.md, B): a quiet night owes a handful between runs; a stalled push owes hundreds. */
+export const OWED_FLOOR = 50;
+
+export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[]; /** outcome tags still to push to ActiveCampaign (SPEC-post-session.md, B) */ owed?: number }): string | null {
   const n = o.questions.length;
   const plural = (k: number, one: string, many: string) => (k === 1 ? one : many);
   const lines: string[] = [];
@@ -120,6 +124,8 @@ export function digestText(o: { questions: Array<{ question: string; asked: numb
   }
   const st = o.stale ?? [];
   if (st.length) lines.push(`${st.length} ${plural(st.length, "answer has", "answers have")} waited over a week for your OK: ${st.join(", ")}. ${o.url}`);
+  if (o.owed === -1) lines.push("Outcome tags owed to ActiveCampaign: unknown (the plan failed; check the push).");
+  else if (o.owed !== undefined && o.owed >= OWED_FLOOR) lines.push(`Outcome tags owed to ActiveCampaign: ${o.owed} (the push is behind).`);
   return lines.length ? lines.join("\n") : null;
 }
 

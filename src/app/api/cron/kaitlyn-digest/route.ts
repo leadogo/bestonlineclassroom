@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { answeredWithin, digestDue, digestText, postedFrom } from "@/lib/kaitlyn-kb";
+import { planOutcomeTags } from "@/lib/outcome-push";
 import { postToIntel } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +23,13 @@ export async function GET(request: Request) {
   const now = new Date();
   const { data: events } = await db().from("events").select("id, slug, kaitlyn_mode, kaitlyn_digest_on, timezone").neq("kaitlyn_mode", "off");
   const report: Array<{ event: string; due: boolean; text: string | null }> = [];
+  // The outcome push's backlog, once per run (SPEC-post-session.md, B): the plan covers every event.
+  let owed: number | undefined;
   for (const e of events ?? []) {
     if (e.slug.startsWith("test")) continue;
     const { due, today } = digestDue(now, e.kaitlyn_digest_on, e.timezone || "America/Edmonton");
     if (!due && !force && !dry) { report.push({ event: e.slug, due: false, text: null }); continue; }
+    if (owed === undefined) owed = await planOutcomeTags().then((p) => p.length).catch(() => -1);
     const since = new Date(now.getTime() - DAY_MS).toISOString();
     const [open, waiting] = await Promise.all([
       db().from("kaitlyn_kb").select("key, question").eq("event_id", e.id).eq("handling", "open").gte("last_asked_at", since).order("asked", { ascending: false }).limit(12),
@@ -62,6 +66,7 @@ export async function GET(request: Request) {
       ghosted: byHand.map((g) => ({ name: g.first_name as string, reason: String(g.auto_ghost_reason ?? "").startsWith("by hand: ") ? String(g.auto_ghost_reason).slice(9) : null })),
       posted: postedFrom((decided.data ?? []) as Array<{ status: string; skip_reason?: string | null }>),
       stale: (stale.data ?? []).map((r) => r.key as string),
+      owed,
     });
     if (!dry) {
       const sent = text ? await postToIntel(text) : { ok: true };

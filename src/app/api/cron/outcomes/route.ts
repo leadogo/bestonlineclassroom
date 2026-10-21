@@ -1,50 +1,26 @@
-import { tagContact, activeCampaignConfigured } from "@/lib/activecampaign";
-import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
+import { activeCampaignConfigured } from "@/lib/activecampaign";
 import { db } from "@/lib/db";
-import type { EventRow } from "@/lib/events";
-import { tagsFor, type Outcome, type TagNames } from "@/lib/outcomes";
+import { planOutcomeTags, pushOutcomeTags } from "@/lib/outcome-push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * Hourly (vercel.json): for every session in the last 8 days, tag each registrant in ActiveCampaign with what
- * they did (SPEC-analytics.md). Session-end outcomes wait until 30 minutes after the recording ends; replay,
- * question and click go as soon as they happen. `outcome_tags` remembers what was sent. `?dry=1` lists instead.
+ * Every 15 minutes (vercel.json): for every session in the last 8 days, tag each registrant in ActiveCampaign with what
+ * they did (SPEC-analytics.md). Session-end outcomes wait until 30 minutes after the recording ends; replay, question
+ * and click go as soon as they happen. `outcome_tags` remembers what was sent. The push is planned newest session first
+ * and runs under a time budget, so a big night clears over a few runs instead of timing out (SPEC-post-session.md, A).
+ * `?dry=1` lists the plan instead; the response carries `owed`, what the next runs still have to push.
  */
 export async function GET(request: Request) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const dry = new URL(request.url).searchParams.get("dry") === "1";
   if (!activeCampaignConfigured() && !dry) return Response.json({ error: "ActiveCampaign not configured" }, { status: 503 });
-  const since = new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 10);
-  // IPs are kept 30 days for blocking, then dropped (SPEC-phase4 chat-moderation).
-  if (!dry) await db().from("registrants").update({ ip: null, ip_seen_at: null }).lt("ip_seen_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
-  const { data: events } = await db().from("events").select("*");
-  const now = Date.now();
-  let sent = 0;
-  const planned: Array<{ email: string; tag: string }> = [];
-  for (const e of (events ?? []) as EventRow[]) {
-    const names = (e as unknown as { tags: TagNames }).tags ?? {};
-    const { data: rows } = await db().from("registrant_outcomes").select("*").eq("event_id", e.id).gte("session_date", since).neq("source", "test").not("email", "is", null);
-    const ids = (rows ?? []).map((r) => r.registrant_id as string);
-    const { data: done } = ids.length ? await db().from("outcome_tags").select("registrant_id, tag").in("registrant_id", ids) : { data: [] };
-    const have = new Set((done ?? []).map((d) => `${d.registrant_id}:${d.tag}`));
-    for (const r of rows ?? []) {
-      const session = sessionFor(scheduleOf(e), r.session_date as string);
-      const over = Boolean(session && now >= session.end.getTime() + 30 * 60_000);
-      for (const tag of tagsFor(r as unknown as Outcome, names, over)) {
-        if (have.has(`${r.registrant_id}:${tag}`)) continue;
-        if (dry) {
-          planned.push({ email: r.email as string, tag });
-          continue;
-        }
-        const ok = await tagContact(r.email as string, tag);
-        if (ok) {
-          await db().from("outcome_tags").insert({ registrant_id: r.registrant_id, tag });
-          sent += 1;
-        }
-      }
-    }
+  if (dry) {
+    const plan = await planOutcomeTags();
+    return Response.json({ owed: plan.length, planned: plan.map((p) => ({ email: p.email, tag: p.tag, session_date: p.session_date })) });
   }
-  return Response.json(dry ? { planned } : { sent });
+  // IPs are kept 30 days for blocking, then dropped (SPEC-phase4 chat-moderation).
+  await db().from("registrants").update({ ip: null, ip_seen_at: null }).lt("ip_seen_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+  return Response.json(await pushOutcomeTags());
 }
