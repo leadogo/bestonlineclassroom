@@ -6,6 +6,8 @@ Proposed Oct 21 2026 midday from William's "if there's anything else you suggest
 hour ("yes the post-session tags need to be fixed and all other smaller things"). Built in two batches: this spec's
 A to E the same afternoon; `link-opens` A, B and D on Thursday morning (its own spec carries them).
 
+**Status.** Batch 1 (A to E) merged Oct 21 11:55 AM (PR #3, 5ffe4f2) after a `/review` pass whose findings were fixed (a throttled tag was recorded as sent; the night report and the digest had one chance a day to post; `pageAll`, because PostgREST answers 1,000 rows at most and the old cron read 1,000 of 1,688); migration 042 applied; the noon run pushed 121 tags (85 missed, 11 attended, 9 watched 40, 8 saw offer, 7 registered, 1 left early) and returned on budget. Batch 2 is PR #4 (`link-opens`, b7048d7), reviewed twice, for Thursday morning.
+
 ## What happened
 - **The outcome tags stalled after the 770-registrant night.** `/api/cron/outcomes` (every 15 minutes, `maxDuration`
   300) tags each registrant of the last 8 days in ActiveCampaign with what they did; the AILGR Missed, Stayed and Left
@@ -38,8 +40,11 @@ A. **The push finishes.** `src/lib/activecampaign.ts`: `api()` paces calls at le
    the last 8 days, the tags each still needs, ordered **newest session first, session-end tags (attended, missed,
    left early, stayed 40, saw offer) before the rest**, one contact lookup per email per run (a Map), and a time
    budget (`PUSH_BUDGET_MS = 240_000`): the run returns `{ sent, owed }` when the budget is spent and the next run
-   continues. The cron route becomes a thin caller; `?dry=1` still lists. At 5 requests a second that is about 550
-   tags per run, so the Oct 20 backlog clears in five runs and a Tuesday night in two.
+   continues. The cron route becomes a thin caller; `?dry=1` still lists. **First run, Oct 21 noon: 121 tags in 234 s**
+   (ActiveCampaign answers each call in about 700 ms, so the pace is the API, not the 210 ms floor): about 0.5 tags a
+   second, the Oct 20 backlog (1,810) clears over the afternoon, and a Thursday night's own session-end tags (about 800)
+   go in the first run or two because they are planned first. Follow-up if that is too slow: three workers under the same
+   5-a-second pacing.
 B. **The digest says when the push is behind.** The 9 AM Kaitlyn digest gains one line when the owed count (the dry
    plan's length) is 50 or more: "Outcome tags owed to ActiveCampaign: N (the push is behind)". Below 50, nothing.
 C. **The night report.** `/api/cron/night-report` (hourly at :50, posts when it is 7 PM in the event's zone, the
