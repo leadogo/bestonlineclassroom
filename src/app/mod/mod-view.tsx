@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "../login/actions";
 import { KAITLYN, mergeUpdates, simulatedCursor, splitBody, trimCrowd, type ChatItem, type ChatUpdate, type KaitlynMode, type SimulatedRow } from "@/lib/chat";
-import { EMOJIS, GHOST_REASONS } from "@/lib/moderation";
+import { EMOJIS, GHOST_REASONS, SKIP_REASONS } from "@/lib/moderation";
 import { Avatar } from "@/components/room/PeoplePanel";
 import { rankEngagement } from "@/lib/engagement";
 import { asksMarket, findMarkets, findStates, marketDraft, NO_MATCH_DRAFT, onlyStates, placeOf, rollup, rollupDraft, type MarketCount } from "@/lib/market-answer";
@@ -21,6 +21,8 @@ type Mentionable = { id: string; name: string; sub?: string };
 /** One of Kaitlyn's open suggestions (kaitlyn_decisions, status pending): a draft to send, a ghost or a reaction to approve, or a line she wants a human on. */
 type KPending = { id: number; message_id: number; registrant_id: string; action: "reply" | "skip" | "ghost" | "ask_william"; category: string; text: string; react: string; why: string; /** What William was saying on screen when they typed (the last 20 s), when the event has a transcript. */ screen?: string | null };
 type KDecision = "send" | "skip" | "ghost" | "react";
+/** A run of three or more of Kaitlyn's posted lines in a row, folded on the desk (SPEC-kaitlyn-solo.md, H). */
+type Run = { key: string; n: number; names: string[]; first: number; last: number };
 type Item = ChatItem & { registrantId?: string | null; deleted?: boolean; ghost?: boolean; mentionsMe?: boolean; team?: boolean; belief?: boolean; question?: boolean; ghostReply?: boolean };
 type Tab = "chat" | "people" | "team" | "engagement" | "stats";
 
@@ -45,6 +47,8 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
   const [kaitlyn, setKaitlyn] = useState<KPending[]>([]);
   const [autopilot, setAutopilot] = useState<"auto" | "on" | "off">(event.autopilot ?? "auto");
   const [fixing, setFixing] = useState<number | null>(null);
+  // Runs of her posted lines the desk tapped open (SPEC-kaitlyn-solo.md, H), by the first row's key.
+  const [openRuns, setOpenRuns] = useState<Set<string>>(() => new Set());
   const [teach, setTeach] = useState("");
   const [taught, setTaught] = useState("");
   const [teamText, setTeamText] = useState("");
@@ -210,8 +214,8 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
     return true;
   }
   // Acting on one of Kaitlyn's suggestions: the row leaves the desk at once and her reply (if any) shows as hers.
-  async function kaitlynAct(k: KPending, decision: KDecision, body?: string): Promise<boolean> {
-    const res = await fetch("/api/mod", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: event.slug, date: session.date, action: "kaitlyn", id: k.id, decision, body }) });
+  async function kaitlynAct(k: KPending, decision: KDecision, body?: string, reason?: string): Promise<boolean> {
+    const res = await fetch("/api/mod", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: event.slug, date: session.date, action: "kaitlyn", id: k.id, decision, body, reason }) });
     const j = (await res.json().catch(() => ({}))) as { error?: string; message?: Wire | null };
     if (!res.ok) {
       setError(j.error ?? "That didn't work.");
@@ -312,6 +316,7 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
   const chat = list.filter((m) => !m.team);
   const teamMsgs = list.filter((m) => m.team && !m.deleted);
   const shown = chat.filter((m) => (m.role !== "simulated" || showSim) && (!onlyMentions || m.mentionsMe));
+  const { runs, hiddenRows } = foldRuns(shown, openRuns, fixing);
   const inRoom = people.filter((p) => p.in_room && p.source !== "test");
   const msgCount = new Map<string, number>();
   const beliefCount = new Map<string, number>();
@@ -437,7 +442,12 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
 
             <div ref={scroller} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-4 py-2">
               {shown.length === 0 && <p className="py-8 text-center text-muted">No messages yet.</p>}
-              {shown.map((m) => (
+              {shown.map((m) => {
+                // A run of her posted lines folds into one row (SPEC-kaitlyn-solo.md, H); the rows inside a folded run are not drawn.
+                const run = runs.get(m.key);
+                if (run) return <KaitlynRun key={m.key} run={run} onOpen={() => setOpenRuns((s) => new Set(s).add(run.key))} />;
+                if (hiddenRows.has(m.key)) return null;
+                return (
                 <div key={m.key} className={`flex gap-3 border-b border-line/60 py-2.5 ${m.deleted ? "opacity-40" : ""} ${m.mentionsMe ? "-mx-4 bg-brand/10 px-4" : m.role === "attendee" ? "-mx-4 bg-emerald-500/10 px-4" : ""}`}>
                   <Avatar name={m.name} />
                   <div className="min-w-0 flex-1">
@@ -523,7 +533,8 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
                     {fixing === m.id && m.id !== undefined && !m.deleted && <FixRow m={m} onFix={fix} onClose={() => setFixing(null)} />}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {pending > 0 && !atBottom && (
@@ -667,10 +678,12 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, confirmGh
  * a ghost or a reaction to approve with one tap, or a line she wants a human on (the box is there, empty, for the
  * proper answer; it posts as her). Skip drops it; nothing posts on its own.
  */
-function KaitlynRow({ k, ghosted, onAct }: { k: KPending; ghosted: boolean; onAct: (k: KPending, decision: KDecision, body?: string) => Promise<boolean> }) {
+function KaitlynRow({ k, ghosted, onAct }: { k: KPending; ghosted: boolean; onAct: (k: KPending, decision: KDecision, body?: string, reason?: string) => Promise<boolean> }) {
   const [draft, setDraft] = useState(k.text);
   const [busy, setBusy] = useState(false);
-  const go = async (decision: KDecision, body?: string) => { setBusy(true); await onAct(k, decision, body); setBusy(false); };
+  // Skip on a draft asks why (SPEC-kaitlyn-solo.md, E): "wrong" is the one she learns from.
+  const [skipping, setSkipping] = useState(false);
+  const go = async (decision: KDecision, body?: string, reason?: string) => { setBusy(true); await onAct(k, decision, body, reason); setBusy(false); };
   const label = k.action === "reply" ? "reply" : k.action === "ghost" ? "ghost?" : k.action === "ask_william" ? "needs you" : "react?";
   const editable = k.action === "reply" || k.action === "ask_william";
   return (
@@ -696,7 +709,18 @@ function KaitlynRow({ k, ghosted, onAct }: { k: KPending; ghosted: boolean; onAc
         {k.react && (
           <button type="button" disabled={busy} onClick={() => go("react")} className="min-h-8 rounded-full border border-line bg-panel px-2.5 text-sm disabled:opacity-40" title="React as Kaitlyn">React {k.react}</button>
         )}
-        <button type="button" disabled={busy} onClick={() => go("skip")} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink disabled:opacity-40">{k.action === "ask_william" ? "Dismiss" : "Skip"}</button>
+        {k.action !== "reply" ? (
+          <button type="button" disabled={busy} onClick={() => go("skip")} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink disabled:opacity-40">{k.action === "ask_william" ? "Dismiss" : "Skip"}</button>
+        ) : skipping ? (
+          <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Why skip it">
+            {SKIP_REASONS.map((r) => (
+              <button key={r} type="button" disabled={busy} onClick={() => go("skip", undefined, r)} className={`min-h-8 rounded-full px-2.5 text-xs font-bold disabled:opacity-40 ${r === "wrong" ? "bg-live text-white" : "border border-line bg-panel text-ink"}`} title={r === "wrong" ? "Skip it, and she learns not to say this" : "Skip it; nothing learned"}>{r}</button>
+            ))}
+            <button type="button" onClick={() => setSkipping(false)} className="min-h-8 rounded-full px-2 text-xs text-muted">cancel</button>
+          </span>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => setSkipping(true)} className="min-h-8 rounded-full px-2 text-sm text-muted hover:text-ink disabled:opacity-40">Skip</button>
+        )}
       </div>
     </div>
   );
@@ -860,6 +884,40 @@ function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history, l
         return rate === null ? tile("–", "projected bookings", false, "no past sessions with bookings yet") : tile(`≈ ${Math.round(base * rate)}`, "projected bookings", true, `${Math.round(rate * 100)}% of ${stats.at_pitch !== null ? "those at the pitch" : "the room now"} · ${same.length >= 4 ? "this weekday" : "all days"}, ${pool.length} session${pool.length === 1 ? "" : "s"}`);
       })()}
     </div>
+  );
+}
+
+/** Three or more of Kaitlyn's posted lines in a row fold into one row (SPEC-kaitlyn-solo.md, H), so at five lines a minute the cards that need a human stay on screen. A run being fixed, or tapped open, stays unfolded; the rows inside a folded run are not drawn. */
+function foldRuns(shown: Item[], openRuns: Set<string>, fixing: number | null): { runs: Map<string, Run>; hiddenRows: Set<string> } {
+  const runs = new Map<string, Run>();
+  const hiddenRows = new Set<string>();
+  let run: Item[] = [];
+  const flush = () => {
+    if (run.length >= 3 && !openRuns.has(run[0].key)) {
+      runs.set(run[0].key, { key: run[0].key, n: run.length, names: [...new Set(run.flatMap((r) => r.mentionNames ?? []))], first: run[0].at, last: run[run.length - 1].at });
+      for (const r of run.slice(1)) hiddenRows.add(r.key);
+    }
+    run = [];
+  };
+  for (const m of shown) {
+    if (m.name === KAITLYN && m.role === "moderator" && !m.deleted && fixing !== m.id) run.push(m);
+    else flush();
+  }
+  flush();
+  return { runs, hiddenRows };
+}
+
+/** A folded run of Kaitlyn's posted lines (SPEC-kaitlyn-solo.md, H): how many, to whom, and when; a tap opens the lines with their Fix and Delete. */
+function KaitlynRun({ run, onOpen }: { run: Run; onOpen: () => void }) {
+  const names = run.names.slice(0, 6).join(", ") + (run.names.length > 6 ? ` +${run.names.length - 6}` : "");
+  return (
+    <button type="button" onClick={onOpen} className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-3 border-b border-line/60 bg-cta/5 px-4 py-2 text-left hover:bg-cta/10" title="Open her lines, with Fix and Delete">
+      <Avatar name={KAITLYN} />
+      <span className="min-w-0 flex-1 text-sm">
+        <span className="font-bold text-brand">Kaitlyn</span> answered {run.n}{names ? `: ${names}` : ""}
+        <span className="ml-2 text-xs text-muted tabular-nums">{clock(run.first)} to {clock(run.last)} · tap to open</span>
+      </span>
+    </button>
   );
 }
 

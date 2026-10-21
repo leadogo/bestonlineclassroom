@@ -78,8 +78,26 @@ export function digestDue(now: Date, lastOn: string | null, tz = "America/Edmont
   return { due: Number(get("hour")) % 24 === 9 && lastOn !== today, today };
 }
 
-/** The Slack line for #autoweb-intel; null when there is nothing to say. `unanswered` and `ghosted` (SPEC-kaitlyn-ghosts.md, E2): who got no answer last night and who was ghosted by hand, so the audit is read every morning. */
-export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }> }): string | null {
+/** Last night's lines by what became of them (SPEC-kaitlyn-solo.md, F): `stood` = posted and left alone (auto, sent as drafted); the rest the desk changed. `posted` is the sum. */
+export type Posted = { posted: number; stood: number; fixed: number; deleted: number; edited: number; wrong: number };
+
+/** The counts from the night's decision rows: auto and sent stood; edited, fixed and deleted were changed; a skip marked wrong is a line that would have been wrong. */
+export function postedFrom(rows: Array<{ status: string; skip_reason?: string | null }>): Posted {
+  const p: Posted = { posted: 0, stood: 0, fixed: 0, deleted: 0, edited: 0, wrong: 0 };
+  for (const r of rows) {
+    if (r.status === "auto" || r.status === "sent") p.stood++;
+    else if (r.status === "fixed") p.fixed++;
+    else if (r.status === "deleted") p.deleted++;
+    else if (r.status === "edited") p.edited++;
+    else if (r.status === "skipped" && r.skip_reason === "wrong") p.wrong++;
+    else continue;
+    p.posted++;
+  }
+  return p;
+}
+
+/** The Slack line for #autoweb-intel; null when there is nothing to say. `unanswered` and `ghosted` (SPEC-kaitlyn-ghosts.md, E2): who got no answer last night and who was ghosted by hand, so the audit is read every morning. `posted` (SPEC-kaitlyn-solo.md, F) is the agreement line; `stale` (G) names staged answers older than a week. */
+export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[] }): string | null {
   const n = o.questions.length;
   const plural = (k: number, one: string, many: string) => (k === 1 ? one : many);
   const lines: string[] = [];
@@ -95,6 +113,13 @@ export function digestText(o: { questions: Array<{ question: string; asked: numb
   if (u.length) lines.push(`Last night ${u.length} ${plural(u.length, "person", "people")} went unanswered: ${u.join(", ")}.`);
   const g = o.ghosted ?? [];
   if (g.length) lines.push(`You ghosted ${g.length} by hand: ${g.map((x) => (x.reason ? `${x.name} (${x.reason})` : x.name)).join(", ")}.`);
+  const p = o.posted;
+  if (p?.posted) {
+    const changed = [[p.fixed, "fixed"], [p.deleted, "deleted"], [p.edited, "edited before sending"], [p.wrong, "skipped as wrong"]].filter(([n]) => n).map(([n, w]) => `${n} you ${w}`);
+    lines.push(`Kaitlyn posted ${p.posted} last night: ${p.stood} stood${changed.length ? `, ${changed.join(", ")}` : ""} (agreement ${Math.round((100 * p.stood) / p.posted)}%).`);
+  }
+  const st = o.stale ?? [];
+  if (st.length) lines.push(`${st.length} ${plural(st.length, "answer has", "answers have")} waited over a week for your OK: ${st.join(", ")}. ${o.url}`);
   return lines.length ? lines.join("\n") : null;
 }
 

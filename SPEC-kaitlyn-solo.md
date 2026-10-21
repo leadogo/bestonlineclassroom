@@ -7,7 +7,7 @@ Oct 21 2026 morning from William's ask ("make the room more automated and Kaitly
 moderate better without requiring me … she wasn't really actually answering market questions around the pitch
 time"). Nothing here changes until William approves this spec.
 
-**Status.** Oct 21 morning (William: "ok go"): C and D built with `kaitlyn-ghosts` D and deployed; replay of Oct 20 through the new prompt: 18 of 18 roll-call drops skip, 37 of 37 pitch-window market lines are sure replies with a count (Treasure Coast, Southern MD, Upstate and "Ny" included). A: the switch at 5 PM. B, E, F, G, H: Thursday morning.
+**Status.** Oct 21 morning (William: "ok go"): C and D built with `kaitlyn-ghosts` D and deployed; replay of Oct 20 through the new prompt: 18 of 18 roll-call drops skip, 37 of 37 pitch-window market lines are sure replies with a count (Treasure Coast, Southern MD, Upstate and "Ny" included). A: switched to assisted at 10:14 AM (the room reads the mode per message; nothing arrives before 5 PM). B, E, F, G, H: built the same morning on branch `kaitlyn-solo-thursday` (127 tests, tsc, eslint, `next build` clean); merge Thursday morning before 3:30 PM MT, after `doppler run -p bestonlineclassroom -c prd -- node scripts/migrate.ts` applies 041 (additive).
 
 ## What happened (Tue Oct 20, the pitch)
 - `events.kaitlyn_mode` for ailg-r is still **shadow**: every line she drafts waits for a click on the desk. The

@@ -20,3 +20,11 @@ export const GHOST_REASONS = ["live test", "price", "nag", "sneer", "client", "n
 export function ghostReason(v: unknown): string {
   return (GHOST_REASONS as readonly string[]).includes(String(v)) ? `by hand: ${String(v)}` : "by hand";
 }
+
+/** Why the desk skipped one of Kaitlyn's drafts (SPEC-kaitlyn-solo.md, E): one tap. Only "wrong" becomes a correction she learns from; the rest are bookkeeping. */
+export const SKIP_REASONS = ["wrong", "already answered", "not needed", "roll-call"] as const;
+
+/** The stored skip reason: one of the chips, or null. */
+export function skipReason(v: unknown): string | null {
+  return (SKIP_REASONS as readonly string[]).includes(String(v)) ? String(v) : null;
+}
