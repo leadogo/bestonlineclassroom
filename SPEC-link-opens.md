@@ -26,8 +26,17 @@ numbers (report doc: "Tuesday Oct 20 Session Report"). Nothing here changes unti
   new registrants 48% tonight on the site against 35% by the two-minute rule in the room (Oct 13 to 17: 41%
   against 32%; Sun 48 against 29; Mon 56 against 45). Trends hold, levels are lower.
 - The open door (`/w/ailg-r`, an email field): 208 clicks, 146 from Linux agents; 62 human clicks, 14 got through,
-  8 watched. Contacts whose ActiveCampaign field still holds the generic door (about 4,245 at the Oct 18 dry run)
-  land there from every promo email.
+  8 watched. From the two promo emails alone: 193 door hits (38 human, 155 scanner), 4 humans typed an email, none
+  of the 4 watched. **Why they land there (Oct 21 check):** `WebinarJoinLink` holds 13,803 values; 7,148 are the
+  door, all dated Oct 18: 7,038 `watch.bookmoreshowings.com/w/ailg-r?src=email&eh=<hash>` (the Sep 20
+  `ac-links.ts` wrote that form to every contact without a room registrant; Sunday's phase 2 moved it onto the
+  watch host) and 110 bare `/w/ailg-r` (dead EasyWebinar logins replaced by phase 2). The Oct 18 repair gave
+  personal links only to contacts created since Aug 1 (the 90-day scope now shows 5 left); every one of the
+  7,143 still on the door is older. The promo email and the Roezan text both send the field, so those contacts
+  get the door from either (no text reached the door Oct 20: 0 clicks with `src=sms`). The door can walk a
+  person in from `eh` only when a room row with that email hash exists, and these contacts have none; for the
+  245 who do, the campaign's appended `?src=email` turns the hash into `<hash>?src=email`, which fails the
+  64-hex check, so the lookup is skipped and they are prompted too.
 - The humans who tapped at 4 PM mattered: 171 human taps between 3 and 5 PM, 46 of them watched; the move put them
   on the 30- and 15-minute reminders, a second touch worth keeping.
 
@@ -68,10 +77,12 @@ D. **Counters**: the desk's `people[].in_room`, `stats.in_room`, `stats.peak`, `
 E. **Reminders and Katherine**: no change in the cron; B keeps scanner-moved rows out of tonight, so the 30- and
    15-minute emails and the 4 PM call list reach registrants and human moved-ins only. Whether Katherine keeps
    calling moved-ins is William's call (the plan item in the report doc).
-F. **The door**: `scripts/ac-personal-links.ts --door`: every ActiveCampaign contact whose `WebinarJoinLink` is the
-   generic door (`/w/ailg-r`, any host) gets a room registrant (`source = legacy`, a past session date, no email)
-   and `https://watch.bookmoreshowings.com/<token>` + `/replay/<token>`; dry run, then apply before Thursday Oct
-   22's 4:08 PM send. **William in ActiveCampaign**: automation 192's "Update WebinarJoinLink = …/w/ailg-r?src=sms"
+F. **The door**: the existing `scripts/ac-personal-links.ts --since 2000-01-01` (no new flag: its selection is
+   already "tag 304, join link not personal"): every such contact gets a room registrant (`source = legacy`, a
+   past session date, so tonight's count and the reminders are untouched) and
+   `https://watch.bookmoreshowings.com/<token>` + `/replay/<token>`. Dry run Oct 21 9:40 AM: 13,794 contacts,
+   7,143 to write (245 already have a room row and only need the field, 6,898 need a row), about 25 minutes at
+   5 requests a second. Apply before Thursday Oct 22's 4:08 PM send. **William in ActiveCampaign**: automation 192's "Update WebinarJoinLink = …/w/ailg-r?src=sms"
    step (W1 of `SPEC-show-rate-recovery.md`) would overwrite these; remove it (every contact then holds a personal
    link) or condition it on a blank field. The door page itself is unchanged; its `?e=&fn=` pass-through stays
    for Skool and Zap links.
@@ -118,6 +129,6 @@ outside 3:30 to 7:45 PM MT. Rollback: the columns are additive; one flag returns
 3. leadogo's `room_join` moves to the two-minute mark and the show rate drops to the real level (one measure,
    re-based after 14 days). The `room_watch` road only if continuity of the old number matters more.
 4. The row move stays at render for human-looking opens, so a 4 PM tap still earns the reminder emails.
-5. The door backfill covers every contact holding the generic link, not only tagged ones, and the automation 192
-   step is removed.
+5. The door backfill runs the existing script over every contact age (7,143 contacts, all created before Aug 1
+   2026), and the automation 192 step is removed.
 6. "Arriving" shows beside "in the room"; the Oct 20 report's numbers are the first on the new rule.
