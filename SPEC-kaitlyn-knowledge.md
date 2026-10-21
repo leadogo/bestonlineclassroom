@@ -124,6 +124,62 @@ prompt falls back to the fact sheet alone when it is empty.
 - Never: deploy in the window; a destructive migration; a digest to a channel other than the intel channel
   without his say.
 
+## Training from the desk's own replies (Oct 20 2026 night)
+William, after the Tuesday session (298 chat lines, 95 that wanted an answer, 54 answered by Kaitlyn, 11 by him as
+"Kevin from William's Team", 30 unanswered, 18 of her drafts edited, 22 never actioned): "train Kaitlyn even further
+from the messages I sent today."
+
+### What was done by hand that night (writes verified; script in the session scratchpad, not in the repo)
+- His 18 edits of her lines already reach her: the prompt carries the last 40 `kaitlyn_corrections` (T1 of
+  `SPEC-kaitlyn-ghosts.md`). They roll off after about two more sessions.
+- Five open keys asked that night got his words as `answer` and the humanizer rewrite as the line, staged
+  (`handling = 'answer'`, `approved_at` null, "Waiting for your OK"; fact check clean on all five): `skip-the-story`
+  (his line to Ingrid: plenty of tactical content, but you're listening to someone who knows and whom you can trust),
+  `facebook-ads-failed`, `brokers`, `contact-number`, `booking-not-going-through` (his three booking lines folded
+  into one). Approval stays his, one click each, as this spec's boundary says.
+- Four facts he stated went onto the fact sheet as Teach lines, live at once (the Teach box's format, `(William,
+  Oct 20, 2026)`): the 11Labs Quebec French model; not letting the AI speak Spanish when the agent does not; the
+  DNC registry with the explicit opt-in exception; pricing as a tailored consult with different options and
+  incentives. No Slack "Kaitlyn learned" line was posted.
+- Left out on purpose: "building out a service for mortgage and life insurance" (decision 5 of
+  `SPEC-kaitlyn-ghosts.md`: not until it exists); Agent Locator (already on the sheet); market-specific lines
+  (Calgary, Queens: the directory answers those); his chatter replies.
+- Still open with no words from him: `screen-frozen`, `account-takeover`, `trust-unclear`, `past-training-class`,
+  `chatgpt-agent-visibility`.
+
+### The repeatable step: `scripts/kaitlyn-train-from-desk.ts [--date YYYY-MM-DD] [--apply]`
+Learning from the desk was "ask first" above; he has now asked, for his own seat. For one session:
+1. **Open keys he answered.** For every `kaitlyn_kb` row with `handling = 'open'` asked that night (decisions with
+   `kb_key`), find a reply from William's seat (team member role `admin`) to the asker within 15 minutes
+   (`chat_messages.answered_by`, or an `@mention` of the asker, the `answeredWithin` rule), or his edit of her draft
+   on that key (`kaitlyn_corrections.fixed`). His words become `answer`, the rewrite (`rewriteAnswer`, fact-checked;
+   a flagged rewrite keeps his words) becomes the line, staged for his OK: `answered_by` = his seat, `approved_at`
+   null. The script never approves.
+2. **Approved keys he edited.** A correction on a key that already has an approved line is printed as a "fold in?"
+   suggestion with both texts, not written: an edit on the desk is often situational, and staging it would pull the
+   live line out of her prompt until he clicks.
+3. **Facts** stay by hand: the script prints his replies that carry a product fact and name no key, for the Teach box.
+4. `--apply` writes; without it the run prints what would be staged. The 9 AM digest gains one line, "N answers
+   staged from your replies last night", when the script ran.
+Run by hand after a busy night first; after two clean runs it rides inside the digest cron (the previous night's date).
+
+### Testing
+- `kaitlyn-train.test.ts`: the asker-to-reply match (answered_by; mention within 15 minutes; a reply to someone
+  else does not count); a correction on an open key becomes the answer; a correction on an approved key is a
+  suggestion only; a dry run writes nothing.
+- Production on test-run: a seat asks a novel question, William's seat answers it, the script stages the row, the
+  page shows it under Waiting for your OK with his words on the left.
+
+### Boundaries
+- Always: his words are the source; the script stages and never approves; only William's seat trains, other
+  moderators' replies show as context on the card.
+- Never: write a Teach line from a script; touch `ailg-r` rows in a test.
+
+### Decisions proposed (say no to any)
+7. The script stages, never approves; approval stays one click on the page.
+8. Only William's seat trains; Kevin's and Akash's replies are context, not answers.
+9. The script runs by hand twice, then nightly inside the digest cron.
+
 ## Decisions proposed (say no to any)
 1. The knowledge base is per webinar; `test-run` gets a copy of the seed so tests never touch `ailg-r`.
 2. The model names the key inside the same decision call; no second call per message.

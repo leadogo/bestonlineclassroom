@@ -19,6 +19,8 @@ Follow-ups noticed, not built: "OC" and other abbreviations do not match the dir
 "wide open" where the count is 9: a market alias table); a third live-or-recorded push with an ultimatum (Kim Ma) is the one
 line she ghosts that the spec calls sincere, his hand agreed; the roll-call slot still skips a tie for good (a queue if it
 shows in the audit). Decisions below were taken on his go.
+**Oct 20 night:** the roll-call rule reversed after its first session (section D, decision 4); the training from his
+own replies that night is in `SPEC-kaitlyn-knowledge.md` ("Training from the desk's own replies").
 
 ## Objective
 In William's words, Oct 20: "look at the messages from yesterday and see what we can do to train Kaitlyn even more.
@@ -136,13 +138,32 @@ first name) and a tap scrolls to the row; it goes away on its own after 30 s or 
 the same for their private replies. One component in `src/components/room/`, no dependency, nothing new on the wire
 (`mentions` is already in the poll). Checked on an iPhone in portrait with the chat below the video and with it hidden.
 
-## D. roll-call (ask)
-Katherine AI's minute-2 line becomes "Drop your city in the chat 👇 the team checks how many agents we have near you",
-and Kaitlyn answers a bare city drop with the directory count at any minute, one line per person, no "exclusive" talk
-unless asked (reverting the Oct 13 skip; the "answering him on screen" rule stays for everything else). Cost: the room
-hears Kaitlyn in minute 2. Gain: the 27-of-27 unanswered lines in minutes 0 to 5 and the start of the "you skip me"
-feeling. The weaker alternative is to keep the skip and post one line at minute 5 ("got everyone's cities, the team
-checks your market when you book").
+## D. roll-call (REVISED Oct 20 night)
+As shipped at noon Oct 20: Katherine's minute-2 line became "Drop your city in the chat 👇 the team checks how many agents
+we have near you", and Kaitlyn answered a bare city drop with the directory count at any minute, one line per 10 s slot.
+First night (Tue Oct 20): 18 city-drop drafts in minutes 0 to 2 (Sarasota, Santa Barbara, Queen Creek, Dallas, Toronto,
+Vancouver, San Antonio, Long Beach...), every one skipped by William from the desk. His read: "for the first few minutes
+when people are typing in what market they're from, she still wants to respond to them as if they're at the end asking
+for market and I had to skip all of them." The drops land at 20 to 90 s, while he asks the room where they are from on
+screen, before Katherine's line; a count back to each of them is noise in the roll-call and 18 cards on the desk.
+
+New rule, replacing the paragraph above:
+- **The roll-call window is the first five minutes** (`ROLL_CALL_WINDOW_S = 300`, offset from the session start). In it a
+  bare city or state ("Sarasota", "Dallas TX", "Michelle in Florida", "Van., B.C. Moving to AZ") is answering him on
+  screen: `skip`, `why` "roll-call", no card on the desk, no line in the room. A reaction is the most she does (decision
+  4b: none by default).
+- A direct market question in the window ("how many in Dallas?", "anyone in Toronto?", "is Calgary saturated?") still
+  gets the count, one per slot, as any minute.
+- **From minute five** a bare city drop gets the count as the noon rule says (one line per person, one per 10 s slot,
+  no "exclusive" talk unless asked), because by then it is a question, not a roll-call answer.
+- Katherine's minute-2 line stays as edited (the team does check on the call); the on-screen ask is his.
+- Prompt rules that change: the "one exception is a city or state" sentence in the polls rule (it becomes: in the first
+  five minutes a city or state is a poll answer like any other), and the "markets and the clock" rule (bare drops get
+  the count from minute five, questions at any minute). `decide()` passes the offset; the eval set relabels its
+  minute-0-to-2 city drops as `skip` (the market class scored 97% on the noon rule and must be re-run, target: no
+  city-drop reply inside the window, counts on every direct question, bare drops answered after it).
+- Audit line: the nightly audit counts "roll-call drops" separately from "unanswered", so the first five minutes stop
+  reading as misses.
 
 ## E. kaitlyn-audit
 E1. `npm run kaitlyn:audit -- --from 2026-10-11 [--out docs/kaitlyn-audit-<date>.md]`: the tables of the audit document
@@ -190,6 +211,9 @@ in the room reads a new column until the code does; the Katherine line (D) chang
 2. B1 price: a price ask before the pitch gets the line; only the push after it ghosts.
 3. B1 nag: his pattern, the re-point first, a ghost on the second complaint; C makes it rare.
 4. D: yes, the roll-call changes (one Settings edit and one prompt rule; revert is the same edit and one commit).
+   **Amended Oct 20 night (William): bare city drops in the first five minutes are skips with no desk card; counts on a
+   direct question at any minute; bare drops answered from minute five. 4b (ask): a 👍 reaction on a roll-call drop, or
+   nothing (default nothing).**
 5. "Mortgage product coming January": not in her knowledge until it exists.
 6. "booked, see you on the call" leaves the booked shapes.
 7. Pittsburgh: not added here; `market_counts` is synced from the BMS directory, so the row belongs there (on William).
