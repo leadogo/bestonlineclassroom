@@ -13,3 +13,10 @@ test("isScannerAgent: a Linux desktop is a scanner; phones, ChromeOS, Windows an
   assert.equal(isScannerAgent(null), false);
   assert.equal(isScannerAgent(""), false);
 });
+
+test("isScannerAgent: a smart TV or a console says Linux and is a person", () => {
+  assert.equal(isScannerAgent("Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36"), false);
+  assert.equal(isScannerAgent("Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36 WebAppManager"), false);
+  assert.equal(isScannerAgent("Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36 CrKey/1.56.500000"), false, "a Chromecast");
+  assert.equal(isScannerAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"), true, "the sandbox");
+});

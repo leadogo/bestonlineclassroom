@@ -2,11 +2,11 @@ import { after } from "next/server";
 import { MAX_BODY, POST_GAP_MS, slackLine } from "@/lib/chat";
 import { autoGhostReason, checkMessage } from "@/lib/chat-filter";
 import { db } from "@/lib/db";
-import { moveIn } from "@/lib/move-in";
+import { moveIn, reportRoomJoin, roomDateFor } from "@/lib/move-in";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { mine } from "@/lib/reactions";
 import { TOKEN_RE } from "@/lib/registrants";
-import { roomState, scheduleOf, sessionFor } from "@/lib/daily-schedule";
+import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { postToChatChannel } from "@/lib/slack";
 import { tagNow } from "@/lib/tagging";
 import { katherineReply } from "@/lib/katherine";
@@ -27,9 +27,7 @@ async function registrant(token: string) {
   if (!data) return null;
   const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean; belief_phrases?: string[]; kaitlyn_mode?: string | null; kaitlyn_facts?: string | null; cta_at_seconds?: number | null; autopilot?: string | null; captions_url?: string | null; captions_offset_seconds?: number | string | null; chapters?: Array<{ at: number; label: string }>; outline?: string | null } | null;
   // The date the room shows (SPEC-link-opens.md, B): the running session when it is live and this row still sits behind it (a scanner-looking open the render did not move, a Linux-desktop agent). Reads and lines use it; a POSTed line moves the row.
-  const running = ev ? roomState(scheduleOf(ev), new Date()) : null;
-  const behind = Boolean(running && running.state === "live" && running.session.date !== data.session_date);
-  const roomDate: string = behind && running ? running.session.date : (data.session_date as string);
+  const { date: roomDate, behind } = ev ? roomDateFor(scheduleOf(ev), data.session_date as string) : { date: data.session_date as string, behind: false };
   const start = ev ? sessionFor(scheduleOf(ev), roomDate)?.start ?? null : null;
   // Kaitlyn's view of the event: her mode and switches, the fact sheet, and the transcript of the presentation (the room's captions) so she knows what William is saying when they type.
   return { ...data, roomDate, behind, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled), beliefPhrases: ev?.belief_phrases ?? undefined, kaitlyn: { kaitlyn_mode: asMode(ev?.kaitlyn_mode), kaitlyn_facts: ev?.kaitlyn_facts ?? null, cta_at_seconds: ev?.cta_at_seconds ?? null, autopilot: asAutopilot(ev?.autopilot), captions_url: ev?.captions_url ?? null, captions_offset_seconds: ev?.captions_offset_seconds ?? 0, chapters: Array.isArray(ev?.chapters) ? ev!.chapters : [], video_seconds: ev?.video_seconds ?? null, outline: ev?.outline ?? null } };
@@ -113,7 +111,7 @@ export async function POST(request: Request) {
     if (mids.length) for (const x of (await db().from("team_members").select("id, display_name").in("id", mids)).data ?? []) { mentions.push(`m:${x.id}`); mention_names.push(x.display_name as string); }
   }
   // A line is a person (SPEC-link-opens.md, B): a row the render did not move becomes tonight's now, with the room_join the render skipped; a move another row of theirs blocks still posts the line under tonight.
-  if (r.behind) await moveIn(r, r.roomDate);
+  if (r.behind && (await moveIn(r, r.roomDate))) after(() => reportRoomJoin(r, r.roomDate));
   const ins = await db()
     .from("chat_messages")
     .insert({ event_id: r.event_id, session_date: r.roomDate, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: ghosted ? "author" : "all", mentions, mention_names, is_question: isQuestion(body), belief: isBelief(body, r.beliefPhrases) })

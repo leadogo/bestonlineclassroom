@@ -290,9 +290,11 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
     input.current?.focus();
   }
   // "@" at the caret offers everyone in the room and the team (yourself included); refines as you type.
+  // A line makes a person for the desk (the picker and the head count), whatever the clock says (review of Oct 21).
+  const chatters = new Set(list.filter((m) => m.role === "attendee" && m.registrantId && !m.deleted).map((m) => m.registrantId as string));
   const atWord = /(?:^|\s)@([^@\s]*)$/.exec(text);
   const options: Mentionable[] = atWord
-    ? [...people.filter((p) => p.in_room && p.person !== false).map((p) => ({ id: p.registrant_id, name: p.first_name, sub: p.email_masked })), ...team].filter((p) => p.name.toLowerCase().startsWith(atWord[1].toLowerCase())).slice(0, 8)
+    ? [...people.filter((p) => p.in_room && (p.person !== false || chatters.has(p.registrant_id))).map((p) => ({ id: p.registrant_id, name: p.first_name, sub: p.email_masked })), ...team].filter((p) => p.name.toLowerCase().startsWith(atWord[1].toLowerCase())).slice(0, 8)
     : [];
   function pick(p: Mentionable) {
     setText(text.replace(/@[^@\s]*$/, `@${p.name} `));
@@ -317,7 +319,7 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
   const teamMsgs = list.filter((m) => m.team && !m.deleted);
   const shown = chat.filter((m) => (m.role !== "simulated" || showSim) && (!onlyMentions || m.mentionsMe));
   const { runs, hiddenRows } = foldRuns(shown, openRuns, fixing);
-  const inRoom = people.filter((p) => p.in_room && p.person !== false && p.source !== "test");
+  const inRoom = people.filter((p) => p.in_room && (p.person !== false || chatters.has(p.registrant_id)) && p.source !== "test");
   const msgCount = new Map<string, number>();
   const beliefCount = new Map<string, number>();
   for (const m of chat) if (m.role === "attendee" && m.registrantId && !m.deleted) { msgCount.set(m.registrantId, (msgCount.get(m.registrantId) ?? 0) + 1); if (m.belief) beliefCount.set(m.registrantId, (beliefCount.get(m.registrantId) ?? 0) + 1); }

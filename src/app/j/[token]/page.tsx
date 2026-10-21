@@ -15,6 +15,7 @@ import { pickRunningOrNext } from "@/lib/daily-schedule";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { isScannerAgent } from "@/lib/scanner";
 import { renderMove } from "@/lib/outcomes";
+import { reportRoomJoin, type Movable } from "@/lib/move-in";
 
 export const dynamic = "force-dynamic";
 
@@ -75,19 +76,14 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   // An old link used for a later session: the person now belongs to that session (chat, presence, numbers). A scanner open moves nobody and its beats are dropped; a person the render misread is moved by their first line or their offer click (SPEC-link-opens.md, A and B).
   const to = outcome.rejoinDate;
   if (to && renderMove(to, Boolean(outcome.props.preview), scanner)) {
-    await db().from("registrants").update({ session_date: to, moved_in_at: new Date().toISOString() }).eq("id", r.id);
+    const mv = await db().from("registrants").update({ session_date: to, moved_in_at: new Date().toISOString() }).eq("id", r.id);
+    if (mv.error) console.error("[join] move failed", { code: mv.error.code });
     r.session_date = to;
   }
   if (!outcome.props.preview) after(() => logClick({ path: "j", outcome: outcome.props.state, token, registrantId: r.id, eventId: r.event_id, sessionDate: outcome.rejoinDate ?? r.session_date, src, userAgent: ua, bot: scanner }));
   const simulated = await getSimulatedRows(r.event.id).catch(() => []);
   // ponytail: the site's /join records room_join for leadogo, the ritual sheet and Slack; calling it once here keeps
   // all three without a new contract. Replace with a direct leadogo event when analytics N2 lands.
-  if (outcome.props.state === "live" && !outcome.props.preview && !scanner && r.site_registration_id && !r.room_join_reported_at) {
-    after(async () => {
-      const q = new URLSearchParams({ k: r.token, rid: r.site_registration_id as string, sd: r.session_date, ...(r.source === "test" ? { t: "1" } : {}) });
-      await fetch(`https://thefuturerealestateagent.com/join?${q}`, { redirect: "manual", signal: AbortSignal.timeout(5000) }).catch(() => {});
-      await db().from("registrants").update({ room_join_reported_at: new Date().toISOString() }).eq("id", r.id);
-    });
-  }
+  if (outcome.props.state === "live" && !outcome.props.preview && !scanner) after(() => reportRoomJoin(r as unknown as Movable, r.session_date));
   return <Room {...outcome.props} simulated={simulated} />;
 }

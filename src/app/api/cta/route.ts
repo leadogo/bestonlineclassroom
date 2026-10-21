@@ -1,10 +1,10 @@
 import { after } from "next/server";
 import { db } from "@/lib/db";
-import { moveIn, type Movable } from "@/lib/move-in";
+import { moveIn, reportRoomJoin, roomDateFor, type Movable } from "@/lib/move-in";
 import { tagNow } from "@/lib/tagging";
 import { TOKEN_RE } from "@/lib/registrants";
 import { postToIntel } from "@/lib/slack";
-import { roomState, scheduleOf, sessionFor } from "@/lib/daily-schedule";
+import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +26,9 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   // A click is a person (SPEC-link-opens.md, B): a row the render did not move (a scanner-looking open) becomes tonight's on the click, and the click lands under tonight.
   const sched = reg.data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[] } | null;
-  const running = kind === "live" && sched ? roomState(scheduleOf(sched), new Date()) : null;
-  const date: string = running && running.state === "live" && running.session.date !== reg.data.session_date ? running.session.date : reg.data.session_date;
-  if (date !== reg.data.session_date) await moveIn(reg.data as unknown as Movable, date);
+  const { date, behind } = kind === "live" && sched ? roomDateFor(scheduleOf(sched), reg.data.session_date as string) : { date: reg.data.session_date as string, behind: false };
+  const me = reg.data as unknown as Movable;
+  if (behind && (await moveIn(me, date))) after(() => reportRoomJoin(me, date));
   const { error } = await db()
     .from("attendance")
     .upsert({ registrant_id: reg.data.id, session_date: date, kind, cta_clicked_at: now, last_seen_at: now }, { onConflict: "registrant_id,session_date,kind", ignoreDuplicates: false });
