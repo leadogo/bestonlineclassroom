@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { answeredWithin, digestDue, digestText } from "@/lib/kaitlyn-kb";
+import { answeredWithin, digestDue, digestText, postedFrom } from "@/lib/kaitlyn-kb";
 import { postToIntel } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +48,11 @@ export async function GET(request: Request) {
     const missed = Array.from(new Set((pending.data ?? []).filter((d) => !answeredWithin(new Date(d.created_at as string).getTime(), d.registrant_id as string, lines, handoffs)).map((d) => d.registrant_id as string)));
     const names = missed.length ? ((await db().from("registrants").select("id, first_name").in("id", missed)).data ?? []) : [];
     const byHand = (ghosts.data ?? []).filter((g) => g.auto_ghost_reason === null || String(g.auto_ghost_reason).startsWith("by hand"));
+    // The agreement line (SPEC-kaitlyn-solo.md, F): what became of every line she posted or drafted since yesterday; and the staged answers that have waited over a week for his OK (G).
+    const [decided, stale] = await Promise.all([
+      db().from("kaitlyn_decisions").select("status, skip_reason").eq("event_id", e.id).gte("created_at", since).limit(2000),
+      db().from("kaitlyn_kb").select("key").eq("event_id", e.id).not("answer", "is", null).is("approved_at", null).neq("handling", "ignore").lt("answered_at", new Date(now.getTime() - 7 * DAY_MS).toISOString()).order("key").limit(20),
+    ]);
     const text = digestText({
       questions: (open.data ?? []).map((r) => ({ question: r.question as string, asked: perKey.get(r.key as string) ?? 1 })),
       people: new Set(asks.map((a) => a.registrant_id as string)).size,
@@ -55,6 +60,8 @@ export async function GET(request: Request) {
       url: `${SITE}/admin/knowledge?event=${e.slug}`,
       unanswered: names.map((r) => r.first_name as string),
       ghosted: byHand.map((g) => ({ name: g.first_name as string, reason: String(g.auto_ghost_reason ?? "").startsWith("by hand: ") ? String(g.auto_ghost_reason).slice(9) : null })),
+      posted: postedFrom((decided.data ?? []) as Array<{ status: string; skip_reason?: string | null }>),
+      stale: (stale.data ?? []).map((r) => r.key as string),
     });
     if (!dry) {
       const sent = text ? await postToIntel(text) : { ok: true };

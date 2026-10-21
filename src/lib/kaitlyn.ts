@@ -422,16 +422,50 @@ export function handoffDue(card: { status: string; created_at: string }, nowMs: 
   return card.status === "pending" && nowMs - new Date(card.created_at).getTime() >= HANDOFF_AFTER_MS && !handed && !humanReplied;
 }
 
+/** The desk's first refusal (SPEC-kaitlyn-solo.md, B): a sure reply outside the routine set waits this long on the desk, then posts itself in assisted and auto. Oct 20: five such cards never went out. */
+export const DESK_FIRST_MS = 90_000;
+
+/** Whether a pending reply card posts itself now: assisted or auto, 90 s on the desk with no action, and no moderator answered the person meanwhile. Shadow never posts. */
+export function deskFirstDue(card: { status: string; action: string; created_at: string }, nowMs: number, mode: Mode, humanReplied: boolean): boolean {
+  return card.status === "pending" && card.action === "reply" && (mode === "assisted" || mode === "auto") && nowMs - new Date(card.created_at).getTime() >= DESK_FIRST_MS && !humanReplied;
+}
+
+/** The desk had first refusal (SPEC-kaitlyn-solo.md, B): every sure reply card left pending 90 s in assisted or auto posts itself, unless a moderator answered the person or she replied to them a moment ago. The row is claimed (pending → auto) before the post, so two instances never post the same line. */
+async function sweepDeskFirst(eventId: string, sessionDate: string, offset: number, mode: Mode, now: number): Promise<number> {
+  if (mode !== "assisted" && mode !== "auto") return 0;
+  const cards = (await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, status, action, text, why, kb_key, created_at").eq("event_id", eventId).eq("session_date", sessionDate).eq("action", "reply").eq("status", "pending").lt("created_at", new Date(now - DESK_FIRST_MS).toISOString()).order("id").limit(20)).data ?? [];
+  let posted = 0;
+  for (const c of cards) {
+    const text = String(c.text ?? "").trim();
+    if (!text) continue;
+    const r = (await db().from("registrants").select("id, event_id, session_date, first_name, source, ghosted_at").eq("id", String(c.registrant_id)).maybeSingle()).data;
+    if (!r) continue;
+    const reg: Reg = { id: r.id as string, event_id: r.event_id as string, session_date: r.session_date as string, first_name: r.first_name as string, source: String(r.source ?? ""), ghosted: Boolean(r.ghosted_at) };
+    const taken = await takenBy(reg, c.message_id as number, (c.kb_key as string | null) ?? null);
+    if (!deskFirstDue({ status: String(c.status), action: String(c.action), created_at: String(c.created_at) }, now, mode, taken === "a moderator answered first")) continue;
+    if (taken) { await db().from("kaitlyn_decisions").update({ status: "skipped", why: `${taken}; ${c.why ?? ""}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", c.id).eq("status", "pending"); continue; }
+    const claim = await db().from("kaitlyn_decisions").update({ status: "auto", why: `desk passed; ${c.why ?? ""}`.slice(0, 140), decided_at: new Date().toISOString() }).eq("id", c.id).eq("status", "pending").select("id");
+    if (!claim.data?.length) continue;
+    const body = `@${reg.first_name} ${text}`;
+    const mid = await postAsKaitlyn(reg, body, offset, "kaitlyn");
+    if (!mid) { await db().from("kaitlyn_decisions").update({ status: "pending", decided_at: null }).eq("id", c.id); continue; }
+    await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", c.id);
+    posted += 1;
+    if (reg.source !== "test") await postToChatChannel(`Kaitlyn posted after 90 s on the desk · ${reg.first_name}: ${JSON.stringify(text)}`);
+  }
+  return posted;
+}
+
 const sweepAt = new Map<string, number>();
-/** Called from the room's heartbeat (SPEC-kaitlyn-ghosts.md, A3): the hand-off line for every card the desk left for 90 s, open tab or not. At most one sweep per event every 10 s per instance; Off on the Autopilot switch means never. */
-export async function sweepHandoffs(eventId: string, sessionDate: string, autopilot: Autopilot, offset: number): Promise<number> {
+/** Called from the room's heartbeat (SPEC-kaitlyn-ghosts.md, A3): the hand-off line for every card the desk left for 90 s, open tab or not, and the desk-first replies (SPEC-kaitlyn-solo.md, B). At most one sweep per event every 10 s per instance; Off on the Autopilot switch means never. */
+export async function sweepHandoffs(eventId: string, sessionDate: string, autopilot: Autopilot, offset: number, mode: Mode = "shadow"): Promise<number> {
   if (autopilot === "off") return 0;
   const key = `${eventId}:${sessionDate}`;
   const now = Date.now();
   if ((sweepAt.get(key) ?? 0) > now - 10_000) return 0;
   sweepAt.set(key, now);
+  let posted = await sweepDeskFirst(eventId, sessionDate, offset, mode, now);
   const cards = (await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, status, created_at").eq("event_id", eventId).eq("session_date", sessionDate).eq("action", "ask_william").eq("status", "pending").is("sent_body", null).lt("created_at", new Date(now - HANDOFF_AFTER_MS).toISOString()).order("id").limit(20)).data ?? [];
-  let posted = 0;
   const seen = new Set<string>();
   for (const c of cards) {
     const rid = String(c.registrant_id);

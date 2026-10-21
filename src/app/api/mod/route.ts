@@ -8,7 +8,7 @@ import { toggleReaction } from "@/lib/reactions";
 import { asAutopilot, asMode, KAITLYN, postAsKaitlyn, reactAsKaitlyn, withoutMention } from "@/lib/kaitlyn";
 import { postToChatChannel } from "@/lib/slack";
 import { withQuery } from "@/lib/params";
-import { ghostReason } from "@/lib/moderation";
+import { ghostReason, skipReason } from "@/lib/moderation";
 import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
 import { cuesFor, windowAt } from "@/lib/transcript";
 
@@ -217,7 +217,8 @@ export async function POST(request: Request) {
       const mark = (patch: object) => db().from("kaitlyn_decisions").update({ decided_by: member.id, decided_at: now, ...patch }).eq("id", id);
       const what = String(b.decision ?? "");
       if (what === "skip") {
-        await mark({ status: "skipped" });
+        // The reason chip (SPEC-kaitlyn-solo.md, E): only "wrong" reaches her corrections; a dismissed "needs you" card has none.
+        await mark({ status: "skipped", skip_reason: d.action === "reply" ? skipReason(b.reason) : null });
         return Response.json({ ok: true });
       }
       if (what === "react") {

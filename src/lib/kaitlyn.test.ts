@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, isRollCallDrop, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, ROLL_CALL_WINDOW_S, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, DESK_FIRST_MS, deskFirstDue, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, isRollCallDrop, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, ROLL_CALL_WINDOW_S, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
@@ -87,6 +87,19 @@ test("marketLine: the directory's answer worded for the model, or null when no p
   assert.equal(marketLine("Im on the treasure coast", md), "directory has no row for treasure coast itself; 0 across Florida; inside it none of its markets listed yet");
   assert.equal(marketLine("Upstate", md), "directory has no row for upstate itself; 0 across New York; inside it none of its markets listed yet");
   assert.equal(marketLine("Ny", md), "directory says 0 across New York (no markets yet)");
+});
+
+test("deskFirstDue: a sure reply the desk left 90 s posts itself in assisted and auto, never in shadow, never over a moderator's answer (SPEC-kaitlyn-solo.md, B)", () => {
+  assert.equal(DESK_FIRST_MS, 90_000);
+  const t0 = Date.parse("2026-10-21T23:30:00Z");
+  const card = (ageMs: number, status = "pending", action = "reply") => ({ status, action, created_at: new Date(t0 - ageMs).toISOString() });
+  assert.equal(deskFirstDue(card(90_000), t0, "assisted", false), true);
+  assert.equal(deskFirstDue(card(90_000), t0, "auto", false), true);
+  assert.equal(deskFirstDue(card(89_999), t0, "assisted", false), false, "not yet");
+  assert.equal(deskFirstDue(card(90_000), t0, "shadow", false), false, "shadow never posts");
+  assert.equal(deskFirstDue(card(90_000), t0, "assisted", true), false, "a moderator answered them");
+  assert.equal(deskFirstDue(card(90_000, "skipped"), t0, "assisted", false), false, "the desk acted");
+  assert.equal(deskFirstDue(card(90_000, "pending", "ask_william"), t0, "assisted", false), false, "not a reply; the hand-off path owns it");
 });
 
 test("isRollCallDrop: a bare city or state in the first five minutes is a skip; a question, or any minute after, is not (SPEC-kaitlyn-ghosts.md, D)", () => {

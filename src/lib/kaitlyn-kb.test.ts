@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type KbRow } from "./kaitlyn-kb.ts";
+import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, postedFrom, type KbRow } from "./kaitlyn-kb.ts";
 
 const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, approved_at: p.approved ? "2026-10-17T00:00:00Z" : null, handling: "open", asked: 0, ...p });
 
@@ -110,6 +110,18 @@ test("digestText: last night's unanswered people and the by-hand ghosts ride on 
   const one = digestText({ questions: [{ question: "Do you work with Redfin agents?", asked: 1 }], people: 1, waiting: 0, url, unanswered: ["Heather"], ghosted: [] })!;
   assert.match(one, /Answer it: https[^\n]+\nLast night 1 person went unanswered: Heather\.$/);
   assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, unanswered: [], ghosted: [] }), null);
+});
+
+test("digestText and postedFrom: the agreement line and the stale staged answers (SPEC-kaitlyn-solo.md, F and G)", () => {
+  const url = "https://www.bestonlineclassroom.com/admin/knowledge";
+  const rows = [...Array(52).fill({ status: "auto" }), ...Array(6).fill({ status: "fixed" }), ...Array(2).fill({ status: "deleted" }), { status: "skipped", skip_reason: "wrong" }, { status: "skipped", skip_reason: "roll-call" }, { status: "pending" }, { status: "sent" }, { status: "edited" }];
+  const p = postedFrom(rows);
+  assert.deepEqual(p, { posted: 63, stood: 53, fixed: 6, deleted: 2, edited: 1, wrong: 1 });
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, posted: p }), "Kaitlyn posted 63 last night: 53 stood, 6 you fixed, 2 you deleted, 1 you edited before sending, 1 you skipped as wrong (agreement 84%).");
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, posted: postedFrom([{ status: "auto" }, { status: "auto" }]) }), "Kaitlyn posted 2 last night: 2 stood (agreement 100%).");
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, posted: postedFrom([{ status: "pending" }]) }), null, "nothing posted, nothing said");
+  assert.equal(digestText({ questions: [], people: 0, waiting: 0, url, stale: ["brokers", "contact-number"] }), `2 answers have waited over a week for your OK: brokers, contact-number. ${url}`);
+  assert.match(digestText({ questions: [], people: 0, waiting: 0, url, unanswered: ["Heather"], posted: postedFrom([{ status: "sent" }]), stale: ["brokers"] })!, /^Last night 1 person went unanswered: Heather\.\nKaitlyn posted 1 last night: 1 stood \(agreement 100%\)\.\n1 answer has waited over a week/);
 });
 
 test("answeredWithin: a moderator line to the person inside 15 minutes counts, her hand-off line does not, nor a line before theirs or too late (SPEC-kaitlyn-ghosts.md, E; review of Oct 20)", () => {
