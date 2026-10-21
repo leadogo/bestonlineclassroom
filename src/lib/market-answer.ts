@@ -29,7 +29,7 @@ const STATES: Array<[string, string]> = [
 const CODE_OF = new Map(STATES.map(([n, c]) => [norm(n), c]));
 const NAME_OF = new Map(STATES.map(([n, c]) => [c, n]));
 // How people write a state in a chat; "mass" is Massachusetts, "jersey" is New Jersey.
-const STATE_WORDS: Record<string, string> = { mass: "MA", cali: "CA", jersey: "NJ", ont: "ON", "new york state": "NY", "upstate new york": "NY", "upstate ny": "NY", "washington state": "WA", dc: "DC", sask: "SK", nfld: "NL", pei: "PE", "ny state": "NY" };
+const STATE_WORDS: Record<string, string> = { mass: "MA", cali: "CA", jersey: "NJ", ont: "ON", "new york state": "NY", "upstate new york": "NY", "upstate ny": "NY", upstate: "NY", "washington state": "WA", dc: "DC", sask: "SK", nfld: "NL", pei: "PE", "ny state": "NY" };
 // Two letters that are also words ("I'm IN", "OK", "5pm MT"): in capitals they count only after a comma, "Bolton, ON";
 // in lower case a few more read as words ("thank you ma", "co"), so only a comma or capitals make those a state.
 const SHOUTED = new Set(["IN", "OK", "HI", "ME", "OR", "OH", "ON", "ID", "MT", "CT", "LA", "SO"]);
@@ -41,6 +41,56 @@ const ALIAS: Record<string, string[]> = {
   atl: ["atlanta"], phx: ["phoenix"], okc: ["oklahoma city"], slc: ["salt lake city"], stl: ["st louis"], kc: ["kansas city"], kcmo: ["kansas city"], sac: ["sacramento"], sacto: ["sacramento"], sd: ["san diego"], dfw: ["dallas", "fort worth"],
   "the bay": ["bay area"], "tampa bay": ["tampa"], yyc: ["calgary"], yeg: ["edmonton"], kw: ["kitchener", "waterloo"], mtl: ["montreal"], cincy: ["cincinnati"], nola: ["new orleans"], jax: ["jacksonville"], indy: ["indianapolis"], "silicon valley": ["san jose", "santa clara", "san mateo"], oahu: ["honolulu"],
 };
+/**
+ * A region people name that the directory has no row for (the phrases typed in the room Oct 8 to 20, SPEC-kaitlyn-solo.md D):
+ * its state and the directory places inside it. MARKET DATA then carries the state's count and those places' counts, so a
+ * market line never hands off ("Im on the treasure coast" got "I'll flag that for the team" on Oct 20).
+ */
+export const REGIONS: Record<string, { code: string; places: string[] }> = {
+  "treasure coast": { code: "FL", places: ["Port St. Lucie", "Stuart", "Vero Beach"] },
+  "central florida": { code: "FL", places: ["Orlando", "Orange County", "Lakeland", "Tampa"] },
+  "south florida": { code: "FL", places: ["Miami", "Miami-Dade County", "Fort Lauderdale", "West Palm Beach"] },
+  "lee county": { code: "FL", places: ["Fort Myers", "Cape Coral"] },
+  "broward county": { code: "FL", places: ["Fort Lauderdale", "Hollywood"] },
+  "hernando county": { code: "FL", places: ["Spring Hill", "Brooksville"] },
+  "southern md": { code: "MD", places: ["Waldorf"] },
+  "southern maryland": { code: "MD", places: ["Waldorf"] },
+  "montgomery county md": { code: "MD", places: ["Bethesda", "Silver Spring", "Gaithersburg"] },
+  "northeast ohio": { code: "OH", places: ["Cleveland", "Akron"] },
+  "north east ohio": { code: "OH", places: ["Cleveland", "Akron"] },
+  upstate: { code: "NY", places: ["Albany", "Rochester", "Buffalo", "Syracuse"] },
+  westchester: { code: "NY", places: ["Westchester County", "White Plains", "Yonkers"] },
+  "hudson valley": { code: "NY", places: ["Westchester County", "Poughkeepsie"] },
+  "northern new jersey": { code: "NJ", places: ["Northeastern Bergen County", "Hoboken", "Jersey City"] },
+  "north jersey": { code: "NJ", places: ["Northeastern Bergen County", "Hoboken", "Jersey City"] },
+  "lehigh valley": { code: "PA", places: ["Allentown", "Bethlehem"] },
+  "east bay": { code: "CA", places: ["Bay Area", "Oakland"] },
+  "northern california": { code: "CA", places: ["Bay Area", "Sacramento", "San Jose", "San Francisco", "Santa Rosa"] },
+  "southern california": { code: "CA", places: ["Los Angeles", "Orange County", "San Diego", "Riverside"] },
+  "southern ca": { code: "CA", places: ["Los Angeles", "Orange County", "San Diego", "Riverside"] },
+  socal: { code: "CA", places: ["Los Angeles", "Orange County", "San Diego", "Riverside"] },
+  "central texas": { code: "TX", places: ["Austin", "San Antonio", "Waco"] },
+  "triangle nc": { code: "NC", places: ["Raleigh", "Durham", "Chapel Hill"] },
+  gta: { code: "ON", places: ["Toronto", "Mississauga", "Brampton", "Vaughan", "Richmond Hill"] },
+  "vancouver island": { code: "BC", places: ["Victoria", "Nanaimo"] },
+};
+const REGION_KEYS = Object.keys(REGIONS).sort((a, b) => b.length - a.length);
+
+export type Region = { key: string; code: string; places: string[] };
+
+/** The region the text names, longest phrase first; null when none. */
+export function findRegion(text: string): Region | null {
+  const t = ` ${norm(text)} `;
+  const key = REGION_KEYS.find((k) => t.includes(` ${k} `));
+  return key ? { key, ...REGIONS[key] } : null;
+}
+
+/** The directory rows for a region's places, busiest first; places with no row are left out (she never names a place the directory does not have). */
+export function regionPlaces(region: Region, markets: MarketCount[]): MarketCount[] {
+  const want = new Set(region.places.map(norm));
+  return markets.filter((m) => want.has(norm(placeOf(m.name)))).sort((a, b) => b.clients - a.clients);
+}
+
 // Longest first, so "washington dc" is taken before "washington" and "new york state" before "new york".
 const STATE_NAMES: Array<[string, string]> = [...[...CODE_OF.entries()], ...Object.entries(STATE_WORDS)].sort((a, b) => b[0].length - a[0].length);
 
@@ -54,9 +104,17 @@ export function findStates(text: string): string[] {
   let t = ` ${norm(text)} `;
   const found: Array<[number, string]> = [];
   for (const [n, c] of STATE_NAMES) { const i = t.indexOf(` ${n} `); if (i >= 0) { found.push([i, c]); t = t.replace(` ${n} `, " ".repeat(n.length + 2)); } }
-  for (const m of text.matchAll(/(,\s*)?\b([A-Za-z]{2})\b/g)) {
+  const byName = found.length > 0;
+  // The whole message is two letters ("Ny", "Fl", "Tx"): the state, in any case; "Hi", "Ok", "In" stay words (Oct 20: "Ny" got "which part of New York?").
+  const solo = /^\W*([A-Za-z]{2})\W*$/.exec(text);
+  if (solo && NAME_OF.has(solo[1].toUpperCase()) && !SHOUTED.has(solo[1].toUpperCase())) found.push([0, solo[1].toUpperCase()]);
+  for (const m of text.matchAll(/(,\s*|\b(?:in|from)\s+)?\b([A-Za-z]{2})\b/gi)) {
     const c = m[2].toUpperCase();
-    if (!NAME_OF.has(c) || (!m[1] && (m[2] !== c || SHOUTED.has(c)))) continue;
+    if (!NAME_OF.has(c)) continue;
+    const lead = m[1] ?? "";
+    // A capital code stands on its own unless it is also a word ("IN", "ON", "OK"), which needs a comma or "in"/"from" before it ("Peel region in ON");
+    // a lower-case code needs a comma ("Bolton, on"), and a comma followed by a lower-case English word is not a code when the state is named in full ("Bruce Peninsula, in Ontario").
+    if (m[2] === c ? SHOUTED.has(c) && !lead : !lead.startsWith(",") || byName) continue;
     found.push([m.index, c]);
   }
   const words = norm(text).split(" ");
@@ -116,8 +174,15 @@ const ASK = /\b(county|region|territory|how many (agents?|people|clients?|realto
 /** The message reads like a market question even when no market matched: a county, a suburb, a state, "LA", "Nashville, TN". */
 export function asksMarket(text: string): boolean {
   const t = ` ${norm(text)} `;
-  return ASK.test(text) || findStates(text).length > 0 || Object.keys(ALIAS).some((k) => t.includes(` ${k} `));
+  return ASK.test(text) || findStates(text).length > 0 || findRegion(text) !== null || Object.keys(ALIAS).some((k) => t.includes(` ${k} `));
 }
+
+/** A market line asked outright ("how many in Dallas?", "anyone in Toronto?", "Dallas?") as against a bare drop ("Dallas", "Sylvia from Miami"): the roll-call window answers the first and skips the second (SPEC-kaitlyn-ghosts.md, D). */
+export function asksOutright(text: string): boolean {
+  return ASK.test(text) || /\?/.test(text) || OUTRIGHT.test(text);
+}
+// A question without its question mark: "Can you check Tulsa Oklahoma area", "what about Pembroke pines", "Do you have a large Chicagoland presence", "any in Lee County".
+const OUTRIGHT = /\b(how|what|where|which|who|do you|did you|can you|could you|check|any|is there|are there|presence|saturated|covered|available)\b/i;
 
 // Kevin's own lines from Sep 29–Oct 8, number and place swapped; {N} is the count, {X} the place.
 const BANK: Array<[number, string[]]> = [

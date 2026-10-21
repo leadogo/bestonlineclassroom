@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asksMarket, codeOf, findMarkets, findStates, isStateMarket, marketDraft, normalizeMarkets, onlyStates, placeOf, rollup, rollupDraft } from "./market-answer.ts";
+import { asksMarket, asksOutright, codeOf, findMarkets, findRegion, findStates, isStateMarket, marketDraft, normalizeMarkets, onlyStates, placeOf, regionPlaces, rollup, rollupDraft } from "./market-answer.ts";
 
 const M = (name: string, clients: number, live = clients) => ({ name, clients, live });
 const markets = [
@@ -101,6 +101,41 @@ test("asksMarket: a market question with no directory match still gets the none-
   assert.equal(asksMarket("hi from Tulsa"), false);
   assert.equal(asksMarket("Yes"), false);
   assert.equal(asksMarket("What is the cost?"), false);
+  // A region the directory has no row for still reads as a market line (SPEC-kaitlyn-solo.md, C).
+  assert.equal(asksMarket("Im on the treasure coast"), true);
+  assert.equal(asksMarket("gta?"), true);
+  assert.equal(asksMarket("I'm on the east coast"), false, "not a region we map");
+});
+
+test("findStates: what Oct 20 missed (SPEC-kaitlyn-solo.md, C): title-case codes alone, Upstate, a code after in/from, a comma before an English word", () => {
+  assert.deepEqual(findStates("Ny"), ["NY"]);
+  assert.deepEqual(findStates("Fl"), ["FL"]);
+  assert.deepEqual(findStates("tx?"), ["TX"]);
+  assert.deepEqual(findStates("Hi"), [], "a greeting");
+  assert.deepEqual(findStates("Ok"), []);
+  assert.deepEqual(findStates("In"), []);
+  assert.deepEqual(findStates("Upstate"), ["NY"]);
+  assert.deepEqual(findStates("upstate ny"), ["NY"]);
+  assert.deepEqual(findStates("Peel region in ON"), ["ON"]);
+  assert.deepEqual(findStates("I'm from TX"), ["TX"]);
+  assert.deepEqual(findStates("Bruce Peninsula, in Ontario Canada"), ["ON"], "', in' is not Indiana when the province is named");
+  assert.deepEqual(findStates("Bolton, on"), ["ON"], "still a code after a comma on its own");
+  assert.deepEqual(findStates("Southern MD"), ["MD"]);
+  assert.deepEqual(findStates("I'm in"), []);
+  assert.deepEqual(findStates("BOOKED ON FRIDAY"), []);
+});
+
+test("findRegion and regionPlaces: the region's state and the directory rows inside it, longest phrase first", () => {
+  assert.deepEqual(findRegion("Im on the treasure coast"), { key: "treasure coast", code: "FL", places: ["Port St. Lucie", "Stuart", "Vero Beach"] });
+  assert.equal(findRegion("Hi! Are there any in Southern MD")?.code, "MD");
+  assert.equal(findRegion("Northern California/Bay Area")?.key, "northern california");
+  assert.equal(findRegion("Dallas"), null);
+  const rows = [M("Vero Beach, FL", 2), M("Stuart, FL", 0), M("Tampa, FL", 7)];
+  assert.deepEqual(regionPlaces(findRegion("treasure coast")!, rows).map((m) => `${m.name} ${m.clients}`), ["Vero Beach, FL 2", "Stuart, FL 0"]);
+  assert.equal(asksOutright("how many in Dallas?"), true);
+  assert.equal(asksOutright("anyone in Toronto"), true);
+  for (const s of ["Can you check Tulsa Oklahoma area", "what about Pembroke pines", "Do you have a large Chicagoland Presence", "any in Lee County", "Is Calgary saturated", "Can you check San Francisco CA pls", "How agenmany in or Dublin or San Ramon CA", "NJ - Bergen County"]) assert.equal(asksOutright(s), true, s);
+  for (const s of ["Dallas", "Sylvia from Miami", "Charlotte NC", "Massachusetts", "Chicago Sellers", "Interested - San Diego", "yes, sellers, Dedham MA", "Roseville ca"]) assert.equal(asksOutright(s), false, s);
 });
 
 test("marketDraft: Kevin's bands, the number and place swapped in", () => {

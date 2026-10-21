@@ -1503,14 +1503,14 @@
    "minute": 62
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Chicago Sellers",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "yes, sellers, Dedham MA",
    "minute": 1
   },
@@ -1521,14 +1521,14 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Chicago Sellers",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Roseville ca",
    "minute": 1
   },
@@ -1545,50 +1545,50 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "NC",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Chicago Suburbs Sellers Only",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "MASSACHUsetts",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Massachussetts",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Charlotte NC",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Massachussetts",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Charlotte NC",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Charlotte NC",
    "minute": 1
   },
@@ -1599,8 +1599,8 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Charlotte NC",
    "minute": 1
   },
@@ -1629,8 +1629,8 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "New Jersey",
    "minute": 1
   },
@@ -1737,14 +1737,14 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Wisconsin",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Lothian Maryland",
    "minute": 1
   },
@@ -1761,8 +1761,8 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "@Kaitlyn from William's Team I am in Hilo, Hawaii",
    "minute": 1
   },
@@ -1785,44 +1785,44 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Austin/San Antonio",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Chelan WA",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Hilo HI",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "DC",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "California, Irvine",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "washington dc",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Boston",
    "minute": 1
   },
@@ -1839,26 +1839,26 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "chicago",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "washington dc",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Massachusetts",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "hollywood & fort lauderdale , FL",
    "minute": 1
   },
@@ -1869,44 +1869,44 @@
    "minute": 76
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "victoria bc",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "los angeles ca",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "ottawa",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Toronto, Canada",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "North carolina",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "GTA toronto",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Vaughan,ontario",
    "minute": 1
   },
@@ -1917,8 +1917,8 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Vaughan Ont",
    "minute": 1
   },
@@ -1929,26 +1929,26 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Interested - San Diego",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "greensboro nc",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Houston, tx",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "same with natasha nc",
    "minute": 1
   },
@@ -1959,20 +1959,20 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "high point nc",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Maryland",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "montreal",
    "minute": 1
   },
@@ -1983,26 +1983,26 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Triangle NC",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Montréal, Québec",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Triangle NC",
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "New jersey",
    "minute": 1
   },
@@ -2025,8 +2025,8 @@
    "minute": 1
   },
   {
-   "key": "market-count",
-   "expected": "market",
+   "key": "roll-call",
+   "expected": "skip",
    "body": "Easton, PA",
    "minute": 1
   },

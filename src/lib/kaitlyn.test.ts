@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, isRollCallDrop, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, ROLL_CALL_WINDOW_S, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
@@ -77,10 +77,28 @@ test("marketLine: the directory's answer worded for the model, or null when no p
   const markets = [{ name: "Los Angeles, CA", clients: 10, live: 7 }, { name: "Hoboken, NJ", clients: 1, live: 1 }, { name: "Central New Jersey, NJ", clients: 2, live: 2 }];
   assert.equal(marketLine("LA", markets), "directory says 10 clients in Los Angeles, CA");
   assert.equal(marketLine("New Jersey", markets), "directory says 3 across New Jersey (Central New Jersey 2, Hoboken 1)");
-  assert.equal(marketLine("Cape Coral Florida?", markets), "directory has no market by that name; the state has 0 across Florida");
+  assert.equal(marketLine("Cape Coral Florida?", markets), "directory has no market by that name; the state has 0 across Florida (no markets yet)");
   assert.equal(marketLine("how many agents in Nashville", markets), "directory has no market by that name (none there yet)");
   assert.equal(marketLine("thanks so much!", markets), null);
   assert.equal(marketLine("LA", []), null);
+  // A region (SPEC-kaitlyn-solo.md, C and D): the state's count and the directory rows inside it; "Southern MD" is Maryland's roll-up with Waldorf, never a hand-off.
+  const md = [...markets, { name: "Waldorf, MD", clients: 1, live: 1 }, { name: "Baltimore, MD", clients: 2, live: 2 }];
+  assert.equal(marketLine("Hi! Are there any in Southern MD", md), "directory has no row for southern md itself; 3 across Maryland; inside it Waldorf 1");
+  assert.equal(marketLine("Im on the treasure coast", md), "directory has no row for treasure coast itself; 0 across Florida; inside it none of its markets listed yet");
+  assert.equal(marketLine("Upstate", md), "directory has no row for upstate itself; 0 across New York; inside it none of its markets listed yet");
+  assert.equal(marketLine("Ny", md), "directory says 0 across New York (no markets yet)");
+});
+
+test("isRollCallDrop: a bare city or state in the first five minutes is a skip; a question, or any minute after, is not (SPEC-kaitlyn-ghosts.md, D)", () => {
+  assert.equal(ROLL_CALL_WINDOW_S, 300);
+  assert.equal(isRollCallDrop("Dallas", 40, 4500), true);
+  assert.equal(isRollCallDrop("Sylvia from Miami", 299, 4500), true);
+  assert.equal(isRollCallDrop("Dallas", 300, 4500), false, "from minute five the count");
+  assert.equal(isRollCallDrop("how many in Dallas?", 40, 4500), false, "asked outright");
+  assert.equal(isRollCallDrop("anyone in Toronto", 40, 4500), false);
+  assert.equal(isRollCallDrop("Dallas?", 40, 4500), false, "a question mark is a question; the prompt decides");
+  assert.equal(isRollCallDrop("Dallas", 40, 30), false, "never once the pitch is on");
+  assert.equal(isRollCallDrop("Dallas", 40, null), true);
 });
 
 test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted lines are in; the turn carries the room", () => {
@@ -92,7 +110,11 @@ test("systemPrompt and userTurn: the fact sheet, Kevin's answers and the ghosted
   // The ghosts come from the view now (B3), per call, so the prompt only carries them when given.
   assert.ok(systemPrompt(null, [], [], null, [{ line: "Is this a recording lol", context: null, reason: null }]).includes("LINES THE TEAM GHOSTED (the line that got the person ghosted by hand"));
   assert.ok(systemPrompt(null).includes("No fact sheet"));
-  assert.ok(s.includes("a bare city or state with no question") && s.includes("gets the count at any minute") && s.includes("Katherine's polls are the usual case"));
+  // The roll-call rule as revised Oct 20 night (SPEC-kaitlyn-ghosts.md, D): a bare drop in the first five minutes is a skip, a question gets the count at any minute, and a market line never hands off.
+  assert.ok(s.includes("in the roll-call window (the first five minutes) a bare city or state with no question") && s.includes("gets the count at any minute") && s.includes("From minute five a bare city or state gets the count too") && s.includes("Katherine's polls are the usual case"));
+  assert.ok(s.includes("a market line is never ask_william") && !s.includes("gets the count at any minute, one line per person"));
+  assert.match(userTurn({ minute: 1, pitchMinute: 75, name: "Bo", body: "Dallas", priorOwn: [], modReplies: [], said: [], recent: [], market: null, katherine: false }), /minute 1, the roll-call window \(a bare city or state is an answer to him on screen until minute 5\), before the pitch \(it starts at minute 75\)/);
+  assert.doesNotMatch(userTurn({ minute: 5, pitchMinute: 75, name: "Bo", body: "Dallas", priorOwn: [], modReplies: [], said: [], recent: [], market: null, katherine: false }), /roll-call window/);
   assert.ok(s.includes("YOU ALREADY SAID TONIGHT is in every turn") && s.includes("No customer-service phrases") && !s.includes("bubblier"));
   assert.ok(s.includes('"sure": true only when FACTS, KNOWLEDGE or MARKET DATA give this answer outright') && s.includes("Never a filler reply") && !s.includes("can't answer that one here"));
   // The ghost bullet was rewritten from the audit (SPEC-kaitlyn-ghosts.md, B1): the live test and the honesty exemption are still there, in their new words.

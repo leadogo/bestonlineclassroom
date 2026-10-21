@@ -10,7 +10,7 @@ import { tells, tidy } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 import { correctionsBlock, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type Correction, type Ghost, type KbRow } from "./kaitlyn-kb.ts";
 import { asksForReplay } from "./katherine.ts";
-import { asksMarket, findMarkets, findStates, onlyStates, placeOf, rollup, type MarketCount } from "./market-answer.ts";
+import { asksMarket, asksOutright, findMarkets, findRegion, findStates, onlyStates, placeOf, regionPlaces, rollup, type MarketCount, type Rollup } from "./market-answer.ts";
 import { EMOJIS, isEmoji } from "./moderation.ts";
 import { toggleReaction } from "./reactions.ts";
 import { postToChatChannel, postToIntel } from "./slack.ts";
@@ -47,6 +47,13 @@ export const ROLL_CALL_SLOT_MS = 10_000;
 /** Whether a market line before the pitch may post now: nothing of hers in the last slot, or no city line tonight yet. */
 export function rollCallOpen(lastMarketReplyMs: number | null, nowMs: number): boolean {
   return lastMarketReplyMs === null || nowMs - lastMarketReplyMs >= ROLL_CALL_SLOT_MS;
+}
+/** The roll-call window (SPEC-kaitlyn-ghosts.md, D, revised Oct 20 night): for this long from the start, a bare city or state is an answer to William asking the room where they are from, not a question. Oct 20: 18 such drafts in minutes 0 to 2, every one skipped by hand. */
+export const ROLL_CALL_WINDOW_S = 300;
+
+/** A bare city or state inside the roll-call window (and before the pitch): a skip, whatever the model drafted. A line asked outright ("how many in Dallas?") is not. */
+export function isRollCallDrop(body: string, offsetSeconds: number, pitchSeconds: number | null): boolean {
+  return offsetSeconds < ROLL_CALL_WINDOW_S && (pitchSeconds === null || offsetSeconds < pitchSeconds) && !asksOutright(body);
 }
 const MODEL = process.env.KAITLYN_MODEL ?? "claude-sonnet-5-5";
 const KEY = process.env.ANTHROPIC_API_KEY ?? "";
@@ -96,7 +103,7 @@ VARIETY
   he is about to cover it (only when COMING UP shows it): ${q(SHAPES.soon)}
 
 WHAT HE IS SAYING (the turn carries WILLIAM ON SCREEN, COMING UP and SEGMENT whenever the transcript of the presentation is known)
-- Read their line as a reply to him first. An answer to something he just asked the room ("type YES", "S, B or SB", "what do you use AI for") is a skip whatever the words are, with "answering him on screen" in why. Katherine's polls are the usual case. The one exception is a city or state: when he asks where people are from, their answer gets the count (the markets rule).
+- Read their line as a reply to him first. An answer to something he just asked the room ("type YES", "S, B or SB", "what do you use AI for") is a skip whatever the words are, with "answering him on screen" in why. Katherine's polls are the usual case. A city or state in the roll-call window (ROOM says so, the first five minutes) is the same: he asked where they are from, skip with "roll-call" in why, no reaction. From minute five a bare city or state gets the count (the markets rule).
 - When his words on screen answer the question outright, answer from them in your own words, one sentence, and count it as sure ("he just said the pixel reads the listing pages, not anyone's personal posts"). A product claim must still agree with FACTS and KNOWLEDGE, and a figure he said on screen never posts unless KNOWLEDGE allows it.
 - When COMING UP covers the question, do not answer it yourself: say he is about to, sure, category other, one of the "about to cover it" shapes. Only when it is in COMING UP; otherwise the usual rules.
 - "What was that called?", "what did he just say the budget was?", "can you repeat the three ingredients?": questions about what he just showed are answered from the screen, one sentence in your words, never a quote, same guard.
@@ -111,7 +118,8 @@ HARD RULES
 
 ACTIONS
 - reply: a question about the product, the call, booking, markets, integrations, compliance, the replay email, tech trouble, where the link is; "booked" (celebrate briefly; the team confirms by text and email); a price question (the FACTS sentence, never a figure); a market question (MARKET DATA has the number, the wording is yours; nothing in the directory → nobody there yet and they'd be first; say "exclusive" only when they ask about sharing or competition; no place named → ask which market); a greeting that asks the room something.
-- markets and the clock: a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") gets the count at any minute, one line per person, no "exclusive" talk unless they ask (William, Oct 20: the roll-call on screen can only read some names, so the chat answers everyone). A direct market question ("how many in X?", "anyone in X?") gets the count too, and once booking is open every market line does.
+- markets and the clock: in the roll-call window (the first five minutes) a bare city or state with no question ("Chicago", "Dallas TX", "Sylvia from Miami") is a skip, why "roll-call", no reaction (William, Oct 20: they are answering him on screen, a count back is noise). A direct market question ("how many in X?", "anyone in X?", "is X saturated?") gets the count at any minute. From minute five a bare city or state gets the count too, one line per person, no "exclusive" talk unless they ask, and once booking is open every market line does.
+- a market line is never ask_william. A region, a county, a suburb or a place the directory does not list gets the state's count from MARKET DATA and the listed market nearest it when MARKET DATA names one ("none under the Treasure Coast itself, 61 across Florida, Vero Beach has 2"); with no state known, "nobody there yet, you'd be first". A region ("upstate", "northern California", "the treasure coast") also gets a which-city, in the same line.
 - skip: one-word agreement ("yes", "ok", "lol"), answers to Katherine AI's polls (what they use AI for, sellers or buyers, S/B/SB, yes/no), chatter between attendees, statements that need no answer, "hi" on its own, anything you would only answer to look busy. The team answers about one message in nine. A quiet room is better than a robotic one.
 - ghost: the line would hurt the room and the person is not asking in good faith. Hide them when you are sure ("sure": true) it is one of these, the way the team does by hand within twenty seconds:
   · the illusion tested or exposed: telling the room it is a recording or fake (claims, not questions), "he just read a comment", "you're just watching the comments", "prepopulated comments", "if you're live say LIVE", "prove it's live", "why are the reminder texts still coming when I'm in here", "why ask us to turn on cameras", "I don't see anyone else", and in the first minutes while he reads names on screen, "you only speak to some people not all".
@@ -159,7 +167,8 @@ export type Context = {
 };
 
 export function userTurn(c: Context): string {
-  const room = c.pitchMinute === null ? `minute ${c.minute} of the session` : c.minute >= c.pitchMinute ? `minute ${c.minute}, the pitch started at minute ${c.pitchMinute} (booking is open)` : `minute ${c.minute}, before the pitch (it starts at minute ${c.pitchMinute})`;
+  const rollCall = c.minute < ROLL_CALL_WINDOW_S / 60 ? ` the roll-call window (a bare city or state is an answer to him on screen until minute ${ROLL_CALL_WINDOW_S / 60}),` : "";
+  const room = c.pitchMinute === null ? `minute ${c.minute} of the session` : c.minute >= c.pitchMinute ? `minute ${c.minute}, the pitch started at minute ${c.pitchMinute} (booking is open)` : `minute ${c.minute},${rollCall} before the pitch (it starts at minute ${c.pitchMinute})`;
   const screen = c.onScreen
     ? [
         `WILLIAM ON SCREEN (the last 90 seconds, ending as they typed): ${c.onScreen.said ? JSON.stringify(c.onScreen.said) : "(silence)"}`,
@@ -186,12 +195,20 @@ export function marketLine(body: string, markets: MarketCount[]): string | null 
   if (!markets.length) return null;
   const hits = findMarkets(body, markets);
   const states = findStates(body);
-  if (!hits.length && !states.length && !asksMarket(body)) return null;
+  const region = findRegion(body);
+  if (!hits.length && !states.length && !region && !asksMarket(body)) return null;
   const top = hits[0];
   if (top) return `directory says ${top.clients} client${top.clients === 1 ? "" : "s"} in ${top.name}${hits.length > 1 ? `; also ${hits.slice(1, 3).map((h) => `${h.clients} in ${h.name}`).join(", ")}` : ""}`;
+  const busiest = (s: Rollup) => s.markets.filter((m) => m.clients).slice(0, 6).map((m) => `${placeOf(m.name)} ${m.clients}`).join(", ") || "no markets yet";
+  // A region the directory has no row for: the state's count and the rows inside it, so the answer names a listed market and never hands off.
+  if (region) {
+    const s = rollup(region.code, markets);
+    const inside = regionPlaces(region, markets);
+    return `directory has no row for ${region.key} itself; ${s.clients} across ${s.name}; inside it ${inside.length ? inside.map((m) => `${placeOf(m.name)} ${m.clients}`).join(", ") : "none of its markets listed yet"}`;
+  }
   const sums = states.map((c) => rollup(c, markets));
-  if (sums.length && onlyStates(body, states)) return sums.map((s) => `directory says ${s.clients} across ${s.name} (${s.markets.filter((m) => m.clients).slice(0, 6).map((m) => `${placeOf(m.name)} ${m.clients}`).join(", ") || "no markets yet"})`).join("; ");
-  if (sums.length) return `directory has no market by that name; the state has ${sums.map((s) => `${s.clients} across ${s.name}`).join(", ")}`;
+  if (sums.length && onlyStates(body, states)) return sums.map((s) => `directory says ${s.clients} across ${s.name} (${busiest(s)})`).join("; ");
+  if (sums.length) return `directory has no market by that name; the state has ${sums.map((s) => `${s.clients} across ${s.name} (${busiest(s)})`).join(", ")}`;
   return "directory has no market by that name (none there yet)";
 }
 
@@ -476,6 +493,8 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[], (fixQ.data ?? []) as Correction[], a.event.outline ?? null, (ghostQ.data ?? []) as Ghost[]), userTurn(ctx));
     if (!out) return;
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
+    // The roll-call guard (SPEC-kaitlyn-ghosts.md, D): a bare city or state in the first five minutes is a skip whatever the model drafted, so assisted never answers the roll-call; a skip is never a card.
+    if (d.action === "reply" && d.category === "market" && isRollCallDrop(message.body, message.offset, a.event.cta_at_seconds ?? null)) Object.assign(d, { action: "skip" as const, text: "", react: "", kb: null, sure: false, why: `roll-call; ${d.why}`.slice(0, 140) });
     if (d.kb) await touchKb(reg.event_id, d.kb);
     const itself = postsItself(eff, d);
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.

@@ -138,7 +138,7 @@ first name) and a tap scrolls to the row; it goes away on its own after 30 s or 
 the same for their private replies. One component in `src/components/room/`, no dependency, nothing new on the wire
 (`mentions` is already in the poll). Checked on an iPhone in portrait with the chat below the video and with it hidden.
 
-## D. roll-call (REVISED Oct 20 night)
+## D. roll-call (REVISED Oct 20 night; BUILT Oct 21 morning: `ROLL_CALL_WINDOW_S`, `isRollCallDrop` guard, the two prompt rules, the eval set relabelled, 48 bare drops → skip; replay of Oct 20: 18 of 18 early drops skip)
 As shipped at noon Oct 20: Katherine's minute-2 line became "Drop your city in the chat 👇 the team checks how many agents
 we have near you", and Kaitlyn answered a bare city drop with the directory count at any minute, one line per 10 s slot.
 First night (Tue Oct 20): 18 city-drop drafts in minutes 0 to 2 (Sarasota, Santa Barbara, Queen Creek, Dallas, Toronto,

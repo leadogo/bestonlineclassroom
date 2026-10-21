@@ -7,6 +7,8 @@ Oct 21 2026 morning from William's ask ("make the room more automated and Kaitly
 moderate better without requiring me … she wasn't really actually answering market questions around the pitch
 time"). Nothing here changes until William approves this spec.
 
+**Status.** Oct 21 morning (William: "ok go"): C and D built with `kaitlyn-ghosts` D and deployed; replay of Oct 20 through the new prompt: 18 of 18 roll-call drops skip, 37 of 37 pitch-window market lines are sure replies with a count (Treasure Coast, Southern MD, Upstate and "Ny" included). A: the switch at 5 PM. B, E, F, G, H: Thursday morning.
+
 ## What happened (Tue Oct 20, the pitch)
 - `events.kaitlyn_mode` for ailg-r is still **shadow**: every line she drafts waits for a click on the desk. The
   Autopilot switch (auto) only takes over when nobody has polled the desk for 3 minutes, and William was on it all
@@ -24,7 +26,7 @@ time"). Nothing here changes until William approves this spec.
 - The two market hand-offs are the real misses: "Im on the treasure coast" got "I'll flag that for the team" after
   99 s and "Hi! Are there any in Southern MD" waited for William ("7 across Maryland, I don't see any in southern
   MD"). The matcher reads neither as a place: a region word with no city, and "MD" after "Southern" is found but
-  the line is then "not only a state", so no roll-up goes in MARKET DATA. Same family tonight: "Ny", "Fl", "Tx"
+  the line is then "not only a state", so MARKET DATA gave the roll-up without its markets and the model still chose ask_william; the prompt rule is the fix there, the matcher for the rest. Same family tonight: "Ny", "Fl", "Tx"
   (title case, read as words, not states), "Upstate" on its own, "Peel region in ON" (the capital ON needs a comma),
   and "Bruce Peninsula, in Ontario" (", in" read as Indiana).
 - Questions overall: 31 asked, 4 unanswered within 15 minutes. The room is answered; it is answered late and by his
