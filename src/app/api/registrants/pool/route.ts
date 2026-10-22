@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 const SECRET = process.env.REGISTER_SECRET ?? "";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DAYS = 31;
+const PAGE = 1000;
 
 /**
  * GET /api/registrants/pool?event=ailg-r&from=YYYY-MM-DD&to=YYYY-MM-DD (Bearer REGISTER_SECRET): everyone who
@@ -23,18 +24,26 @@ export async function GET(request: Request) {
   if (!DATE_RE.test(from) || !DATE_RE.test(to) || from > to) return Response.json({ error: "Bad range" }, { status: 400 });
   if ((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 > MAX_DAYS) return Response.json({ error: "Range too long" }, { status: 400 });
 
-  const { data: outcomes, error } = await db()
-    .from("registrant_outcomes")
-    .select("registrant_id, session_date, first_name, email, source, live_seconds, replay_seconds")
-    .eq("event_id", event.id)
-    .gte("session_date", from)
-    .lte("session_date", to)
-    .neq("source", "test")
-    .order("session_date")
-    .limit(5000);
-  if (error) return Response.json({ error: "Read failed" }, { status: 500 });
+  // Paged: PostgREST answers at most 1,000 rows a call whatever the limit says, and a 30-day window holds ~3,500
+  // (22 Oct 2026: Katherine's planner saw the oldest thousand and nothing newer).
+  const outcomes: Array<{ registrant_id: string; session_date: string; first_name: string; email: string | null; source: string | null; live_seconds: number | null; replay_seconds: number | null }> = [];
+  for (let start = 0; ; start += PAGE) {
+    const { data, error } = await db()
+      .from("registrant_outcomes")
+      .select("registrant_id, session_date, first_name, email, source, live_seconds, replay_seconds")
+      .eq("event_id", event.id)
+      .gte("session_date", from)
+      .lte("session_date", to)
+      .neq("source", "test")
+      .order("session_date")
+      .order("registrant_id")
+      .range(start, start + PAGE - 1);
+    if (error) return Response.json({ error: "Read failed" }, { status: 500 });
+    outcomes.push(...((data ?? []) as typeof outcomes));
+    if (!data || data.length < PAGE) break;
+  }
 
-  const ids = (outcomes ?? []).map((o) => String(o.registrant_id));
+  const ids = outcomes.map((o) => String(o.registrant_id));
   const regs = new Map<string, { token: string; phone: string | null; blocked: boolean; created_at: string; flags: Record<string, unknown> }>();
   const booked = new Set<string>();
   const emails = new Set<string>();
@@ -61,7 +70,7 @@ export async function GET(request: Request) {
       event: { slug: event.slug, title: event.title, timezone: event.timezone },
       from,
       to,
-      registrants: (outcomes ?? []).flatMap((o) => {
+      registrants: outcomes.flatMap((o) => {
         const r = regs.get(String(o.registrant_id));
         if (!r) return [];
         const email = o.email ? String(o.email).toLowerCase() : null;
