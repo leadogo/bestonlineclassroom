@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanAttribution, emailHash, isTestIdentity, joinUrl, newToken, normalizeEmail, parseRegisterBody, TOKEN_RE } from "./registrants.ts";
+import { cleanAttribution, emailHash, isTestIdentity, isUniqueViolation, joinUrl, newToken, normalizeEmail, parseRegisterBody, TOKEN_RE } from "./registrants.ts";
 
 test("tokens: 12 chars from the look-alike-free alphabet, no repeats in a thousand", () => {
   const seen = new Set<string>();
@@ -45,4 +45,11 @@ test("parseRegisterBody: the contract's 422s and a clean input", () => {
   const loose = parseRegisterBody({ event: "ailg-r", first_name: "B", email: "b@x.com", session_date: "tomorrow", registration_id: "nope", source: "other" });
   assert.ok(loose.ok);
   if (loose.ok) assert.deepEqual([loose.input.session_date, loose.input.registration_id, loose.input.source], [null, null, "site"]);
+});
+
+test("a unique-index collision is recognised by its Postgres code, nothing else is", () => {
+  assert.equal(isUniqueViolation({ code: "23505", message: "duplicate key value violates unique constraint" }), true);
+  assert.equal(isUniqueViolation({ code: "23503" }), false);
+  assert.equal(isUniqueViolation(new Error("network")), false);
+  assert.equal(isUniqueViolation(null), false);
 });
