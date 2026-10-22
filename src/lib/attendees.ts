@@ -4,7 +4,7 @@
 // over, so the room never says "ended" to someone who came to watch.
 import { db } from "./db.ts";
 import type { EventRow } from "./events.ts";
-import { newToken } from "./registrants.ts";
+import { isUniqueViolation, newToken } from "./registrants.ts";
 
 export type Registrant = {
   id: string;
@@ -60,8 +60,19 @@ export async function createGuest(input: { eventId: string; sessionDate: string;
     })
     .select(COLS)
     .single();
-  if (error) throw error;
+  if (error) {
+    // The unique (event, date, email) index: this email already holds a seat tonight (a registrant typing the
+    // email they signed up with at the open door, or two taps on Join). Their own row, never "Please try again".
+    const theirs = isUniqueViolation(error) && input.email ? await seatFor(input.eventId, input.sessionDate, input.email) : null;
+    if (theirs) return theirs;
+    throw error;
+  }
   return data as Registrant;
+}
+
+async function seatFor(eventId: string, sessionDate: string, email: string): Promise<Registrant | null> {
+  const { data } = await db().from("registrants").select(COLS).eq("event_id", eventId).eq("session_date", sessionDate).eq("email", email).limit(1).maybeSingle();
+  return (data as Registrant | null) ?? null;
 }
 
 /**

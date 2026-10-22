@@ -113,3 +113,8 @@ export function nameFromEmail(email: string | null | undefined): string {
   const part = local.split(/[._\-+\d]/).find((p) => /^[a-z]{2,}$/i.test(p)) ?? "";
   return part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : "Guest";
 }
+
+/** Postgres 23505: the row the insert tried to make already exists (a unique index said so). */
+export function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "23505";
+}
