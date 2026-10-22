@@ -10,7 +10,8 @@ const MAX_DAYS = 31;
 /**
  * GET /api/registrants/pool?event=ailg-r&from=YYYY-MM-DD&to=YYYY-MM-DD (Bearer REGISTER_SECRET): everyone who
  * registered for a session in the range, with what they did since (live seconds, replay seconds, whether they
- * booked a call), for Katherine's re-invite calls. Test identities never appear; blocked people are marked.
+ * booked a call) and where the row came from (`source`: site, legacy, sms, skool…), for Katherine's re-invite calls.
+ * Test identities never appear; blocked people are marked.
  */
 export async function GET(request: Request) {
   if (!SECRET || request.headers.get("authorization") !== `Bearer ${SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
   const { data: outcomes, error } = await db()
     .from("registrant_outcomes")
-    .select("registrant_id, session_date, first_name, email, live_seconds, replay_seconds")
+    .select("registrant_id, session_date, first_name, email, source, live_seconds, replay_seconds")
     .eq("event_id", event.id)
     .gte("session_date", from)
     .lte("session_date", to)
@@ -70,6 +71,7 @@ export async function GET(request: Request) {
           session_date: o.session_date,
           first_name: o.first_name,
           email: o.email,
+          source: o.source,
           phone: r.phone,
           registered_at: r.created_at,
           blocked: r.blocked,
