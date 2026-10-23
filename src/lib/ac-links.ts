@@ -6,7 +6,8 @@
 // ponytail: scripts/ac-personal-links.ts still holds the by-hand version of this; delete it once the cron has run clean.
 import { acApi, JOIN_FIELD, PERSONAL_RE, REGISTERED_TAG_ID, REPLAY_FIELD, watchLinks } from "./activecampaign.ts";
 import { db, pageAll } from "./db.ts";
-import { emailHash, isTestIdentity, newToken } from "./registrants.ts";
+import { cleanName } from "./chat-filter.ts";
+import { emailHash, isTestIdentity, nameFromEmail, newToken, normalizeEmail } from "./registrants.ts";
 
 export type AcContact = { id: string; email: string; firstName?: string; phone?: string; cdate: string };
 /** The lists whose emails carry %WEBINARJOINLINK%: 4740 "AI For Agents Masterclass" and 4743 "30 day openers". */
@@ -17,7 +18,8 @@ export type LinkTask = { contact: AcContact; email: string; token: string | null
 export function linkPlan(contacts: AcContact[], fields: Map<string, { join?: { id: string; value: string } }>, tokenByEmail: Map<string, string>): LinkTask[] {
   const out: LinkTask[] = [];
   for (const c of contacts) {
-    const email = (c.email ?? "").trim().toLowerCase();
+    // The same rules as a registration: a real address, lowercased; nothing from ActiveCampaign reaches the room's tables raw (security pass, Oct 22).
+    const email = normalizeEmail(c.email);
     if (!email || isTestIdentity(email)) continue;
     const f = fields.get(c.id);
     if (PERSONAL_RE.test(f?.join?.value ?? "")) continue;
@@ -105,7 +107,10 @@ export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; even
       let token = t.token;
       if (!token) {
         token = newToken();
-        const ins = await db().from("registrants").insert({ event_id: eventId, session_date: sessionDateFor(undefined, t.contact.cdate, today), token, first_name: (t.contact.firstName || t.email.split("@")[0]).slice(0, 80), email: t.email, email_hash: emailHash(t.email), phone: t.contact.phone || null, source: "legacy", attribution: { ac_sweep: today, ac_contact: t.contact.id } }).select("token").single();
+        // Dated at least 9 days back: outside the outcome push's 8-day window, so a list member who never registered is never tagged missed; a click moves the row into the running session and the tags start from there.
+        const dated = sessionDateFor(undefined, t.contact.cdate, today);
+        const floor = dayIso(new Date(now.getTime() - 9 * 86_400_000), tz);
+        const ins = await db().from("registrants").insert({ event_id: eventId, session_date: dated < floor ? dated : floor, token, first_name: cleanName(t.contact.firstName ?? "") ?? nameFromEmail(t.email), email: t.email, email_hash: emailHash(t.email), phone: (t.contact.phone ?? "").trim().slice(0, 32) || null, source: "legacy", attribution: { ac_sweep: today, ac_contact: t.contact.id } }).select("token").single();
         if (ins.error) {
           const again = await db().from("registrants").select("token").eq("event_id", eventId).eq("email", t.email).order("created_at", { ascending: false }).limit(1).maybeSingle();
           if (!again.data) throw new Error(`insert failed: ${ins.error.message}`);

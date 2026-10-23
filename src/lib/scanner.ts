@@ -24,10 +24,12 @@ export function isScannerAddressRows(tokens: Array<string | null>, thisToken: st
   return new Set([...tokens.filter((t): t is string => Boolean(t)), thisToken]).size >= SCANNER_ADDRESS_TOKENS;
 }
 
-/** The lookup behind the heartbeat: the join opens from this address in the last ten minutes (`link_clicks.ip`, migration 044). Best-effort: a read error means not a scanner. */
-export async function isScannerAddress(ip: string, thisToken: string): Promise<boolean> {
+/** The lookup behind the render and the heartbeat: the join opens of real tokens from this address, with this agent string, in the last ten minutes (`link_clicks.ip`, migration 044). Real tokens and the same agent (security pass, Oct 22): four garbage paths from one address, or four people behind one carrier address on different phones, are not a fleet. Best-effort: a read error means not a scanner. */
+export async function isScannerAddress(ip: string, thisToken: string, ua?: string | null): Promise<boolean> {
   const since = new Date(Date.now() - SCANNER_ADDRESS_WINDOW_MS).toISOString();
-  const { data, error } = await db().from("link_clicks").select("token").eq("ip", ip).eq("path", "j").gte("at", since).limit(50);
+  let q = db().from("link_clicks").select("token").eq("ip", ip).eq("path", "j").not("registrant_id", "is", null).gte("at", since).limit(50);
+  if (ua) q = q.eq("user_agent", ua.slice(0, 300));
+  const { data, error } = await q;
   if (error || !data) return false;
   return isScannerAddressRows(data.map((r) => r.token as string | null), thisToken);
 }

@@ -20,8 +20,9 @@ test("linkPlan: a personal link is left alone; a door link, an EasyWebinar link,
     ["4", { join: { id: "d", value: "" } }],
   ]);
   const tokens = new Map([["two@x.com", "tok2tok2tok2"]]);
-  const plan = linkPlan([c("1", "one@x.com"), c("2", "two@x.com"), c("3", "three@x.com"), c("4", "four@x.com"), c("5", "five@x.com"), c("6", "a-test-sample@thefuturerealestateagent.com"), c("7", "")], fields, tokens);
-  assert.deepEqual(plan.map((t) => [t.contact.id, t.token]), [["2", "tok2tok2tok2"], ["3", null], ["4", null], ["5", null]]);
+  const plan = linkPlan([c("1", "one@x.com"), c("2", "two@x.com"), c("3", "three@x.com"), c("4", "four@x.com"), c("5", "five@x.com"), c("6", "a-test-sample@thefuturerealestateagent.com"), c("7", ""), c("8", "  Mixed.Case@X.com "), c("9", "not an email")], fields, tokens);
+  assert.deepEqual(plan.map((t) => [t.contact.id, t.token]), [["2", "tok2tok2tok2"], ["3", null], ["4", null], ["5", null], ["8", null]]);
+  assert.equal(plan[4].email, "mixed.case@x.com", "normalized like a registration");
 });
 
 test("sessionDateFor: a past AC session date wins, an ISO one too; today or later and a missing one fall to yesterday or the created day", () => {

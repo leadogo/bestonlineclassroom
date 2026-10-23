@@ -5,6 +5,7 @@
 // moderator sends) | assisted (the routine categories post themselves) | auto (every reply posts itself).
 // Best-effort everywhere: a model outage or a bad answer is silence, never an error in the room.
 import { KAITLYN, KAITLYN_MODES, type KaitlynMode } from "./chat.ts";
+import { checkMessage } from "./chat-filter.ts";
 import { db } from "./db.ts";
 import { tells, tidy } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
@@ -279,11 +280,14 @@ export function parseDecision(input: unknown, opts: { beforePitch?: boolean; pic
   // A line with an AI tell never posts on its own; the desk sees what tripped it (SPEC-kaitlyn-autopilot.md, B).
   const tell = action === "reply" ? tells(text)[0] : undefined;
   if (tell) { action = "ask_william"; why = `sounds like a bot: ${tell}; ${why}`.slice(0, 140); }
+  // Her lines clear the room's own chat filter like anyone's (security pass, Oct 22): a prompt-injected link or a slur never posts under the moderator badge.
+  const dirty = action === "reply" ? checkMessage(text) : null;
+  if (dirty && !dirty.ok) { action = "ask_william"; why = `draft fails the chat filter (${dirty.kind}); ${why}`.slice(0, 140); }
   const kbo = o.kb && typeof o.kb === "object" ? (o.kb as Record<string, unknown>) : null;
   const key = kbKey(kbo?.key);
   const kb = key && action !== "skip" ? { key, question: kbQuestion(kbo?.question) } : null;
   // A ghost's text is the private line they still get; it clears the same guard and tells as a reply, or the ghost stands without it.
-  const ghostText = action === "ghost" && text && !guard(text) && !tells(text).length ? text : "";
+  const ghostText = action === "ghost" && text && !guard(text) && !tells(text).length && checkMessage(text).ok ? text : "";
   return { action, category, text: action === "skip" ? "" : action === "ghost" ? ghostText : text, react, why, kb, sure: action === "reply" || (action === "ghost" && o.sure === true) };
 }
 

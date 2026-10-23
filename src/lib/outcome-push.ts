@@ -67,7 +67,7 @@ export async function pushOutcomeTags(opts: { budgetMs?: number } = {}): Promise
         await db().from("outcome_tags").insert({ registrant_id: p.registrant_id, tag: p.tag });
         sent += 1;
         // A registration the instant path missed still gets its links within the hour (SPEC-friday-unattended.md, E1); a failure here is logged, the sweep catches it.
-        if (p.registered) { const t = await db().from("registrants").select("token").eq("id", p.registrant_id).maybeSingle(); if (t.data?.token && !(await setLinks(p.email, String(t.data.token)))) console.error("[outcome-push] links not written", { email: p.email }); }
+        if (p.registered) { const t = await db().from("registrants").select("token").eq("id", p.registrant_id).maybeSingle(); if (t.data?.token && !(await setLinks(p.email, String(t.data.token)))) console.error("[outcome-push] links not written", { registrant_id: p.registrant_id }); }
       } else failed += 1;
     } catch (err) {
       console.error("[outcome-push] tag failed", { tag: p.tag, err: String(err) });

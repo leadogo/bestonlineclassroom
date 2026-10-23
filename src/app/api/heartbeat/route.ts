@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   // The Oct 22 wave came on Windows agents from a few shared addresses (SPEC-friday-unattended.md, D): an address that opened four or more different personal links in the last ten minutes is a scanner fleet, not a household, and its beats are dropped the same way.
   const ip = clientIp(request.headers);
   const [fleet, reg] = await Promise.all([
-    ip ? isScannerAddress(ip, token) : Promise.resolve(false),
+    ip ? isScannerAddress(ip, token, request.headers.get("user-agent")) : Promise.resolve(false),
     db().from("registrants").select("id, event_id, session_date, ip, blocked_at, email, ghosted_at, auto_ghost_reason, event:events(id, katherine_enabled, prompts, cta_prompt_minutes, cta_at_seconds, cta_label, cta_href, kaitlyn_mode)").eq("token", token).maybeSingle(),
   ]);
   if (fleet) return new Response(null, { status: 204 });

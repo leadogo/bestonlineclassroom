@@ -262,6 +262,12 @@ test("before the pitch nobody is sent to the call (SPEC-friday-unattended.md, C)
   assert.equal(parseDecision({ action: "ghost", category: "negative", text: "", sure: true }, { beforePitch: true }).action, "ghost", "other ghost cases keep working before the pitch");
   assert.equal(parseDecision({ action: "reply", category: "price", text: "book a call", sure: false }).action, "ask_william");
   assert.equal(parseDecision({ action: "ghost", category: "price", text: "", sure: true }, { beforePitch: false }).action, "ghost");
+  // A link or a slur in her draft goes to the desk, never the room; a ghost's private line too.
+  const linky = parseDecision({ action: "reply", category: "product", text: "sure, grab it at https://evil.example/now", sure: true, why: "x" });
+  assert.equal(linky.action, "ask_william");
+  assert.match(linky.why, /chat filter \(link\)/);
+  assert.equal(parseDecision({ action: "ghost", category: "negative", text: "see https://evil.example", sure: true }).text, "");
+  assert.equal(parseDecision({ action: "reply", category: "market", text: "3 in Boston, email the team at help@bookmoreshowings.com if you want", sure: true }).action, "reply", "an email address is not a link");
   // Nothing posts itself for an ask_william, and the desk-first gate never takes one (B).
   assert.equal(postsItself("auto", { action: "ask_william", category: "product", text: "draft", react: "", why: "", kb: null, sure: false }), false);
   assert.equal(deskFirstDue({ status: "pending", action: "ask_william", created_at: new Date(Date.now() - 10 * DESK_FIRST_MS).toISOString() }, Date.now(), "auto", false), false);
