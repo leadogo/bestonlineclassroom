@@ -11,17 +11,17 @@ import { emailHash, isTestIdentity, newToken } from "./registrants.ts";
 export type AcContact = { id: string; email: string; firstName?: string; phone?: string; cdate: string };
 /** The lists whose emails carry %WEBINARJOINLINK%: 4740 "AI For Agents Masterclass" and 4743 "30 day openers". */
 export const LINK_LISTS = ["4740", "4743"];
-export type LinkTask = { contact: AcContact; email: string; token: string | null; join?: { id: string } ; replay?: { id: string } };
+export type LinkTask = { contact: AcContact; email: string; token: string | null };
 
 /** Which contacts need a write: a tagged contact with an email, not a test sample, whose join field is not already a personal link. `token` is the room's when the email has a row; null means a row must be created first. */
-export function linkPlan(contacts: AcContact[], fields: Map<string, { join?: { id: string; value: string }; replay?: { id: string } }>, tokenByEmail: Map<string, string>): LinkTask[] {
+export function linkPlan(contacts: AcContact[], fields: Map<string, { join?: { id: string; value: string } }>, tokenByEmail: Map<string, string>): LinkTask[] {
   const out: LinkTask[] = [];
   for (const c of contacts) {
     const email = (c.email ?? "").trim().toLowerCase();
     if (!email || isTestIdentity(email)) continue;
     const f = fields.get(c.id);
     if (PERSONAL_RE.test(f?.join?.value ?? "")) continue;
-    out.push({ contact: c, email, token: tokenByEmail.get(email) ?? null, join: f?.join, replay: f?.replay });
+    out.push({ contact: c, email, token: tokenByEmail.get(email) ?? null });
   }
   return out;
 }
@@ -45,7 +45,7 @@ export function linkSlot(now: Date, tz = "America/Edmonton"): string | null {
   return hour >= 15 ? `${day}T15` : hour >= 3 ? `${day}T03` : null;
 }
 
-export type SweepResult = { scanned: number; pending: number; written: number; created: number; failed: number; truncated: boolean; sample: string[] };
+export type SweepResult = { scanned: number; pending: number; written: number; created: number; failed: number; truncated: boolean; sample: string[]; /** full (every contact) or the days of the incremental window */ scope: string };
 
 async function allPages<T>(path: string, pick: (page: unknown) => T[]): Promise<T[]> {
   const out: T[] = [];
@@ -58,31 +58,42 @@ async function allPages<T>(path: string, pick: (page: unknown) => T[]): Promise<
   }
 }
 
-/** One sweep: reads the join and replay field values and the tagged contacts, plans, and (when `apply`) creates the missing room rows and writes both links, newest contacts first, until the budget is spent. */
-export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; eventSlug?: string; now?: Date }): Promise<SweepResult> {
+const dayIso = (d: Date, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
+
+/**
+ * One sweep. The join field is read in bulk (140 pages, about a minute: the one listing every mode needs); the contacts
+ * come from the tag and the two lists, all of them in `full` mode (the by-hand run: 14,789 contacts, 241 s of reads on
+ * Oct 22, too slow for the cron) or, in the cron's incremental mode, the tagged contacts created in the last `sinceDays`
+ * plus the list members updated in that window (a contact added to "30 day openers" is an update). The plan is every
+ * contact whose join field is not a personal link; the writes go newest first until the budget is spent, each with one
+ * read of the contact's own field values (the replay field's id), a room row when the email has none, and both links.
+ */
+export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; eventSlug?: string; now?: Date; full?: boolean; sinceDays?: number }): Promise<SweepResult> {
   const t0 = Date.now();
   const budget = opts.budgetMs ?? 240_000;
+  const now = opts.now ?? new Date();
   const ev = await db().from("events").select("id, timezone").eq("slug", opts.eventSlug ?? "ailg-r").maybeSingle();
   if (!ev.data) throw new Error("event not found");
   const eventId = ev.data.id as string;
+  const tz = (ev.data.timezone as string) || "America/Edmonton";
   type FV = { id: string; contact: string; field: string; value: string };
-  const fields = new Map<string, { join?: { id: string; value: string }; replay?: { id: string }; session?: string }>();
-  const fold = (rows: FV[], slot: "join" | "replay") => { for (const r of rows) { const o = fields.get(r.contact) ?? {}; o[slot] = { id: r.id, value: r.value }; fields.set(r.contact, o); } };
-  fold(await allPages<FV>(`/fieldValues?filters[fieldid]=${JOIN_FIELD}`, (p) => ((p as { fieldValues?: FV[] }).fieldValues ?? [])), "join");
-  fold(await allPages<FV>(`/fieldValues?filters[fieldid]=${REPLAY_FIELD}`, (p) => ((p as { fieldValues?: FV[] }).fieldValues ?? [])), "replay");
-  // The scope (SPEC-friday-unattended.md, E2): every registered contact (the tag) and every active member of the two lists the webinar emails go to. Oct 22: list 4743 "30 day openers" (Tuesday's email) held 823 contacts with no link, 399 of the first 400 untagged.
+  const fields = new Map<string, { join?: { id: string; value: string }; replay?: { id: string } }>();
+  for (const r of await allPages<FV>(`/fieldValues?filters[fieldid]=${JOIN_FIELD}`, (p) => ((p as { fieldValues?: FV[] }).fieldValues ?? []))) fields.set(r.contact, { join: { id: r.id, value: r.value } });
+  const days = opts.sinceDays ?? 3;
+  const since = dayIso(new Date(now.getTime() - days * 86_400_000), tz);
+  const sources = opts.full
+    ? [`/contacts?tagid=${REGISTERED_TAG_ID}&orders[cdate]=DESC`, ...LINK_LISTS.map((l) => `/contacts?listid=${l}&status=1&orders[cdate]=DESC`)]
+    : [`/contacts?tagid=${REGISTERED_TAG_ID}&filters[created_after]=${since}&orders[cdate]=DESC`, ...LINK_LISTS.map((l) => `/contacts?listid=${l}&status=1&filters[updated_after]=${since}&orders[cdate]=DESC`)];
   const byId = new Map<string, AcContact>();
-  for (const path of [`/contacts?tagid=${REGISTERED_TAG_ID}&orders[cdate]=DESC`, ...LINK_LISTS.map((l) => `/contacts?listid=${l}&status=1&orders[cdate]=DESC`)]) {
-    for (const c of await allPages<AcContact>(path, (p) => ((p as { contacts?: AcContact[] }).contacts ?? []))) if (!byId.has(c.id)) byId.set(c.id, c);
-  }
+  for (const path of sources) for (const c of await allPages<AcContact>(path, (p) => ((p as { contacts?: AcContact[] }).contacts ?? []))) if (!byId.has(c.id)) byId.set(c.id, c);
   const contacts = [...byId.values()].sort((a, b) => (a.cdate < b.cdate ? 1 : -1));
   const tokenByEmail = new Map<string, string>();
   const rows = await pageAll<{ email: string; token: string }>((from, to) => db().from("registrants").select("email, token").eq("event_id", eventId).not("email", "is", null).order("created_at", { ascending: false }).range(from, to));
   for (const r of rows) { const e = r.email.toLowerCase(); if (!tokenByEmail.has(e)) tokenByEmail.set(e, r.token); }
   const plan = linkPlan(contacts, fields, tokenByEmail);
-  const result: SweepResult = { scanned: contacts.length, pending: plan.length, written: 0, created: 0, failed: 0, truncated: false, sample: plan.slice(0, 10).map((t) => t.email) };
+  const result: SweepResult = { scanned: contacts.length, pending: plan.length, written: 0, created: 0, failed: 0, truncated: false, sample: plan.slice(0, 10).map((t) => t.email), scope: opts.full ? "full" : `${days} days` };
   if (!opts.apply) return result;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: (ev.data.timezone as string) || "America/Edmonton" }).format(opts.now ?? new Date());
+  const today = dayIso(now, tz);
   for (const t of plan) {
     if (Date.now() - t0 > budget) { result.truncated = true; break; }
     try {
@@ -97,13 +108,15 @@ export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; even
         } else result.created += 1;
         tokenByEmail.set(t.email, token);
       }
+      // The contact's own field rows: the replay field's id (not in the bulk read) and the join field's, fresh.
+      const have = (await acApi<{ fieldValues: FV[] }>(`/contacts/${t.contact.id}/fieldValues`))?.fieldValues ?? [];
       const links = watchLinks(token);
-      const write = async (field: string, value: string, have?: { id: string }) => {
-        const r = have ? await acApi(`/fieldValues/${have.id}`, { method: "PUT", body: JSON.stringify({ fieldValue: { contact: t.contact.id, field, value } }) }) : await acApi("/fieldValues", { method: "POST", body: JSON.stringify({ fieldValue: { contact: t.contact.id, field, value } }) });
+      for (const [field, value] of [[JOIN_FIELD, links.join], [REPLAY_FIELD, links.replay]] as const) {
+        const existing = have.find((f) => f.field === field);
+        const body = JSON.stringify({ fieldValue: { contact: t.contact.id, field, value } });
+        const r = existing ? await acApi(`/fieldValues/${existing.id}`, { method: "PUT", body }) : await acApi("/fieldValues", { method: "POST", body });
         if (!r) throw new Error(`field ${field} write failed for contact ${t.contact.id}`);
-      };
-      await write(JOIN_FIELD, links.join, t.join);
-      await write(REPLAY_FIELD, links.replay, t.replay);
+      }
       result.written += 1;
     } catch (err) {
       result.failed += 1;
@@ -117,5 +130,5 @@ export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; even
 export function sweepLine(r: SweepResult, slot: string | null): string {
   const left = r.pending - r.written;
   const head = left === 0 ? "Links OK" : "Links: still blank";
-  return `${head} (${slot ?? "forced"} sweep): ${r.written} repaired, ${r.created} room rows created, ${left} of ${r.scanned} tagged contacts still without a personal link${r.failed ? `, ${r.failed} failed` : ""}${r.truncated ? ", budget hit, the next run continues" : ""}.`;
+  return `${head} (${slot ?? "forced"} sweep, ${r.scope}): ${r.written} repaired, ${r.created} room rows created, ${left} of ${r.scanned} contacts checked still without a personal link${r.failed ? `, ${r.failed} failed` : ""}${r.truncated ? ", budget hit, the next run continues" : ""}.`;
 }
