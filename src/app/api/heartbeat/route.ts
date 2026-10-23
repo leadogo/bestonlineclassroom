@@ -5,6 +5,7 @@ import { cleanParams } from "@/lib/params";
 import { TOKEN_RE } from "@/lib/registrants";
 import { postDuePrompts } from "@/lib/prompts";
 import { asMode, sweepDeskFirst } from "@/lib/kaitlyn";
+import { isScannerAgent, isScannerAddress } from "@/lib/scanner";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,11 @@ export async function POST(request: Request) {
   if (!TOKEN_RE.test(token)) return new Response(null, { status: 400 });
   const offset = typeof b.offset === "number" && Number.isFinite(b.offset) ? b.offset : 0;
   const kind = b.kind === "replay" ? "replay" : "live";
+  // An email security scanner's page beats too (SPEC-link-opens.md, A): dropped here, so a scanner open writes no attendance row, stores no address and runs nothing. Oct 13 to 20: no real person ever appeared only through a Linux-desktop agent.
+  if (isScannerAgent(request.headers.get("user-agent"))) return new Response(null, { status: 204 });
+  // The Oct 22 wave came on Windows agents from a few shared addresses (SPEC-friday-unattended.md, D): an address that opened four or more different personal links in the last ten minutes is a scanner fleet, not a household, and its beats are dropped the same way.
+  const ip = clientIp(request.headers);
+  if (ip && await isScannerAddress(ip, token)) return new Response(null, { status: 204 });
 
   const reg = await db().from("registrants").select("id, event_id, session_date, ip, blocked_at, email, ghosted_at, auto_ghost_reason, event:events(id, katherine_enabled, prompts, cta_prompt_minutes, cta_at_seconds, cta_label, cta_href, kaitlyn_mode, autopilot)").eq("token", token).maybeSingle();
   if (reg.error || !reg.data) return new Response(null, { status: 404 });

@@ -1,4 +1,5 @@
 import { ReplayExpired, ReplayView } from "@/components/replay/ReplayView";
+import { isScannerAgent } from "@/lib/scanner";
 import { registrantByToken } from "@/lib/attendees";
 import { ctaHref } from "@/lib/cta";
 import { db } from "@/lib/db";
@@ -30,7 +31,7 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   const r = TOKEN_RE.test(token) ? await registrantByToken(token).catch(() => null) : null;
   const ua = (await headers()).get("user-agent");
   if (!r || !r.event.video_url) {
-    after(() => logClick({ path: "replay", outcome: "invalid", token, userAgent: ua }));
+    after(() => logClick({ path: "replay", outcome: "invalid", token, userAgent: ua, bot: isScannerAgent(ua) }));
     return (
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-sm">
@@ -49,7 +50,7 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   if (r.blocked_at) {
     if (r.block_reason === "client") {
       after(async () => {
-        await logClick({ path: "replay", outcome: "walled", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua });
+        await logClick({ path: "replay", outcome: "walled", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua, bot: isScannerAgent(ua) });
         await tellWallHit(r, r.event.title, "replay").catch(() => {});
       });
       notFound();
@@ -67,7 +68,7 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   const session = sessionFor(scheduleOf(e), r.session_date);
   const opens = session ? replayOpensAt(session, e.replay_opens_at, e.timezone) : null;
   if (session && opens && now.getTime() < opens.getTime() && !(await getTeamMember().catch(() => null))) {
-    after(() => logClick({ path: "replay", outcome: "countdown", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
+    after(() => logClick({ path: "replay", outcome: "countdown", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua, bot: isScannerAgent(ua) }));
     const running = now.getTime() >= session.start.getTime() && now.getTime() < session.end.getTime();
     const ended = now.getTime() >= session.end.getTime();
     const zones = fourZones(ended ? { ...session, start: opens } : session);
@@ -100,11 +101,11 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
   }
   const expiresAt = openedAt && e.replay_hours > 0 ? openedAt.getTime() + e.replay_hours * 3_600_000 : null;
   if (expiresAt !== null && now.getTime() >= expiresAt) {
-    after(() => logClick({ path: "replay", outcome: "replay_expired", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
+    after(() => logClick({ path: "replay", outcome: "replay_expired", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua, bot: isScannerAgent(ua) }));
     return <ReplayExpired logoUrl={e.logo_url} cta={cta} onClickHref={SITE} copy={replayCopy(e.replay_copy)} />;
   }
 
-  after(() => logClick({ path: "replay", outcome: "replay", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua }));
+  after(() => logClick({ path: "replay", outcome: "replay", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, userAgent: ua, bot: isScannerAgent(ua) }));
   const chapters = (Array.isArray(e.chapters) ? e.chapters : []).filter((c) => typeof c?.at === "number" && typeof c?.label === "string").sort((a, b) => a.at - b.at);
   return <ReplayView token={r.token} firstName={r.first_name} title={e.title} logoUrl={e.logo_url} seconds={e.video_seconds ?? 0} cta={cta} chapters={chapters} params={p} expiresAt={expiresAt} serverNow={now.getTime()} copy={replayCopy(e.replay_copy)} />;
 }

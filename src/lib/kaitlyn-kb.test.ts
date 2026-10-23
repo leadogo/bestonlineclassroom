@@ -138,3 +138,10 @@ test("answeredWithin: a moderator line to the person inside 15 minutes counts, h
   assert.equal(answeredWithin(t0, "p4", told), false);
   assert.equal(answeredWithin(t0, "p5", told), false);
 });
+
+test("digestText: the link sweep's line (SPEC-friday-unattended.md, E4) only when it wrote something or left blanks", () => {
+  const base = { questions: [], people: 0, waiting: 0, url: "u" };
+  assert.equal(digestText({ ...base, links: { written: 0, created: 0, pending: 0 } }), null);
+  assert.match(digestText({ ...base, links: { written: 12, created: 2, pending: 12 } })!, /gave 12 contacts a personal link yesterday \(2 needed a room row\)\./);
+  assert.match(digestText({ ...base, links: { written: 1, created: 0, pending: 4 } })!, /gave 1 contact a personal link yesterday; 3 still blank\./);
+});

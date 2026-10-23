@@ -2,7 +2,7 @@
 // registrants left about 2,700 tags; two unpaced requests per tag met the 5-a-second limit and every run died at 300 s.
 // Now: newest session first, the session-end tags (they fire the replay and follow-up automations) before the rest, one
 // contact lookup per email per run, and the run returns when the budget is spent; the next run continues.
-import { addTag, contactId, ensureContact, tagId } from "./activecampaign.ts";
+import { addTag, contactId, ensureContact, setLinks, tagId } from "./activecampaign.ts";
 import { scheduleOf, sessionFor } from "./daily-schedule.ts";
 import { db, pageAll } from "./db.ts";
 import { tagsFor, type Outcome, type TagNames } from "./outcomes.ts";
@@ -10,7 +10,7 @@ import { tagsFor, type Outcome, type TagNames } from "./outcomes.ts";
 export const PUSH_BUDGET_MS = 240_000;
 export const SESSION_END_KEYS = ["attended", "missed", "left_early", "stayed_40min", "saw_offer_no_click"] as const;
 
-export type Planned = { registrant_id: string; email: string; first_name: string; tag: string; session_date: string; end: boolean };
+export type Planned = { registrant_id: string; email: string; first_name: string; tag: string; session_date: string; end: boolean; /** the `registered` tag: the links ride with it (SPEC-friday-unattended.md, E1) */ registered?: boolean };
 
 /** Newest session first, session-end tags before the rest; the given order otherwise (sort is stable). */
 export function orderTags(items: Planned[]): Planned[] {
@@ -39,7 +39,7 @@ export async function planOutcomeTags(now = Date.now()): Promise<Planned[]> {
       const over = Boolean(session && now >= session.end.getTime() + 30 * 60_000);
       for (const tag of tagsFor(r as unknown as Outcome, names, over)) {
         if (have.has(`${r.registrant_id}:${tag}`)) continue;
-        out.push({ registrant_id: r.registrant_id as string, email: r.email as string, first_name: String(r.first_name ?? ""), tag, session_date: r.session_date as string, end: endNames.has(tag) });
+        out.push({ registrant_id: r.registrant_id as string, email: r.email as string, first_name: String(r.first_name ?? ""), tag, session_date: r.session_date as string, end: endNames.has(tag), registered: tag === names.registered });
       }
     }
   }
@@ -66,6 +66,8 @@ export async function pushOutcomeTags(opts: { budgetMs?: number } = {}): Promise
       if (cid && tid && (await addTag(cid, tid))) {
         await db().from("outcome_tags").insert({ registrant_id: p.registrant_id, tag: p.tag });
         sent += 1;
+        // A registration the instant path missed still gets its links within the hour (SPEC-friday-unattended.md, E1); a failure here is logged, the sweep catches it.
+        if (p.registered) { const t = await db().from("registrants").select("token").eq("id", p.registrant_id).maybeSingle(); if (t.data?.token && !(await setLinks(p.email, String(t.data.token)))) console.error("[outcome-push] links not written", { email: p.email }); }
       } else failed += 1;
     } catch (err) {
       console.error("[outcome-push] tag failed", { tag: p.tag, err: String(err) });

@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const dry = params.get("dry") === "1";
   const force = params.get("force") === "1";
   const now = new Date();
-  const { data: events } = await db().from("events").select("id, slug, kaitlyn_mode, kaitlyn_digest_on, timezone").neq("kaitlyn_mode", "off");
+  const { data: events } = await db().from("events").select("id, slug, kaitlyn_mode, kaitlyn_digest_on, timezone, ac_links_last").neq("kaitlyn_mode", "off");
   const report: Array<{ event: string; due: boolean; text: string | null }> = [];
   // The outcome push's backlog, once per run (SPEC-post-session.md, B): the plan covers every event.
   let owed: number | undefined;
@@ -67,6 +67,7 @@ export async function GET(request: Request) {
       posted: postedFrom((decided.data ?? []) as Array<{ status: string; skip_reason?: string | null }>),
       stale: (stale.data ?? []).map((r) => r.key as string),
       owed,
+      links: (e.ac_links_last as { written: number; created: number; pending: number } | null) ?? null,
     });
     if (!dry) {
       const sent = text ? await postToIntel(text) : { ok: true };
