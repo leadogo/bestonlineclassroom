@@ -7,6 +7,30 @@ Oct 22 2026 night from William's message after the Thursday session ("tomorrow I
 be able to be at the event"). **Approved Oct 22 ~10 PM MT** ("Let's push all of this so please /review and /ship"),
 recovery (E3) dropped on his word; built the same night on branch `friday-unattended` (status at the end).
 
+## Status (Oct 22 2026, 10:25 PM MT): SHIPPED
+PR #8 merged 10:17 PM (4e9c01e), production Ready 10:19 PM; migrations 043, 044, 045 applied before the merge; PR #4
+closed as merged with it. Built as specified except: recovery (E3) dropped on William's word; the sweep is incremental in
+the cron and full by hand (E2); the address tell is four tokens, at the render and the heartbeat, real opens from the
+same agent only (D). Review (fresh-context reviewer, security auditor, test engineer, all Oct 22 night): 145 tests;
+fixes taken: the join field written last so a half-written contact is retried; a truncated sweep keeps its slot open;
+the pre-pitch guard catches "a quick call" and "call with" and lets "she calls the leads" through; an unsure or flagged
+price question before the pitch still gets the later line; a price ghost before the pitch is a skip; the aside rule
+leaves ghosts alone and "@Kat", "@everyone" are for her; **her lines now clear the room's chat filter** (a
+prompt-injected link never posts under the moderator badge); ActiveCampaign names, emails and phones are cleaned like a
+registration's before they reach `registrants`; sweep-created rows are dated at least nine days back, outside the
+outcome push's window, so a list member who never registered is never tagged `missed`; links written after the tag so a
+hung call never costs it; only a real address reaches `link_clicks.ip`; the cron at :25, off the outcome push's quarter
+hour. Left for next week (noted by the auditors, not Friday risks): `link_clicks.ip` retention (null it after 7 days),
+the model-coined `kb.question` rendered into her prompt (render keys only for open rows), a WAF rate limit on
+`/api/heartbeat`, the Next 16.x / sharp / source-map-js advisories (pre-existing), fetch-stub tests for `setLinks`.
+**Production checks, 10:20 PM:** a registration on `ailg-r` through the webhook reached ActiveCampaign with both links
+and the tag in under 25 s (row removed after); on the live `test-run` session, "how much is this?" at minute 4 posted "he
+goes over all of that in the last part" on her own, "@Sam how much is it" was skipped as an aside, and "do you integrate
+with Boomtown Pro version 9?" left a pending card and nothing in the room; the cron's incremental dry run read 9,720
+contacts in about two minutes and found 56 pending. **Settings for Friday:** `ailg-r` autopilot = on (set 10:21 PM),
+`kaitlyn_mode` assisted, Katherine AI on. The full by-hand sweep over the tag and both lists (883 pending at 10:00 PM)
+ran from 10:00 PM; its result and the Tuesday-list coverage are in the final message of the session and the memory note.
+
 ## What happened (Thu Oct 22), in numbers
 
 **The room.** 216 live attendance rows; **70 people** by the two-minute-or-an-action rule (55 watched 15 minutes or more,
@@ -217,6 +241,18 @@ back, Theresa among them.
   conditional content: shown when `WebinarJoinLink` is not blank; the else branch shows the door,
   `https://watch.bookmoreshowings.com/w/ailg-r?src=email`, so no email ever renders the label with nothing after it
   even on the day something upstream breaks again. The door takes an email and lets them in.
+
+## What to check Friday
+- 4:30 PM: the 3:25 PM Slack line in #autoweb-intel reads "Links OK (… 3 days)" (the 4 PM email carries links); if it reads
+  "still blank" with a count, the next hourly run continues; if it says "the sweep failed", run
+  `scripts/ac-links-sweep.ts --full --apply` by hand.
+- 5:05 PM: the room's Slack lines show "Autopilot on: the switch is On" on her first decision; her posted lines carry no
+  "call" before 6:15 PM; a "Kaitlyn needs you" line means a card is waiting, nothing posted for it.
+- 7:50 PM: the night report's people count is the number to quote; the desk tile and `/api/metrics` agree with it.
+- Saturday 9 AM: the digest lists the unknowns, the agreement line, and the links line.
+- Kill switches, in order of force: Autopilot → Auto (she only takes over an empty desk), Autopilot → Off (she never
+  takes over; routine categories still post), `kaitlyn_mode` → off (silence), `git revert 4e9c01e` (the code; the
+  migrations stay).
 
 ## Friday's settings (the rollout, in order)
 1. Friday morning, after his grades: the apply step (A), then the branch with B and C: tests, `tsc`, eslint, `next
