@@ -17,9 +17,11 @@ export async function tagNow(registrantId: string, outcome: InstantOutcome): Pro
     const { data: have } = await db().from("outcome_tags").select("tag").eq("registrant_id", r.id).eq("tag", tag).maybeSingle();
     if (have) return;
     // The links ride with the registered tag (SPEC-friday-unattended.md, E1): every path writes them, seconds after the registration.
-    if (outcome === "registered") { await ensureContact(r.email, r.first_name, r.phone); await setLinks(r.email, String(r.token)); }
+    if (outcome === "registered") await ensureContact(r.email, r.first_name, r.phone);
     const ok = await tagContact(r.email, tag);
     if (ok) await db().from("outcome_tags").upsert({ registrant_id: r.id, tag }, { onConflict: "registrant_id,tag", ignoreDuplicates: true });
+    // After the tag, so a hung ActiveCampaign call never costs it; a miss here is the sweep's.
+    if (outcome === "registered") await setLinks(r.email, String(r.token)).catch((err) => console.error("[tagging] links not written", { err: String(err) }));
   } catch (err) {
     console.error("[tagging] failed", { outcome, err: String(err) });
   }

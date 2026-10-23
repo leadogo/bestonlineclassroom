@@ -144,4 +144,8 @@ test("digestText: the link sweep's line (SPEC-friday-unattended.md, E4) only whe
   assert.equal(digestText({ ...base, links: { written: 0, created: 0, pending: 0 } }), null);
   assert.match(digestText({ ...base, links: { written: 12, created: 2, pending: 12 } })!, /gave 12 contacts a personal link yesterday \(2 needed a room row\)\./);
   assert.match(digestText({ ...base, links: { written: 1, created: 0, pending: 4 } })!, /gave 1 contact a personal link yesterday; 3 still blank\./);
+  // Both runs of the day add up; a run older than a day does not.
+  const now = new Date("2026-10-24T15:00:00Z");
+  assert.match(digestText({ ...base, now, links: { at: "2026-10-24T09:20:00Z", written: 2, created: 0, pending: 2, prev: { at: "2026-10-23T21:20:00Z", written: 5, created: 1, pending: 5 } } })!, /gave 7 contacts a personal link yesterday \(1 needed a room row\)\./);
+  assert.match(digestText({ ...base, now, links: { at: "2026-10-24T09:20:00Z", written: 2, created: 0, pending: 2, prev: { at: "2026-10-22T21:20:00Z", written: 5, created: 1, pending: 5 } } })!, /gave 2 contacts a personal link yesterday\./);
 });

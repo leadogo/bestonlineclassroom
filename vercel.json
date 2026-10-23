@@ -32,7 +32,7 @@
     },
     {
       "path": "/api/cron/ac-links",
-      "schedule": "20 * * * *"
+      "schedule": "25 * * * *"
     }
   ]
 }

@@ -1,5 +1,6 @@
 // A row per link open (SPEC-analytics.md): which link, who, and what they got. `ended` and `replay_expired` are
 // the ones to watch: a person clicked and could not see the session. Best-effort, never blocks the page.
+import { isIP } from "node:net";
 import { db } from "./db.ts";
 
 export type ClickOutcome = "live" | "countdown" | "ended" | "replay" | "replay_expired" | "invalid" | "prompt" | "scan" | "walled";
@@ -16,7 +17,7 @@ export async function logClick(input: { path: "j" | "w" | "replay" | "qr"; outco
       src: input.src?.slice(0, 40) ?? null,
       user_agent: input.userAgent?.slice(0, 300) ?? null,
       bot: input.bot ?? false,
-      ip: input.ip ?? null,
+      ip: input.ip && isIP(input.ip) ? input.ip : null,
     });
   } catch (err) {
     console.error("[clicks] insert failed", { err: String(err) });

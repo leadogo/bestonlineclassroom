@@ -239,8 +239,8 @@ test("the prompt never suggests a shape the bot-tell check refuses, and the shap
 });
 
 test("before the pitch nobody is sent to the call (SPEC-friday-unattended.md, C): guard, the price override, the aside rule", () => {
-  for (const s of ["you need to book a call", "that's what the free call is for", "the call covers setup", "book your spot", "a quick consult sorts that out"]) assert.equal(guard(s, true), "call talk before the pitch", s);
-  for (const s of ["he gets to that near the end of the class", "3 in Boston so you're good", "the team confirms by text and email"]) assert.equal(guard(s, true), null, s);
+  for (const s of ["you need to book a call", "that's what the free call is for", "the call covers setup", "book your spot", "a quick consult sorts that out", "a quick call sorts it", "the free 15-minute call covers it", "our call goes through that", "jump on a call with the team", "once you've booked the call", "this call is free"]) assert.equal(guard(s, true), "call talk before the pitch", s);
+  for (const s of ["he gets to that near the end of the class", "3 in Boston so you're good", "the team confirms by text and email", "yes, she calls the leads and texts them too", "you can call them yourself, the AI is optional", "she's calling warm leads only"]) assert.equal(guard(s, true), null, s);
   assert.equal(guard("that's what the free call is for"), null, "after the pitch the call line stands");
   // The Katherine figure in any spelling passes; a figure without the dollar sign is still a price.
   for (const s of ["$250 a month", "it's $250/mo for Katherine", "$250 per month", "$250 monthly"]) assert.equal(guard(s), null, s);
@@ -251,6 +251,20 @@ test("before the pitch nobody is sent to the call (SPEC-friday-unattended.md, C)
   assert.ok(SHAPES.later.includes(price.text), price.text);
   assert.notEqual(parseDecision({ action: "reply", category: "price", text: "x", sure: true }, { beforePitch: true, pick: 2 }).text, price.text);
   assert.equal(parseDecision({ action: "reply", category: "price", text: "Katherine on her own is $250 a month", sure: true }, { beforePitch: true, pick: 1 }).text, "Katherine on her own is $250 a month");
+  // An unsure price draft or an ask_william filed under price still gets the later line (the first ask is always answered); a price ghost before the pitch is a skip; after the pitch an unsure one waits for the desk as always.
+  for (const input of [{ action: "reply", category: "price", text: "book a call", sure: false }, { action: "ask_william", category: "price", text: "depends", sure: true }, { action: "ask_william", category: "price", text: "", sure: false }]) {
+    const d = parseDecision(input, { beforePitch: true, pick: 0 });
+    assert.equal(d.action, "reply", JSON.stringify(input));
+    assert.ok(SHAPES.later.includes(d.text), d.text);
+    assert.equal(d.sure, true);
+  }
+  assert.equal(parseDecision({ action: "ghost", category: "price", text: "", sure: true }, { beforePitch: true }).action, "skip");
+  assert.equal(parseDecision({ action: "ghost", category: "negative", text: "", sure: true }, { beforePitch: true }).action, "ghost", "other ghost cases keep working before the pitch");
+  assert.equal(parseDecision({ action: "reply", category: "price", text: "book a call", sure: false }).action, "ask_william");
+  assert.equal(parseDecision({ action: "ghost", category: "price", text: "", sure: true }, { beforePitch: false }).action, "ghost");
+  // Nothing posts itself for an ask_william, and the desk-first gate never takes one (B).
+  assert.equal(postsItself("auto", { action: "ask_william", category: "product", text: "draft", react: "", why: "", kb: null, sure: false }), false);
+  assert.equal(deskFirstDue({ status: "pending", action: "ask_william", created_at: new Date(Date.now() - 10 * DESK_FIRST_MS).toISOString() }, Date.now(), "auto", false), false);
   // Any other reply that still says "call" before the pitch is silenced and flagged; after the pitch it posts.
   const setup = { action: "reply", category: "product", text: "the call covers setup step by step", sure: true, why: "setup" };
   assert.equal(parseDecision(setup, { beforePitch: true }).action, "ask_william");
@@ -260,7 +274,7 @@ test("before the pitch nobody is sent to the call (SPEC-friday-unattended.md, C)
   assert.ok(SHAPES.later.every((s) => !guard(s, true) && !/\bcall\b/i.test(s)));
   // A line that opens with @another attendee is an aside; the team's handles are for her.
   for (const s of ["@iPhone $$?", "@Pat Dinkens are you in Houston?", "  @Sam lol same"]) assert.equal(isAsideToAttendee(s), true, s);
-  for (const s of ["@Katherine what the other one he mentioned?", "@Kaitlyn how much?", "@Kevin from William's Team sorry didn't see it", "how much is it?", "@ William?"]) assert.equal(isAsideToAttendee(s), false, s);
+  for (const s of ["@Katherine what the other one he mentioned?", "@Kaitlyn how much?", "@Kevin from William's Team sorry didn't see it", "how much is it?", "@ William?", "@Kat how much?", "@Will is this live", "@everyone how much is it?", "@all anyone in Dallas?"]) assert.equal(isAsideToAttendee(s), false, s);
   assert.equal(laterShape(0), SHAPES.later[0]);
   assert.equal(laterShape(SHAPES.later.length + 1), SHAPES.later[1]);
 });

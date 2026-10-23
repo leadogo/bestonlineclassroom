@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const dry = params.get("dry") === "1";
   const force = params.get("force") === "1";
   const now = new Date();
-  const ev = await db().from("events").select("id, timezone, ac_links_slot").eq("slug", "ailg-r").maybeSingle();
+  const ev = await db().from("events").select("id, timezone, ac_links_slot, ac_links_last").eq("slug", "ailg-r").maybeSingle();
   if (!ev.data) return Response.json({ error: "event not found" }, { status: 404 });
   const slot = linkSlot(now, (ev.data.timezone as string) || "America/Edmonton");
   const due = slot !== null && slot !== ev.data.ac_links_slot;
@@ -26,7 +26,10 @@ export async function GET(request: Request) {
     const result = await sweepLinks({ apply: !dry, now });
     const line = sweepLine(result, slot);
     if (!dry) {
-      await db().from("events").update({ ac_links_slot: slot, ac_links_last: { at: now.toISOString(), slot, ...result, sample: undefined } }).eq("id", ev.data.id);
+      // A run that hit the budget keeps the slot open, so the next hour continues; the previous run rides along for the 9 AM digest (both slots count).
+      const last = (ev.data.ac_links_last ?? null) as { at?: string; written?: number; created?: number; pending?: number } | null;
+      const prev = last?.at ? { at: last.at, written: last.written ?? 0, created: last.created ?? 0, pending: last.pending ?? 0 } : null;
+      await db().from("events").update({ ...(result.truncated ? {} : { ac_links_slot: slot }), ac_links_last: { at: now.toISOString(), slot, ...result, sample: undefined, prev } }).eq("id", ev.data.id);
       await postToIntel(line);
     }
     return Response.json({ now: now.toISOString(), slot, due, dry, line, result });

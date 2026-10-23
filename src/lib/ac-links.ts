@@ -45,6 +45,13 @@ export function linkSlot(now: Date, tz = "America/Edmonton"): string | null {
   return hour >= 15 ? `${day}T15` : hour >= 3 ? `${day}T03` : null;
 }
 
+/** The contact listings a sweep reads: full, every tagged contact and every active list member; incremental, the tagged contacts created and the list members updated since `since` (YYYY-MM-DD). */
+export function linkSources(full: boolean, since: string): string[] {
+  return full
+    ? [`/contacts?tagid=${REGISTERED_TAG_ID}&orders[cdate]=DESC`, ...LINK_LISTS.map((l) => `/contacts?listid=${l}&status=1&orders[cdate]=DESC`)]
+    : [`/contacts?tagid=${REGISTERED_TAG_ID}&filters[created_after]=${since}&orders[cdate]=DESC`, ...LINK_LISTS.map((l) => `/contacts?listid=${l}&status=1&filters[updated_after]=${since}&orders[cdate]=DESC`)];
+}
+
 export type SweepResult = { scanned: number; pending: number; written: number; created: number; failed: number; truncated: boolean; sample: string[]; /** full (every contact) or the days of the incremental window */ scope: string };
 
 async function allPages<T>(path: string, pick: (page: unknown) => T[]): Promise<T[]> {
@@ -81,9 +88,7 @@ export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; even
   for (const r of await allPages<FV>(`/fieldValues?filters[fieldid]=${JOIN_FIELD}`, (p) => ((p as { fieldValues?: FV[] }).fieldValues ?? []))) fields.set(r.contact, { join: { id: r.id, value: r.value } });
   const days = opts.sinceDays ?? 3;
   const since = dayIso(new Date(now.getTime() - days * 86_400_000), tz);
-  const sources = opts.full
-    ? [`/contacts?tagid=${REGISTERED_TAG_ID}&orders[cdate]=DESC`, ...LINK_LISTS.map((l) => `/contacts?listid=${l}&status=1&orders[cdate]=DESC`)]
-    : [`/contacts?tagid=${REGISTERED_TAG_ID}&filters[created_after]=${since}&orders[cdate]=DESC`, ...LINK_LISTS.map((l) => `/contacts?listid=${l}&status=1&filters[updated_after]=${since}&orders[cdate]=DESC`)];
+  const sources = linkSources(Boolean(opts.full), since);
   const byId = new Map<string, AcContact>();
   for (const path of sources) for (const c of await allPages<AcContact>(path, (p) => ((p as { contacts?: AcContact[] }).contacts ?? []))) if (!byId.has(c.id)) byId.set(c.id, c);
   const contacts = [...byId.values()].sort((a, b) => (a.cdate < b.cdate ? 1 : -1));
@@ -111,7 +116,8 @@ export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; even
       // The contact's own field rows: the replay field's id (not in the bulk read) and the join field's, fresh.
       const have = (await acApi<{ fieldValues: FV[] }>(`/contacts/${t.contact.id}/fieldValues`))?.fieldValues ?? [];
       const links = watchLinks(token);
-      for (const [field, value] of [[JOIN_FIELD, links.join], [REPLAY_FIELD, links.replay]] as const) {
+      // The join field is the "done" marker linkPlan reads, so it is written last: a replay write that fails leaves the contact pending for the next pass.
+      for (const [field, value] of [[REPLAY_FIELD, links.replay], [JOIN_FIELD, links.join]] as const) {
         const existing = have.find((f) => f.field === field);
         const body = JSON.stringify({ fieldValue: { contact: t.contact.id, field, value } });
         const r = existing ? await acApi(`/fieldValues/${existing.id}`, { method: "PUT", body }) : await acApi("/fieldValues", { method: "POST", body });

@@ -13,7 +13,7 @@ import { logClick } from "@/lib/clicks";
 import { headers } from "next/headers";
 import { pickRunningOrNext } from "@/lib/daily-schedule";
 import { clientIp, ipBlocked } from "@/lib/ip";
-import { isScannerAgent } from "@/lib/scanner";
+import { isScannerAddress, isScannerAgent } from "@/lib/scanner";
 import { renderMove } from "@/lib/outcomes";
 import { reportRoomJoin, type Movable } from "@/lib/move-in";
 
@@ -27,9 +27,9 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const sp = await searchParams;
   const h = await headers();
   const ua = h.get("user-agent");
-  // An email security scanner opening the link (SPEC-link-opens.md, A): it sees the page, nothing else happens.
-  const scanner = isScannerAgent(ua);
   const ip = clientIp(h);
+  // An email security scanner opening the link (SPEC-link-opens.md, A; the address tell of SPEC-friday-unattended.md, D): it sees the page, nothing else happens.
+  const scanner = isScannerAgent(ua) || (ip && TOKEN_RE.test(token) ? await isScannerAddress(ip, token) : false);
   if (await ipBlocked(ip)) return <main className="flex min-h-screen items-center justify-center p-6 text-center text-base text-muted">This room isn&apos;t available.</main>;
   const r = TOKEN_RE.test(token) ? await registrantByToken(token).catch(() => null) : null;
   if (!r) {

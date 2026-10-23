@@ -101,7 +101,7 @@ export function postedFrom(rows: Array<{ status: string; skip_reason?: string | 
 /** The owed line only from here (SPEC-post-session.md, B): a quiet night owes a handful between runs; a stalled push owes hundreds. */
 export const OWED_FLOOR = 50;
 
-export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[]; /** outcome tags still to push to ActiveCampaign (SPEC-post-session.md, B) */ owed?: number; /** the last link sweep's counts (SPEC-friday-unattended.md, E4): a Zap that stops writing shows here the next morning */ links?: { written: number; created: number; pending: number } | null }): string | null {
+export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[]; /** outcome tags still to push to ActiveCampaign (SPEC-post-session.md, B) */ owed?: number; /** the last link sweep's counts (SPEC-friday-unattended.md, E4): a Zap that stops writing shows here the next morning */ links?: { at?: string; written: number; created: number; pending: number; prev?: { at: string; written: number; created: number; pending: number } | null } | null; now?: Date }): string | null {
   const n = o.questions.length;
   const plural = (k: number, one: string, many: string) => (k === 1 ? one : many);
   const lines: string[] = [];
@@ -124,8 +124,11 @@ export function digestText(o: { questions: Array<{ question: string; asked: numb
   }
   const st = o.stale ?? [];
   if (st.length) lines.push(`${st.length} ${plural(st.length, "answer has", "answers have")} waited over a week for your OK: ${st.join(", ")}. ${o.url}`);
-  const lk = o.links;
-  if (lk && (lk.written || lk.pending - lk.written > 0)) lines.push(`Links: the sweep gave ${lk.written} contact${lk.written === 1 ? "" : "s"} a personal link yesterday${lk.created ? ` (${lk.created} needed a room row)` : ""}${lk.pending - lk.written > 0 ? `; ${lk.pending - lk.written} still blank` : ""}.`);
+  // Both of yesterday's runs (3 PM and 3 AM) count; the previous run rides inside the last one.
+  const dayAgo = (o.now ?? new Date()).getTime() - 24 * 3600 * 1000;
+  const runs = [o.links, o.links?.prev].filter((r): r is NonNullable<typeof r> => Boolean(r) && (!r!.at || new Date(r!.at).getTime() >= dayAgo));
+  const lk = runs.length ? { written: runs.reduce((n, r) => n + r.written, 0), created: runs.reduce((n, r) => n + r.created, 0), blank: Math.max(0, (o.links?.pending ?? 0) - (o.links?.written ?? 0)) } : null;
+  if (lk && (lk.written || lk.blank > 0)) lines.push(`Links: the sweep gave ${lk.written} contact${lk.written === 1 ? "" : "s"} a personal link yesterday${lk.created ? ` (${lk.created} needed a room row)` : ""}${lk.blank > 0 ? `; ${lk.blank} still blank` : ""}.`);
   if (o.owed === -1) lines.push("Outcome tags owed to ActiveCampaign: unknown (the plan failed; check the push).");
   else if (o.owed !== undefined && o.owed >= OWED_FLOOR) lines.push(`Outcome tags owed to ActiveCampaign: ${o.owed} (the push is behind).`);
   return lines.length ? lines.join("\n") : null;

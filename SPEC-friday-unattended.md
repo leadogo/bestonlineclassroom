@@ -85,7 +85,9 @@ Friday, nothing between 3:30 and 7:45 PM; the switch to On is a click Friday mor
   writes one; a *Wrong* on a silent one with his line → the same approved row (she answers it next time); *Right* and
   *Not sure* → nothing. The 9 AM digest's "answers waiting" line is untouched (nothing is staged, he approved on the page).
 - **Round 2**: the same script with a new seed and `--round r2` after the apply step and the two Kaitlyn modules below
-  are deployed, republished to the same page (round 1's grades stay in the store). Target before 3:30 PM Friday.
+  are deployed, republished to the same page (round 1's grades stay in the store). **Done Oct 22 11:20 PM**: the 11
+  he marked wrong re-run with his answers in, plus 39 fresh; through the shipping code: 40 would post, 5 stay silent,
+  5 skip (the three asides among them), no "call" before minute 75, the Katherine figure at minute 64.
 - **Round 1 graded (Oct 22, 9:11 to 9:35 PM MT): 39 right, 11 wrong.** By what she would do: posted lines 26 right
   and 7 wrong, silences 10 right and 3 wrong, skips 3 right and 1 wrong. The apply step, keyed by hand where the
   replay's key is broader than his fix:
@@ -148,11 +150,15 @@ Friday, nothing between 3:30 and 7:45 PM; the switch to On is a click Friday mor
   and "moved in today" on the desk and in the post, the views recomputed) onto today's main (merges clean, checked Oct
   22 9:30 PM); migration 043; deploy Friday morning. Replay check: tonight reads 70 people and a peak in the fifties,
   not 216 and 167.
-- **The address tell** (decision 5, new): the Windows-agent wave shares addresses. `link_clicks.ip inet` (migration 044,
-  additive, logged at render from `clientIp`); at a `/j` render, an address that opened two or more *other* personal
-  tokens in the last ten minutes marks this open `bot = true` and takes the scanner path (no move, no `room_join`).
-  Tonight that catches the 112 (60 addresses, 3 of them 32 rows) and no person: a household on one address opens one
-  token. `isScannerIp(rows)` pure in `scanner.ts`, one indexed query (`link_clicks (ip, at desc)`).
+- **The address tell** (decision 5, new; as built Oct 22 night): the Windows-agent wave shares addresses.
+  `link_clicks.ip inet` (migration 044, additive, logged at render from `clientIp`, only a real address). An address
+  that opened **four or more different** personal tokens in the last ten minutes (`isScannerAddressRows`, pure, in
+  `scanner.ts`; one indexed query on `link_clicks (ip, at desc)`) is a fleet: at the `/j` render the open takes the
+  scanner path (`bot = true`, no `room_join`; the row still moves, as PR #4 decided for the agent tell), and at the
+  heartbeat its beats are dropped, so no attendance row. Four, not three: a brokerage office is one or two laptops on
+  one address. Tonight that catches the heavy addresses (three of them 32 of the 112 rows); the two-minute rule
+  catches the rest of the wave in every count. A false positive (four real people behind one office or carrier
+  address inside ten minutes) loses attendance rows for at most ten minutes; chat is unaffected.
 - **Still true after this**: a scanner that reaches the live room with a fresh address still writes a row (the heartbeat
   does not know); the two-minute rule keeps it out of every count. Reminders and Katherine's 4 PM list read tonight's
   registrants, so a scanner that no longer moves rows no longer gets them.
@@ -186,10 +192,16 @@ back, Theresa among them.
   missed (the outcomes cron re-sends `registered` to anyone without the tag). The site's Zap keeps writing what it
   writes; the room's value wins because it writes last and checks first. A personal link already in the field is left
   alone (one `GET /contacts/{id}/fieldValues` before the write).
-- **E2, the sweep.** `scripts/ac-personal-links.ts` moves into `src/lib/ac-links.ts` (the plan pure: which tagged
-  contacts need a write, the room row to create when there is none, `sessionDateFor`) and `/api/cron/ac-links`
-  (hourly `20 * * * *`; runs when it is 3 or 15 o'clock in America/Edmonton and `events.ac_links_slot` is not this
-  slot; budget 240 s; `?dry=1` lists). Scope: tag 304 (`ailgr_registered`) **and every active member of lists 4740
+- **E2, the sweep.** `src/lib/ac-links.ts` (the plan pure: which contacts need a write, the room row to create when
+  there is none, `sessionDateFor`, `linkSlot`) behind `/api/cron/ac-links` (hourly `20 * * * *`; runs once in the 3 AM
+  slot and once in the 3 PM slot in America/Edmonton, `events.ac_links_slot` records it so a failed run is retried the
+  next hour; budget 240 s; `?dry=1` lists) and `scripts/ac-links-sweep.ts` for the by-hand run. **Two modes (found at
+  build time, Oct 22 11 PM: the full read of 14,789 contacts took 241 s, the cron's whole budget):** the cron is
+  incremental, the join field read in bulk once (about a minute), then the tagged contacts *created* and the list
+  members *updated* in the last 3 days (a contact added to "30 day openers" is an update; `updated_after` alone is
+  useless, 10,410 of 13,967 tagged contacts were "updated" since Monday); the script's `--full` reads every contact
+  and is how the backlog was cleared tonight (883 contacts). Each write re-reads the contact's own field rows (the
+  replay field's id), so a half-written contact is finished on the next pass. Scope: tag 304 (`ailgr_registered`) **and every active member of lists 4740
   "AI For Agents Masterclass" and 4743 "30 day openers"** (Tuesday's email list: 6,305 active, 823 without a link, 399
   of the first 400 untagged, found Oct 22 11 PM; William: "make sure that all clients for Tuesday's upcoming email
   won't have missing links"), field 47 not a personal link, test samples out; a contact with no room row gets one (`source = legacy`, dated yesterday, so tonight's count and the reminders

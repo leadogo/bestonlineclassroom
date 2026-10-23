@@ -101,7 +101,8 @@ export async function setLinks(email: string, token: string): Promise<boolean> {
   if (have.some((f) => f.field === JOIN_FIELD && PERSONAL_RE.test(f.value))) return true;
   const links = watchLinks(token);
   let ok = true;
-  for (const [field, value] of [[JOIN_FIELD, links.join], [REPLAY_FIELD, links.replay]] as const) {
+  // The join field last: it is the "done" marker, so a failed replay write is retried by the sweep.
+  for (const [field, value] of [[REPLAY_FIELD, links.replay], [JOIN_FIELD, links.join]] as const) {
     const existing = have.find((f) => f.field === field);
     const body = JSON.stringify({ fieldValue: { contact: cid, field, value } });
     const r = existing ? await api(`/fieldValues/${existing.id}`, { method: "PUT", body }) : await api("/fieldValues", { method: "POST", body });

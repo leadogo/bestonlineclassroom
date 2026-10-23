@@ -77,12 +77,13 @@ export function laterShape(n: number): string {
 }
 
 /** A line that opens with @someone who is not on the team is an aside to another attendee, never a question for her (William's grade on "@iPhone $$?", Oct 22). "@Katherine" and "@Kaitlyn" are for her. */
-export const TEAM_HANDLES = ["katherine", "kaitlyn", "kevin", "william", "akash", "team"];
+export const TEAM_HANDLES = ["katherine", "kaitlyn", "kevin", "william", "akash", "team", "everyone", "all", "mods", "host"];
 export function isAsideToAttendee(body: string): boolean {
   const m = /^\s*@([^\s:,]+)/.exec(body);
   if (!m) return false;
   const who = m[1].toLowerCase().replace(/[^a-z]/g, "");
-  return !TEAM_HANDLES.some((h) => who.startsWith(h));
+  if (who.length < 3) return false;
+  return !TEAM_HANDLES.some((h) => who.startsWith(h) || h.startsWith(who));
 }
 const q = (list: string[]) => list.map((s) => JSON.stringify(s)).join(" · ");
 
@@ -234,7 +235,8 @@ export function marketLine(body: string, markets: MarketCount[]): string | null 
 
 /** What a reply may never contain, whatever the model wrote; the reply becomes ask_william with the draft kept. `beforePitch`: nobody is sent to the call before booking opens (SPEC-friday-unattended.md, C). */
 export function guard(text: string, beforePitch = false): string | null {
-  if (beforePitch && /\b(?:book(?:ing)?(?: a| the| your)? call|(?:the|a|your|free|that) call|consult(?:ation)?|book(?:ing)? (?:a |the |your )?(?:spot|time|slot))\b/i.test(text)) return "call talk before the pitch";
+  // The call as a thing to book ("a quick call", "the free 15-minute call", "our call", "call with the team", "book a spot", "consult"); "she calls the leads" and "call them yourself" are not booking talk (review of Oct 22).
+  if (beforePitch && /\b(?:a|an|the|your|our|this|that|free|quick|strategy|discovery|intro|onboarding|setup)\s+(?:[\w-]+\s+){0,3}call\b|\bcall with\b|\bbook(?:ing|ed)?\b[^.!?]{0,40}\bcall\b|\bconsult(?:ation)?\b|\bbook(?:ing)?\s+(?:a |the |your )?(?:spot|time|slot)\b/i.test(text)) return "call talk before the pitch";
   // The two figures William approved Oct 17 (Katherine's subscription, in any spelling, and the ad-budget example) pass; every other figure does not.
   const t = text.replace(/\$250\s?(?:a month|\/\s?mo(?:nth)?|per month|monthly)/gi, "").replace(/\$10 a day/gi, "");
   // A figure with "a month" is a price; "one to four a month" (how often William presents) is not.
@@ -267,8 +269,11 @@ export function parseDecision(input: unknown, opts: { beforePitch?: boolean; pic
   if (action === "reply" && !text) action = "skip";
   // A reply she is not sure of never posts: the draft goes to the desk for a moderator to replace or send (William, Oct 14).
   if (action === "reply" && o.sure === false) { action = "ask_william"; why = `not sure; ${why}`.slice(0, 140); }
-  // Before the pitch a BMS price question gets the "later" line whatever the model drafted; the Katherine figure (an allowed $250) is the one price answer that stands.
-  if (opts.beforePitch && action === "reply" && category === "price" && !/\$250/.test(text)) { text = laterShape(opts.pick ?? Math.floor(Math.random() * 1000)); why = `before the pitch; ${why}`.slice(0, 140); }
+  // Before the pitch a BMS price question gets the "later" line whatever the model drafted, unsure drafts and ask_william included (the first ask is always answered, with nobody on the desk to answer it otherwise); the Katherine figure (an allowed $250) is the one price answer that stands; the price-push ghost starts at the pitch (a second ask before it is a skip).
+  if (opts.beforePitch && category === "price") {
+    if (action === "ghost") { action = "skip"; why = `before the pitch, no price ghost; ${why}`.slice(0, 140); }
+    else if ((action === "reply" || action === "ask_william") && !/\$250/.test(text)) { action = "reply"; text = laterShape(opts.pick ?? Math.floor(Math.random() * 1000)); why = `before the pitch; ${why}`.slice(0, 140); }
+  }
   const bad = action === "reply" ? guard(text, Boolean(opts.beforePitch)) : null;
   if (bad) { action = "ask_william"; why = `draft mentions ${bad}; ${why}`.slice(0, 140); }
   // A line with an AI tell never posts on its own; the desk sees what tripped it (SPEC-kaitlyn-autopilot.md, B).
@@ -495,7 +500,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     // The roll-call guard (SPEC-kaitlyn-ghosts.md, D): a bare city or state in the first five minutes is a skip whatever the model drafted, so assisted never answers the roll-call; a skip is never a card.
     if (d.action === "reply" && d.category === "market" && isRollCallDrop(message.body, message.offset, a.event.cta_at_seconds ?? null)) Object.assign(d, { action: "skip" as const, text: "", react: "", kb: null, sure: false, why: `roll-call; ${d.why}`.slice(0, 140) });
     // A line to another attendee ("@iPhone $$?") is theirs, not hers (William's grade, Oct 22): a skip whatever the model drafted.
-    if (d.action !== "skip" && isAsideToAttendee(message.body)) Object.assign(d, { action: "skip" as const, text: "", react: "", kb: null, sure: false, why: `aside to another attendee; ${d.why}`.slice(0, 140) });
+    if ((d.action === "reply" || d.action === "ask_william") && isAsideToAttendee(message.body)) Object.assign(d, { action: "skip" as const, text: "", react: "", kb: null, sure: false, why: `aside to another attendee; ${d.why}`.slice(0, 140) });
     if (d.kb) await touchKb(reg.event_id, d.kb);
     const itself = postsItself(eff, d);
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.

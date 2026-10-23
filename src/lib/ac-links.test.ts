@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { linkPlan, linkSlot, sessionDateFor, sweepLine } from "./ac-links.ts";
+import { linkPlan, linkSlot, linkSources, sessionDateFor, sweepLine } from "./ac-links.ts";
+
+test("linkSources: incremental filters the tag by created_after and the lists by updated_after; full has no window", () => {
+  const inc = linkSources(false, "2026-10-20");
+  assert.equal(inc.length, 3);
+  assert.match(inc[0], /tagid=304.*created_after\]=2026-10-20/);
+  assert.ok(inc.slice(1).every((p) => /listid=\d+&status=1.*updated_after\]=2026-10-20/.test(p)));
+  assert.ok(linkSources(true, "2026-10-20").every((p) => !/_after/.test(p)));
+});
 
 const c = (id: string, email: string, cdate = "2026-10-21T17:00:00-05:00") => ({ id, email, cdate });
 
