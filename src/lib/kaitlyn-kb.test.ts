@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, OWED_FLOOR, postedFrom, type KbRow } from "./kaitlyn-kb.ts";
+import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, kbKey, kbQuestion, knowledgeBlock, OWED_FLOOR, postedFrom, type KbRow } from "./kaitlyn-kb.ts";
 
 const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, approved_at: p.approved ? "2026-10-17T00:00:00Z" : null, handling: "open", asked: 0, ...p });
 
@@ -84,13 +84,6 @@ test("factsLost: a rewrite that drops a figure, a link or a name is caught; a fa
   assert.deepEqual(factsLost(his, "The bonus is Katherine AI included free instead of 250/mo, see getkatherine.ai"), ["Zillow"]);
   assert.deepEqual(factsLost("Conversion runs 1% to 5%. Yes, leads close.", "Conversion runs 1% to 5%, and yes, leads have closed."), []);
   assert.deepEqual(factsLost("We're based in Edmonton and so is William.", "We're based in Edmonton, and so is William."), []);
-});
-
-test("handoffLine: one of Kevin's shapes, never empty, picks by the draw", () => {
-  const a = handoffLine(() => 0), b = handoffLine(() => 0.999);
-  assert.ok(a.length > 10 && b.length > 10);
-  assert.notEqual(a, b);
-  assert.match(a + b, /team/);
 });
 
 test("ghostBlock: the line that got them ghosted, what they said before it, and the desk's reason; nothing when there are none (SPEC-kaitlyn-ghosts.md, B3)", () => {

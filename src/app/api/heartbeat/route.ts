@@ -4,7 +4,7 @@ import { clientIp } from "@/lib/ip";
 import { cleanParams } from "@/lib/params";
 import { TOKEN_RE } from "@/lib/registrants";
 import { postDuePrompts } from "@/lib/prompts";
-import { asAutopilot, asMode, sweepHandoffs } from "@/lib/kaitlyn";
+import { asMode, sweepDeskFirst } from "@/lib/kaitlyn";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -47,8 +47,8 @@ export async function POST(request: Request) {
   if (kind === "live" && ev) {
     // Katherine's timed lines and the book-now rows ride on the room's clock; once per session each.
     after(() => postDuePrompts(ev, session_date, offset));
-    // Her hand-off line for any card the desk left for 90 s (SPEC-kaitlyn-ghosts.md, A3) and the sure replies the desk passed on (SPEC-kaitlyn-solo.md, B); nothing to do when Kaitlyn is off.
-    if (ev.kaitlyn_mode && ev.kaitlyn_mode !== "off") after(() => sweepHandoffs(ev.id, session_date, asAutopilot(ev.autopilot), offset, asMode(ev.kaitlyn_mode)));
+    // The sure replies the desk passed on for 90 s post themselves (SPEC-kaitlyn-solo.md, B); nothing to do when Kaitlyn is off.
+    if (ev.kaitlyn_mode && ev.kaitlyn_mode !== "off") after(() => sweepDeskFirst(ev.id, session_date, offset, asMode(ev.kaitlyn_mode)));
     // A seat's first heartbeat: who have we seen before under this email? Ghosted or blocked before, or a third night: ghost quietly (they still see their own rows).
     if (!prev.data && reg.data.email && !reg.data.ghosted_at) {
       const email = reg.data.email as string;

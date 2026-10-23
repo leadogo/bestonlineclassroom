@@ -60,7 +60,7 @@ export function ghostBlock(rows: Ghost[]): string {
 /** "Answered" for the digest and the audit (SPEC-kaitlyn-ghosts.md, E): a moderator line mentioning the person inside this window after their line. */
 export const ANSWER_WINDOW_MS = 15 * 60_000;
 
-/** Whether a moderator answered this person within the window of their line at `atMs`; her hand-off line (`handoffIds`) promises an answer and is not one. */
+/** Whether a moderator answered this person within the window of their line at `atMs`; a hand-off line of hers from before Oct 23 (`handoffIds`, the line is gone since SPEC-friday-unattended.md B) promised an answer and is not one. */
 export function answeredWithin(atMs: number, rid: string, told: Array<{ id?: number; mentions: string[]; created_at: string }>, handoffIds: Set<number> = new Set()): boolean {
   return told.some((m) => {
     if (m.id !== undefined && handoffIds.has(m.id)) return false;
@@ -144,16 +144,4 @@ export function factsLost(original: string, rewrite: string): string[] {
     }
   }
   return out;
-}
-
-const HANDOFF = [
-  "good one, I'll get the team to answer that properly and they'll follow up with you",
-  "let me pass that to the team so you get a proper answer, they'll reach out",
-  "I'll flag that for the team, they'll follow up with you on it",
-  "that one's better from the team, I'll have them follow up with you",
-];
-
-/** What she posts, once per person per night, when she does not know and nobody is on the desk (SPEC-kaitlyn-autopilot.md, decision 5). */
-export function handoffLine(pick: () => number = Math.random): string {
-  return HANDOFF[Math.min(HANDOFF.length - 1, Math.floor(pick() * HANDOFF.length))];
 }

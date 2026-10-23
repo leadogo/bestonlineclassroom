@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asAutopilot, asMode, delayMs, DESK_FIRST_MS, deskFirstDue, engaged, extractJson, ghostsItself, guard, HANDOFF_AFTER_MS, handoffDue, holdsReply, isRollCallDrop, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, ROLL_CALL_WINDOW_S, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, DESK_FIRST_MS, deskFirstDue, engaged, extractJson, ghostsItself, guard, holdsReply, isAsideToAttendee, isRollCallDrop, laterShape, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, ROLL_CALL_WINDOW_S, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
 import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
@@ -238,14 +238,31 @@ test("the prompt never suggests a shape the bot-tell check refuses, and the shap
   assert.match(systemPrompt(null), /3 in Boston, 7 across the state/);
 });
 
-test("handoffDue: a card left pending 90 s with no hand-off tonight and no human reply gets the line; acted on, answered, or younger cards do not (A3)", () => {
-  const t0 = Date.parse("2026-10-19T23:09:00Z");
-  const card = (status: string, ageMs: number) => ({ status, created_at: new Date(t0 - ageMs).toISOString() });
-  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS), t0, false, false), true);
-  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS - 1), t0, false, false), false);
-  assert.equal(handoffDue(card("edited", HANDOFF_AFTER_MS * 2), t0, false, false), false);
-  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS * 2), t0, true, false), false);
-  assert.equal(handoffDue(card("pending", HANDOFF_AFTER_MS * 2), t0, false, true), false);
+test("before the pitch nobody is sent to the call (SPEC-friday-unattended.md, C): guard, the price override, the aside rule", () => {
+  for (const s of ["you need to book a call", "that's what the free call is for", "the call covers setup", "book your spot", "a quick consult sorts that out"]) assert.equal(guard(s, true), "call talk before the pitch", s);
+  for (const s of ["he gets to that near the end of the class", "3 in Boston so you're good", "the team confirms by text and email"]) assert.equal(guard(s, true), null, s);
+  assert.equal(guard("that's what the free call is for"), null, "after the pitch the call line stands");
+  // The Katherine figure in any spelling passes; a figure without the dollar sign is still a price.
+  for (const s of ["$250 a month", "it's $250/mo for Katherine", "$250 per month", "$250 monthly"]) assert.equal(guard(s), null, s);
+  assert.equal(guard("it's 250/mo on her own"), "a price");
+  // A BMS price reply before the pitch becomes a "later" shape, and a different pick gives a different shape; the Katherine figure stands.
+  const price = parseDecision({ action: "reply", category: "price", text: "you need to book a call, it depends on your market", sure: true, why: "price" }, { beforePitch: true, pick: 1 });
+  assert.equal(price.action, "reply");
+  assert.ok(SHAPES.later.includes(price.text), price.text);
+  assert.notEqual(parseDecision({ action: "reply", category: "price", text: "x", sure: true }, { beforePitch: true, pick: 2 }).text, price.text);
+  assert.equal(parseDecision({ action: "reply", category: "price", text: "Katherine on her own is $250 a month", sure: true }, { beforePitch: true, pick: 1 }).text, "Katherine on her own is $250 a month");
+  // Any other reply that still says "call" before the pitch is silenced and flagged; after the pitch it posts.
+  const setup = { action: "reply", category: "product", text: "the call covers setup step by step", sure: true, why: "setup" };
+  assert.equal(parseDecision(setup, { beforePitch: true }).action, "ask_william");
+  assert.match(parseDecision(setup, { beforePitch: true }).why, /call talk before the pitch/);
+  assert.equal(parseDecision(setup).action, "reply");
+  assert.equal(parseDecision(setup, { beforePitch: false }).action, "reply");
+  assert.ok(SHAPES.later.every((s) => !guard(s, true) && !/\bcall\b/i.test(s)));
+  // A line that opens with @another attendee is an aside; the team's handles are for her.
+  for (const s of ["@iPhone $$?", "@Pat Dinkens are you in Houston?", "  @Sam lol same"]) assert.equal(isAsideToAttendee(s), true, s);
+  for (const s of ["@Katherine what the other one he mentioned?", "@Kaitlyn how much?", "@Kevin from William's Team sorry didn't see it", "how much is it?", "@ William?"]) assert.equal(isAsideToAttendee(s), false, s);
+  assert.equal(laterShape(0), SHAPES.later[0]);
+  assert.equal(laterShape(SHAPES.later.length + 1), SHAPES.later[1]);
 });
 
 test("the ghost bullet carries William's cases and the never-list (SPEC-kaitlyn-ghosts.md, B1)", () => {
