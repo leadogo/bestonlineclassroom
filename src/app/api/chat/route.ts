@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { MAX_BODY, POST_GAP_MS, slackLine } from "@/lib/chat";
 import { autoGhostReason, checkMessage } from "@/lib/chat-filter";
 import { db } from "@/lib/db";
+import { moveIn, reportRoomJoin, roomDateFor } from "@/lib/move-in";
 import { clientIp, ipBlocked } from "@/lib/ip";
 import { mine } from "@/lib/reactions";
 import { TOKEN_RE } from "@/lib/registrants";
@@ -22,12 +23,14 @@ const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offs
 
 async function registrant(token: string) {
   if (!TOKEN_RE.test(token)) return null;
-  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases, kaitlyn_mode, kaitlyn_facts, cta_at_seconds, autopilot, captions_url, captions_offset_seconds, chapters, outline)").eq("token", token).maybeSingle();
+  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, token, site_registration_id, room_join_reported_at, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases, kaitlyn_mode, kaitlyn_facts, cta_at_seconds, autopilot, captions_url, captions_offset_seconds, chapters, outline)").eq("token", token).maybeSingle();
   if (!data) return null;
   const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean; belief_phrases?: string[]; kaitlyn_mode?: string | null; kaitlyn_facts?: string | null; cta_at_seconds?: number | null; autopilot?: string | null; captions_url?: string | null; captions_offset_seconds?: number | string | null; chapters?: Array<{ at: number; label: string }>; outline?: string | null } | null;
-  const start = ev ? sessionFor(scheduleOf(ev), data.session_date as string)?.start ?? null : null;
+  // The date the room shows (SPEC-link-opens.md, B): the running session when it is live and this row still sits behind it (a scanner-looking open the render did not move, a Linux-desktop agent). Reads and lines use it; a POSTed line moves the row.
+  const { date: roomDate, behind } = ev ? roomDateFor(scheduleOf(ev), data.session_date as string) : { date: data.session_date as string, behind: false };
+  const start = ev ? sessionFor(scheduleOf(ev), roomDate)?.start ?? null : null;
   // Kaitlyn's view of the event: her mode and switches, the fact sheet, and the transcript of the presentation (the room's captions) so she knows what William is saying when they type.
-  return { ...data, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled), beliefPhrases: ev?.belief_phrases ?? undefined, kaitlyn: { kaitlyn_mode: asMode(ev?.kaitlyn_mode), kaitlyn_facts: ev?.kaitlyn_facts ?? null, cta_at_seconds: ev?.cta_at_seconds ?? null, autopilot: asAutopilot(ev?.autopilot), captions_url: ev?.captions_url ?? null, captions_offset_seconds: ev?.captions_offset_seconds ?? 0, chapters: Array.isArray(ev?.chapters) ? ev!.chapters : [], video_seconds: ev?.video_seconds ?? null, outline: ev?.outline ?? null } };
+  return { ...data, roomDate, behind, sessionStart: start ? start.toISOString() : null, katherine: Boolean(ev?.katherine_enabled), beliefPhrases: ev?.belief_phrases ?? undefined, kaitlyn: { kaitlyn_mode: asMode(ev?.kaitlyn_mode), kaitlyn_facts: ev?.kaitlyn_facts ?? null, cta_at_seconds: ev?.cta_at_seconds ?? null, autopilot: asAutopilot(ev?.autopilot), captions_url: ev?.captions_url ?? null, captions_offset_seconds: ev?.captions_offset_seconds ?? 0, chapters: Array.isArray(ev?.chapters) ? ev!.chapters : [], video_seconds: ev?.video_seconds ?? null, outline: ev?.outline ?? null } };
 }
 
 /** GET ?token=&after=<id>&since=<iso>: new real messages after `after`, and deletes/reactions since `since`. */
@@ -40,7 +43,7 @@ export async function GET(request: Request) {
   const since = q.get("since") ?? "";
   // Ghosted people see their own rows; nobody else does.
   const scope = () => {
-    const q = db().from("chat_messages").select(SELECT).eq("event_id", r.event_id).eq("session_date", r.session_date).or(`and(visibility.eq.all,visible_to.is.null),registrant_id.eq.${r.id},visible_to.eq.${r.id}`);
+    const q = db().from("chat_messages").select(SELECT).eq("event_id", r.event_id).eq("session_date", r.roomDate).or(`and(visibility.eq.all,visible_to.is.null),registrant_id.eq.${r.id},visible_to.eq.${r.id}`);
     return r.sessionStart ? q.gte("created_at", r.sessionStart) : q;
   };
 
@@ -53,7 +56,7 @@ export async function GET(request: Request) {
   let updated: Array<{ id: number; reactions: Record<string, number>; deleted: boolean }> = [];
   if (since && after_ > 0) {
     // A line hidden after a ghost (visibility "author") reads as deleted to everyone but its author, who keeps seeing it.
-    const u = await db().from("chat_messages").select("id, reactions, deleted_at, author_name, visibility, registrant_id").eq("event_id", r.event_id).eq("session_date", r.session_date).lte("id", after_).gt("updated_at", since).limit(200);
+    const u = await db().from("chat_messages").select("id, reactions, deleted_at, author_name, visibility, registrant_id").eq("event_id", r.event_id).eq("session_date", r.roomDate).lte("id", after_).gt("updated_at", since).limit(200);
     updated = (u.data ?? []).map((m) => ({ id: m.id, reactions: (m.reactions as Record<string, number>) ?? {}, deleted: Boolean(m.deleted_at) || (m.visibility !== "all" && m.registrant_id !== r.id), name: m.author_name as string }));
   }
   const own = after_ === 0 ? await mine(r.id, news.map((m) => m.id)) : [];
@@ -104,12 +107,14 @@ export async function POST(request: Request) {
   if (wanted.length) {
     const rids = wanted.filter((m) => /^[0-9a-f-]{36}$/i.test(m));
     const mids = wanted.filter((m) => /^m:[0-9a-f-]{36}$/i.test(m)).map((m) => m.slice(2));
-    if (rids.length) for (const x of (await db().from("registrants").select("id, first_name").eq("event_id", r.event_id).eq("session_date", r.session_date).in("id", rids)).data ?? []) { mentions.push(x.id as string); mention_names.push(x.first_name as string); }
+    if (rids.length) for (const x of (await db().from("registrants").select("id, first_name").eq("event_id", r.event_id).eq("session_date", r.roomDate).in("id", rids)).data ?? []) { mentions.push(x.id as string); mention_names.push(x.first_name as string); }
     if (mids.length) for (const x of (await db().from("team_members").select("id, display_name").in("id", mids)).data ?? []) { mentions.push(`m:${x.id}`); mention_names.push(x.display_name as string); }
   }
+  // A line is a person (SPEC-link-opens.md, B): a row the render did not move becomes tonight's now, with the room_join the render skipped; a move another row of theirs blocks still posts the line under tonight.
+  if (r.behind && (await moveIn(r, r.roomDate))) after(() => reportRoomJoin(r, r.roomDate));
   const ins = await db()
     .from("chat_messages")
-    .insert({ event_id: r.event_id, session_date: r.session_date, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: ghosted ? "author" : "all", mentions, mention_names, is_question: isQuestion(body), belief: isBelief(body, r.beliefPhrases) })
+    .insert({ event_id: r.event_id, session_date: r.roomDate, registrant_id: r.id, author_name: r.first_name, role: "attendee", body, offset_seconds: offset, visibility: ghosted ? "author" : "all", mentions, mention_names, is_question: isQuestion(body), belief: isBelief(body, r.beliefPhrases) })
     .select(SELECT)
     .single();
   if (ins.error) {
@@ -117,12 +122,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Please try again." }, { status: 500 });
   }
   if (r.source !== "test" && !ghosted) after(() => postToChatChannel(slackLine(r.first_name, r.email, body)));
-  if (callMe && phone) after(() => forwardCallRequest({ registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, firstName: r.first_name, email: r.email, phone, message: String(b.body ?? "").slice(0, 500), offset }));
+  if (callMe && phone) after(() => forwardCallRequest({ registrantId: r.id, eventId: r.event_id, sessionDate: r.roomDate, firstName: r.first_name, email: r.email, phone, message: String(b.body ?? "").slice(0, 500), offset }));
   after(() => tagNow(r.id, "asked_question"));
   // Katherine answers the replay question (switch per event), a few seconds later, once per person.
-  if (r.katherine && !ghosted) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name }, body, offset));
+  if (r.katherine && !ghosted) after(() => katherineReply({ id: r.id, event_id: r.event_id, session_date: r.roomDate, first_name: r.first_name }, body, offset));
   // Kaitlyn decides what to do with it (switch per event): drafts for the desk in shadow, posts the routine replies herself in assisted and auto.
   // A ghosted person is still answered; her replies to them are private (SPEC-kaitlyn-ghosts.md, B0).
-  if (r.kaitlyn.kaitlyn_mode !== "off") after(() => kaitlynHandle({ reg: { id: r.id, event_id: r.event_id, session_date: r.session_date, first_name: r.first_name, source: String(r.source ?? ""), ghosted, email: r.email }, event: r.kaitlyn, message: { id: ins.data.id as number, body, offset, sessionMinute: r.sessionStart ? Math.max(0, Math.floor((Date.now() - new Date(r.sessionStart).getTime()) / 60_000)) : null }, katherine: r.katherine }));
+  if (r.kaitlyn.kaitlyn_mode !== "off") after(() => kaitlynHandle({ reg: { id: r.id, event_id: r.event_id, session_date: r.roomDate, first_name: r.first_name, source: String(r.source ?? ""), ghosted, email: r.email }, event: r.kaitlyn, message: { id: ins.data.id as number, body, offset, sessionMinute: r.sessionStart ? Math.max(0, Math.floor((Date.now() - new Date(r.sessionStart).getTime()) / 60_000)) : null }, katherine: r.katherine }));
   return Response.json({ message: ins.data });
 }

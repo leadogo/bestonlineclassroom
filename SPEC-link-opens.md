@@ -5,7 +5,7 @@ Module of [SPEC.md](SPEC.md). Depends on: `room` (the `/j` page, the heartbeat),
 `SPEC-show-rate-recovery.md`, and leadogo's room-count post. Proposed Oct 20 2026 late, from the Tuesday session's
 numbers (report doc: "Tuesday Oct 20 Session Report"). Nothing here changes until William approves this spec.
 
-**Status.** Oct 21 midday, William: build "all other smaller things" → A, B, D and G are approved and scheduled for Thursday Oct 22 morning (SPEC-post-session.md, batch 2); C (leadogo `room_join` at the two-minute mark) stays a decision for him; F ran 9:41 AM to 1:00 PM: 7,140 contacts written, 6,898 room rows created (dated 2023-01-31 to 2026-10-20, none tonight), 3 contacts hit a 502 on a field write; the field now holds 13,804 personal links and 17 door values that sit outside the script's scope (no `ailgr_registered` tag), re-run shows 0 pending; undo plan `tasks/runs/ac-personal-links-all-2026-10-21.json`; E unchanged. The Oct 20 "missed" tags include about 300 scanner-moved rows; William chose to let the tag push run as is (Oct 21) and have A and B stop it recurring Thursday.
+**Status.** Oct 21 midday, William: build "all other smaller things" → A, B, D and G are approved and scheduled for Thursday Oct 22 morning (SPEC-post-session.md, batch 2); C (leadogo `room_join` at the two-minute mark) stays a decision for him; F ran 9:41 AM to 1:00 PM: 7,140 contacts written, 6,898 room rows created (dated 2023-01-31 to 2026-10-20, none tonight), 3 contacts hit a 502 on a field write; the field now holds 13,804 personal links and 17 door values that sit outside the script's scope (no `ailgr_registered` tag), re-run shows 0 pending; undo plan `tasks/runs/ac-personal-links-all-2026-10-21.json`; E unchanged. **Built Oct 21 afternoon on branch `link-opens` (A, B, D, G; migration 043), reviewed twice and simplified on the data:** Oct 13 to 20, no real person ever appeared only through a Linux-desktop agent (0 of 415) and no chat-only person stayed under two minutes (0), so (1) the scanner tell is the Linux desktop agent only (`src/lib/scanner.ts`; the last 7 days of human clicks run Chrome 155, 153, 154, so a build threshold was dropped), (2) **a scanner's beats are dropped at the heartbeat**: no attendance row, no address, no first-beat ghost logic, nothing to count or move, (3) the person rule is two minutes or a click everywhere (the chat clause is gone), (4) `/j` moves nobody on a scanner open (`renderMove`, tested), reports no `room_join`, and logs `bot` on every click row (`/w` and `/replay` too; the per-source joins and the door's waiting count read `bot = false`), (5) a person the render misread (a Linux-desktop human) is moved in by the chat on their first POSTed line or by the offer click (`src/lib/move-in.ts`, with the `room_join` the render skipped), and the chat reads and writes under the date the room shows meanwhile, (6) the desk, `/api/metrics`, the per-source joins and the typical-night history count persons with `arriving`, `visits`, `moved_in`, `registered_tonight` and `joined_tonight`, and `show_up_rate` = persons registered tonight / registered tonight, (7) the views carry `joined` = persons, `visited`, `visits`, `moved_in` and `joined_moved_in`, and a sub-two-minute row no longer "saw the offer"; `/api/metrics/registrations` gains `person` beside `joined` for the site (decision 3 stays William's). Third review (same afternoon): smart-TV and console agents say Linux and are people (excluded from the tell); the room's date for a row is one rule (`roomDateFor` in `src/lib/move-in.ts`, tested: a row whose own session has not ended, a future row or a preview of one, is never moved), the `room_join` report is one function the join page, the chat and the click share, run in `after()`; the desk's picker and head count take a chatter under two minutes. **Audit, monthly:** persons whose /j clicks were only Linux-desktop agents (the query in Testing); if it ever shows people, the tell gets an address list. **Deploy Thursday Oct 22 morning: migration 043 first, then merge** (the click log and the click readers need the `bot` column; the render move needs `moved_in_at`). **Oct 21 1:20 PM, William: "whatever happened yesterday was great so I don't want us to regress from that."** Checked: of Oct 20's 131 people, 40 had a scanner open their link first, and for 30 of them the scanner's move is what put them on the 30-minute reminder before their own tap; 4 of the 30 booked. So the row move on a scanner open STAYS (it is the re-engagement touch); a scanner open now moves the row, reports no `room_join`, writes no attendance row (its beats are dropped) and counts nowhere. The Oct 20 "missed" tags include about 300 scanner-moved rows; William chose to let the tag push run as is (Oct 21) and have A and B stop it recurring Thursday.
 
 ## What happened (Tue Oct 20)
 - The room wrote 259 live attendance rows; 131 were people (watched two minutes or more, chatted, or clicked the
@@ -43,7 +43,7 @@ numbers (report doc: "Tuesday Oct 20 Session Report"). Nothing here changes unti
   on the 30- and 15-minute reminders, a second touch worth keeping.
 
 ## Objective
-Every published count is people. A scanner open moves nobody, emails nobody, calls nobody and counts nowhere.
+Every published count is people. A scanner open writes no attendance row, reports no `room_join` and counts nowhere; it still moves the row into tonight, because that move is the re-engagement touch (Oct 20: 30 of the 131 people and 4 of the 37 bookings came by a scanner's open → the 30-minute reminder → their own tap).
 Everyone in ActiveCampaign holds a personal link, so no promo email lands on the door. The desk still sees a wave
 arriving, labelled as such.
 
@@ -58,8 +58,9 @@ arriving, labelled as such.
   tell marked 1,334 of 2,359 clicks tonight. Address lists come later if the audit shows misses (decision 2).
 
 ## Changes
-A. **The `/j` page**: a scanner open renders the room as today (a sandbox sees a page, nobody minds) but does not move
-   the row and does not report `room_join`; the click is logged with `bot = true` (new column).
+A. **The `/j` page**: a scanner open renders the room and moves the row as today (the move puts the contact on tonight's
+   reminders and the missed sequence, the touch Oct 20 ran on) but reports no `room_join`; the click is logged with
+   `bot = true` (new column); the heartbeat drops the scanner's beats, so no attendance row ever exists for it.
 B. **The row move** stays at render for a human-looking open (decision 4: a 4 PM tap still earns the 30- and
    15-minute emails) and happens as a backstop in the heartbeat route when a row becomes a person while its
    `session_date` is not the running session. `registrants.moved_in_at` (new) records the move.
@@ -130,7 +131,8 @@ outside 3:30 to 7:45 PM MT. Rollback: the columns are additive; one flag returns
    audit shows misses.
 3. leadogo's `room_join` moves to the two-minute mark and the show rate drops to the real level (one measure,
    re-based after 14 days). The `room_watch` road only if continuity of the old number matters more.
-4. The row move stays at render for human-looking opens, so a 4 PM tap still earns the reminder emails.
+4. The row move stays at render for every open, scanner or human: a 4 PM tap earns the reminder emails, and so does a
+   scanner's open (Oct 21: that path fed 30 people and 4 bookings on Oct 20).
 5. The door backfill runs the existing script over every contact age (7,143 contacts, all created before Aug 1
    2026), and the automation 192 step is removed.
 6. "Arriving" shows beside "in the room"; the Oct 20 report's numbers are the first on the new rule.

@@ -13,6 +13,9 @@ import { logClick } from "@/lib/clicks";
 import { headers } from "next/headers";
 import { pickRunningOrNext } from "@/lib/daily-schedule";
 import { clientIp, ipBlocked } from "@/lib/ip";
+import { isScannerAddress, isScannerAgent } from "@/lib/scanner";
+import { renderMove } from "@/lib/outcomes";
+import { reportRoomJoin, type Movable } from "@/lib/move-in";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +27,13 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const sp = await searchParams;
   const h = await headers();
   const ua = h.get("user-agent");
-  if (await ipBlocked(clientIp(h))) return <main className="flex min-h-screen items-center justify-center p-6 text-center text-base text-muted">This room isn&apos;t available.</main>;
+  const ip = clientIp(h);
+  // An email security scanner opening the link (SPEC-link-opens.md, A; the address tell of SPEC-friday-unattended.md, D): it sees the page, nothing else happens.
+  const scanner = isScannerAgent(ua) || (ip && TOKEN_RE.test(token) ? await isScannerAddress(ip, token, ua) : false);
+  if (await ipBlocked(ip)) return <main className="flex min-h-screen items-center justify-center p-6 text-center text-base text-muted">This room isn&apos;t available.</main>;
   const r = TOKEN_RE.test(token) ? await registrantByToken(token).catch(() => null) : null;
   if (!r) {
-    after(() => logClick({ path: "j", outcome: "invalid", token, userAgent: ua }));
+    after(() => logClick({ path: "j", outcome: "invalid", token, userAgent: ua, bot: scanner, ip }));
     // A real-looking token nobody holds any more (an old email after a cleanup): into the webinar as a guest
     // rather than a wall. Garbage in the address still gets the page below.
     if (TOKEN_RE.test(token)) {
@@ -54,7 +60,7 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     // A client on the wall (SPEC-phase7.md): a bland 404, logged, one Slack line; a moderator's block keeps the courteous page.
     if (r.block_reason === "client") {
       after(async () => {
-        await logClick({ path: "j", outcome: "walled", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src: typeof sp.src === "string" ? sp.src : null, userAgent: ua });
+        await logClick({ path: "j", outcome: "walled", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src: typeof sp.src === "string" ? sp.src : null, userAgent: ua, bot: scanner, ip });
         await tellWallHit(r, r.event.title, "join").catch(() => {});
       });
       notFound();
@@ -65,24 +71,20 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   const outcome = buildRoom(r.event, r, sp, new Date(), { team });
   const src = typeof sp.src === "string" ? sp.src : null;
   if (outcome.kind === "ended") {
-    after(() => logClick({ path: "j", outcome: "ended", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua }));
+    after(() => logClick({ path: "j", outcome: "ended", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua, bot: scanner, ip }));
     redirect(outcome.to);
   }
-  // An old link used for a later session: the person now belongs to that session (chat, presence, numbers).
-  if (outcome.rejoinDate && !outcome.props.preview) {
-    await db().from("registrants").update({ session_date: outcome.rejoinDate }).eq("id", r.id);
-    r.session_date = outcome.rejoinDate;
+  // An old link used for a later session: the person now belongs to that session (chat, presence, numbers). A scanner's open moves the row too (William, Oct 21: that move is the reminder touch that fed 30 people and 4 bookings on Oct 20); its beats are dropped at the heartbeat and it reports no room_join (SPEC-link-opens.md, A).
+  const to = outcome.rejoinDate;
+  if (to && renderMove(to, Boolean(outcome.props.preview))) {
+    const mv = await db().from("registrants").update({ session_date: to, moved_in_at: new Date().toISOString() }).eq("id", r.id);
+    if (mv.error) console.error("[join] move failed", { code: mv.error.code });
+    r.session_date = to;
   }
-  if (!outcome.props.preview) after(() => logClick({ path: "j", outcome: outcome.props.state, token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src, userAgent: ua }));
+  if (!outcome.props.preview) after(() => logClick({ path: "j", outcome: outcome.props.state, token, registrantId: r.id, eventId: r.event_id, sessionDate: outcome.rejoinDate ?? r.session_date, src, userAgent: ua, bot: scanner, ip }));
   const simulated = await getSimulatedRows(r.event.id).catch(() => []);
   // ponytail: the site's /join records room_join for leadogo, the ritual sheet and Slack; calling it once here keeps
   // all three without a new contract. Replace with a direct leadogo event when analytics N2 lands.
-  if (outcome.props.state === "live" && !outcome.props.preview && r.site_registration_id && !r.room_join_reported_at) {
-    after(async () => {
-      const q = new URLSearchParams({ k: r.token, rid: r.site_registration_id as string, sd: r.session_date, ...(r.source === "test" ? { t: "1" } : {}) });
-      await fetch(`https://thefuturerealestateagent.com/join?${q}`, { redirect: "manual", signal: AbortSignal.timeout(5000) }).catch(() => {});
-      await db().from("registrants").update({ room_join_reported_at: new Date().toISOString() }).eq("id", r.id);
-    });
-  }
+  if (outcome.props.state === "live" && !outcome.props.preview && !scanner) after(() => reportRoomJoin(r as unknown as Movable, r.session_date));
   return <Room {...outcome.props} simulated={simulated} />;
 }

@@ -13,9 +13,9 @@ import { rankEngagement } from "@/lib/engagement";
 import { asksMarket, findMarkets, findStates, marketDraft, NO_MATCH_DRAFT, onlyStates, placeOf, rollup, rollupDraft, type MarketCount } from "@/lib/market-answer";
 
 type Wire = { id: number; registrant_id: string | null; author_name: string; role: "attendee" | "moderator"; body: string; offset_seconds: number; reactions: Record<string, number>; deleted_at: string | null; created_at: string; visibility: "all" | "author" | "team"; mentions: string[]; mention_names?: string[]; belief?: boolean; is_question?: boolean; kind?: string; visible_to?: string | null };
-type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
+type Person = { first_name: string; last_seen_at: string; joined_at: string; source: string; registrant_id: string; in_room: boolean; /** two minutes or a click (SPEC-link-opens.md); absent on an older desk payload */ person?: boolean; /** an older link brought them in today */ moved_in?: boolean; minutes: number; clicked_offer: boolean; at_pitch: boolean; ghosted: boolean; has_ip: boolean; ip_blocked: boolean; email_masked: string; booking_href?: string | null; prior_sessions?: number; auto_ghost_reason?: string | null; hot?: boolean; ultra_hot?: boolean; training_minutes?: number };
 type Desk = { member_id: string; name: string; tab: string | null; replying_to: string | null; last_seen_at: string };
-type Stats = { registered: number; joined: number; in_room: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
+type Stats = { registered: number; moved_in?: number; joined: number; joined_tonight?: number; visits?: number; in_room: number; arriving?: number; peak: number; pitch_at: number | null; at_pitch: number | null; clicked: number; stayed_15: number; booked: number };
 type HistoryRow = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
 type Mentionable = { id: string; name: string; sub?: string };
 /** One of Kaitlyn's open suggestions (kaitlyn_decisions, status pending): a draft to send, a ghost or a reaction to approve, or a line she wants a human on. */
@@ -290,9 +290,11 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
     input.current?.focus();
   }
   // "@" at the caret offers everyone in the room and the team (yourself included); refines as you type.
+  // A line makes a person for the desk (the picker and the head count), whatever the clock says (review of Oct 21).
+  const chatters = new Set(list.filter((m) => m.role === "attendee" && m.registrantId && !m.deleted).map((m) => m.registrantId as string));
   const atWord = /(?:^|\s)@([^@\s]*)$/.exec(text);
   const options: Mentionable[] = atWord
-    ? [...people.filter((p) => p.in_room).map((p) => ({ id: p.registrant_id, name: p.first_name, sub: p.email_masked })), ...team].filter((p) => p.name.toLowerCase().startsWith(atWord[1].toLowerCase())).slice(0, 8)
+    ? [...people.filter((p) => p.in_room && (p.person !== false || chatters.has(p.registrant_id))).map((p) => ({ id: p.registrant_id, name: p.first_name, sub: p.email_masked })), ...team].filter((p) => p.name.toLowerCase().startsWith(atWord[1].toLowerCase())).slice(0, 8)
     : [];
   function pick(p: Mentionable) {
     setText(text.replace(/@[^@\s]*$/, `@${p.name} `));
@@ -317,7 +319,7 @@ export function ModView({ member, event, session, serverNow, backHref, isAdmin =
   const teamMsgs = list.filter((m) => m.team && !m.deleted);
   const shown = chat.filter((m) => (m.role !== "simulated" || showSim) && (!onlyMentions || m.mentionsMe));
   const { runs, hiddenRows } = foldRuns(shown, openRuns, fixing);
-  const inRoom = people.filter((p) => p.in_room && p.source !== "test");
+  const inRoom = people.filter((p) => p.in_room && (p.person !== false || chatters.has(p.registrant_id)) && p.source !== "test");
   const msgCount = new Map<string, number>();
   const beliefCount = new Map<string, number>();
   for (const m of chat) if (m.role === "attendee" && m.registrantId && !m.deleted) { msgCount.set(m.registrantId, (msgCount.get(m.registrantId) ?? 0) + 1); if (m.belief) beliefCount.set(m.registrantId, (beliefCount.get(m.registrantId) ?? 0) + 1); }
@@ -629,6 +631,7 @@ function PeoplePane({ people, msgCount, confirmBlock, setConfirmBlock, confirmGh
         <p className="truncate text-[15px] font-bold">
           {p.first_name}
           <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] font-bold text-muted">{p.source === "zapier" ? "zap" : p.source}</span>
+          {p.in_room && p.person === false && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted" title="Here under two minutes and no click yet: not a person until then (SPEC-link-opens.md)">arriving</span>}
           {p.ghosted && <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted line-through" title={p.auto_ghost_reason ? (p.auto_ghost_reason.startsWith("by hand") ? p.auto_ghost_reason : `auto: ${p.auto_ghost_reason}`) : undefined}>{p.auto_ghost_reason && !p.auto_ghost_reason.startsWith("by hand") ? "auto-ghosted" : "ghosted"}</span>}
           {p.prior_sessions ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted">watched before ×{p.prior_sessions}</span> : null}
           {p.hot ? <span className="ml-1.5 rounded bg-panel px-1.5 text-[11px] text-muted" title={`Watched ${p.training_minutes ?? 0} min of the free training before the session`}>{p.ultra_hot ? "🔥🔥 ultra-hot" : "🔥 hot"}</span> : null}
@@ -820,7 +823,7 @@ function EngagementPane({ people, msgCount, beliefCount, pitchMinutes }: { peopl
         {rows.map((p) => (
           <tr key={p.registrant_id} className={`border-b border-line/60 ${p.in_room ? "" : "opacity-60"}`}>
             <td className="py-1.5 pl-4 pr-2 text-muted tabular-nums">{p.rank}</td>
-            <td className="py-1.5 pr-3"><span className="font-bold">{p.first_name}</span><span className="ml-1.5 text-[11px] text-muted">{p.in_room ? "" : "left"}</span></td>
+            <td className="py-1.5 pr-3"><span className="font-bold">{p.first_name}</span><span className="ml-1.5 text-[11px] text-muted">{p.in_room ? (p.person === false ? "arriving" : "") : "left"}</span></td>
             <td className="py-1.5 pr-3 text-right font-bold tabular-nums">{Math.round(p.score * 100)}</td>
             <td className="py-1.5 pr-3 text-right tabular-nums">{p.minutes}</td>
             <td className="py-1.5 pr-3 text-right tabular-nums">{p.messages}{p.belief ? <span className="ml-1 text-[11px] text-emerald-400">+{p.belief}</span> : null}</td>
@@ -846,11 +849,11 @@ function StatsPane({ stats, chatters, messages, now, ctaAt, startsAt, history, l
   );
   return (
     <div className="grid grid-cols-2 gap-2 p-4">
-      {tile(stats.registered, "held a link tonight")}
-      {tile(stats.joined, `joined · ${pct(stats.joined, stats.registered)}`)}
+      {tile(stats.registered - (stats.moved_in ?? 0), "registered tonight", false, stats.moved_in ? `+ ${stats.moved_in} moved in today from an older link` : undefined)}
+      {tile(stats.joined, `people · ${pct(stats.joined_tonight ?? stats.joined, stats.registered - (stats.moved_in ?? 0))} of tonight's`, false, [stats.visits !== undefined ? `${stats.visits} link opens` : null, stats.joined_tonight !== undefined && stats.joined - stats.joined_tonight ? `${stats.joined - stats.joined_tonight} moved in today` : null].filter(Boolean).join(" · ") || undefined)}
       <div className="rounded-xl border border-emerald-500/40 bg-panel px-3 py-2.5">
         <div className="text-[22px] font-bold leading-tight text-emerald-400 tabular-nums">{stats.in_room}</div>
-        <div className="text-xs text-muted">in the room now</div>
+        <div className="text-xs text-muted">in the room now{stats.arriving ? ` · ${stats.arriving} arriving` : ""}</div>
         {stats.peak > 0 && <div className="text-[11px] text-muted">retention {pct(stats.in_room, stats.peak)} of peak</div>}
       </div>
       {tile(stats.peak, "peak")}

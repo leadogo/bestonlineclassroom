@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, OWED_FLOOR, postedFrom, type KbRow } from "./kaitlyn-kb.ts";
+import { ANSWER_WINDOW_MS, answeredWithin, correctionsBlock, digestDue, digestText, factsLost, ghostBlock, kbKey, kbQuestion, knowledgeBlock, OWED_FLOOR, postedFrom, type KbRow } from "./kaitlyn-kb.ts";
 
 const row = (p: Partial<KbRow> & { key: string; question: string }): KbRow => ({ answer: null, approved: null, approved_at: p.approved ? "2026-10-17T00:00:00Z" : null, handling: "open", asked: 0, ...p });
 
@@ -86,13 +86,6 @@ test("factsLost: a rewrite that drops a figure, a link or a name is caught; a fa
   assert.deepEqual(factsLost("We're based in Edmonton and so is William.", "We're based in Edmonton, and so is William."), []);
 });
 
-test("handoffLine: one of Kevin's shapes, never empty, picks by the draw", () => {
-  const a = handoffLine(() => 0), b = handoffLine(() => 0.999);
-  assert.ok(a.length > 10 && b.length > 10);
-  assert.notEqual(a, b);
-  assert.match(a + b, /team/);
-});
-
 test("ghostBlock: the line that got them ghosted, what they said before it, and the desk's reason; nothing when there are none (SPEC-kaitlyn-ghosts.md, B3)", () => {
   const b = ghostBlock([
     { line: "william,I am surprised if you receive my messages!!!", context: ["William,Have you received my messages?", "William,it looks like that you receivbe my messages!"], reason: "nag", answered: 4 },
@@ -144,4 +137,15 @@ test("answeredWithin: a moderator line to the person inside 15 minutes counts, h
   assert.equal(answeredWithin(t0, "p3", told), false);
   assert.equal(answeredWithin(t0, "p4", told), false);
   assert.equal(answeredWithin(t0, "p5", told), false);
+});
+
+test("digestText: the link sweep's line (SPEC-friday-unattended.md, E4) only when it wrote something or left blanks", () => {
+  const base = { questions: [], people: 0, waiting: 0, url: "u" };
+  assert.equal(digestText({ ...base, links: { written: 0, created: 0, pending: 0 } }), null);
+  assert.match(digestText({ ...base, links: { written: 12, created: 2, pending: 12 } })!, /gave 12 contacts a personal link yesterday \(2 needed a room row\)\./);
+  assert.match(digestText({ ...base, links: { written: 1, created: 0, pending: 4 } })!, /gave 1 contact a personal link yesterday; 3 still blank\./);
+  // Both runs of the day add up; a run older than a day does not.
+  const now = new Date("2026-10-24T15:00:00Z");
+  assert.match(digestText({ ...base, now, links: { at: "2026-10-24T09:20:00Z", written: 2, created: 0, pending: 2, prev: { at: "2026-10-23T21:20:00Z", written: 5, created: 1, pending: 5 } } })!, /gave 7 contacts a personal link yesterday \(1 needed a room row\)\./);
+  assert.match(digestText({ ...base, now, links: { at: "2026-10-24T09:20:00Z", written: 2, created: 0, pending: 2, prev: { at: "2026-10-22T21:20:00Z", written: 5, created: 1, pending: 5 } } })!, /gave 2 contacts a personal link yesterday\./);
 });

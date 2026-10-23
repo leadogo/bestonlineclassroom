@@ -79,3 +79,34 @@ export async function addTag(cid: string, tid: string): Promise<boolean> {
   // A repeat answers 422: the tag is there. Any other failure (a second 429, a 5xx, a timeout) is not a landed tag.
   return Boolean(r.body?.contactTag) || r.status === 422;
 }
+
+/** The personal watch link's shape and the two fields that hold it (SPEC-friday-unattended.md, E1; `watch.` is the texting domain, SPEC-show-rate-recovery.md). */
+export const WATCH = "https://watch.bookmoreshowings.com";
+export const PERSONAL_RE = /^https:\/\/watch\.bookmoreshowings\.com\/[abcdefghjkmnpqrstuvwxyz23456789]{12}$/;
+export const JOIN_FIELD = "47";
+export const REPLAY_FIELD = "49";
+/** `ailgr_registered`: the tag every registered contact carries; the sweep's scope. */
+export const REGISTERED_TAG_ID = "304";
+export const watchLinks = (token: string) => ({ join: `${WATCH}/${token}`, replay: `${WATCH}/replay/${token}` });
+
+/** One paced call for the sweep (the body, or null when the call failed). */
+export const acApi = api;
+
+/** Writes the room's two links onto the contact (SPEC-friday-unattended.md, E1) unless the join field already holds a personal link. Called on the `registered` tag from every path (site, Skool, Zapier, guest, the door), so the field no longer depends on the site's Zap, which missed one new contact in five in the week of Oct 20. true when both links are there afterwards. */
+export async function setLinks(email: string, token: string): Promise<boolean> {
+  if (!activeCampaignConfigured()) return false;
+  const cid = await contactId(email);
+  if (!cid) return false;
+  const have = (await api<{ fieldValues: Array<{ id: string; field: string; value: string }> }>(`/contacts/${cid}/fieldValues`))?.fieldValues ?? [];
+  if (have.some((f) => f.field === JOIN_FIELD && PERSONAL_RE.test(f.value))) return true;
+  const links = watchLinks(token);
+  let ok = true;
+  // The join field last: it is the "done" marker, so a failed replay write is retried by the sweep.
+  for (const [field, value] of [[REPLAY_FIELD, links.replay], [JOIN_FIELD, links.join]] as const) {
+    const existing = have.find((f) => f.field === field);
+    const body = JSON.stringify({ fieldValue: { contact: cid, field, value } });
+    const r = existing ? await api(`/fieldValues/${existing.id}`, { method: "PUT", body }) : await api("/fieldValues", { method: "POST", body });
+    if (!r) ok = false;
+  }
+  return ok;
+}

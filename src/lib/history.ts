@@ -3,7 +3,7 @@
 import { db } from "./db.ts";
 import { scheduleOf, sessionFor } from "./daily-schedule.ts";
 import type { EventRow } from "./events.ts";
-import { concurrentAt, PRESENCE_GRACE_MS } from "./outcomes.ts";
+import { isPerson, concurrentAt, PRESENCE_GRACE_MS } from "./outcomes.ts";
 
 export type PastSession = { date: string; weekday: number; at_pitch: number; booked: number; curve?: number[] };
 
@@ -46,8 +46,8 @@ export async function loadHistory(event: EventRow, before: string, n = 28, curve
     if (!s || event.cta_at_seconds === null) continue;
     const pitchAt = s.start.getTime() + event.cta_at_seconds * 1000;
     if (pitchAt > Date.now()) continue;
-    const att = await db().from("attendance").select("joined_at, last_seen_at, registrant:registrants!inner(source)").eq("session_date", s.date).eq("kind", "live").eq("registrant.event_id", event.id);
-    const intervals = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test").map((a) => ({ from: new Date(a.joined_at as string).getTime(), to: new Date(a.last_seen_at as string).getTime() }));
+    const att = await db().from("attendance").select("joined_at, last_seen_at, seconds_watched, cta_clicked_at, registrant:registrants!inner(source)").eq("session_date", s.date).eq("kind", "live").eq("registrant.event_id", event.id);
+    const intervals = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test" && isPerson({ seconds_watched: (a.seconds_watched as number | null) ?? 0, cta_clicked_at: (a.cta_clicked_at as string | null) ?? null })).map((a) => ({ from: new Date(a.joined_at as string).getTime(), to: new Date(a.last_seen_at as string).getTime() }));
     const booked = await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", s.date).eq("status", "scheduled");
     out.push({ date: s.date, weekday: s.start.getUTCDay(), at_pitch: concurrentAt(intervals, pitchAt, PRESENCE_GRACE_MS), booked: booked.count ?? 0, curve: out.length < curves && minutes > 0 ? Array.from({ length: minutes + 1 }, (_, m) => concurrentAt(intervals, s.start.getTime() + m * 60_000)) : undefined });
   }

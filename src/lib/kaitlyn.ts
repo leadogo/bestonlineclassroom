@@ -5,10 +5,11 @@
 // moderator sends) | assisted (the routine categories post themselves) | auto (every reply posts itself).
 // Best-effort everywhere: a model outage or a bad answer is silence, never an error in the room.
 import { KAITLYN, KAITLYN_MODES, type KaitlynMode } from "./chat.ts";
+import { checkMessage } from "./chat-filter.ts";
 import { db } from "./db.ts";
 import { tells, tidy } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
-import { correctionsBlock, ghostBlock, handoffLine, kbKey, kbQuestion, knowledgeBlock, type Correction, type Ghost, type KbRow } from "./kaitlyn-kb.ts";
+import { correctionsBlock, ghostBlock, kbKey, kbQuestion, knowledgeBlock, type Correction, type Ghost, type KbRow } from "./kaitlyn-kb.ts";
 import { asksForReplay } from "./katherine.ts";
 import { asksMarket, asksOutright, findMarkets, findRegion, findStates, onlyStates, placeOf, regionPlaces, rollup, type MarketCount, type Rollup } from "./market-answer.ts";
 import { EMOJIS, isEmoji } from "./moderation.ts";
@@ -39,8 +40,6 @@ export const ASSISTED = new Set<Category>(["market", "booking", "price", "replay
 export const MAX_TEXT = 300;
 /** No second Kaitlyn reply to the same person inside this window. */
 export const PER_PERSON_MS = 120_000;
-/** A "needs you" card nobody acted on for this long gets her hand-off line, desk open or not (SPEC-kaitlyn-ghosts.md, A3: Heather's three cards sat under a background desk tab). */
-export const HANDOFF_AFTER_MS = 90_000;
 /** Before the pitch, one city line per this long room-wide, so the roll-call minute is not ten Kaitlyn lines at once (SPEC-kaitlyn-ghosts.md, D; the review of Oct 20 cut it from 30 s to 10 s so a burst still answers most people). ponytail: a global slot; a queue if it ever matters. */
 export const ROLL_CALL_SLOT_MS = 10_000;
 
@@ -69,7 +68,24 @@ export const SHAPES = {
   call: ["the call covers setup step by step", "they go through that on the call for your market", "William gets to that in a bit"],
   thanks: ["anytime", "of course", "💛", "glad it helped", "you got it", "no problem at all"],
   soon: ["he's getting to that in a sec", "he covers that in a minute, hang on", "coming up right now, keep watching", "that's literally the next thing he shows"],
+  /** Before the pitch, pricing and the things the call handles (SPEC-friday-unattended.md, C: William, Oct 22, "we don't want to talk about booking a call until they actually get to the part where they have to book a call"). */
+  later: ["he gets to that near the end of the class", "pricing comes up at the end, hang tight", "he goes over all of that in the last part", "that's covered near the end, stick around"],
 };
+
+/** The pre-pitch price line, rotating by the decision so two people in a row do not get the same shape. */
+export function laterShape(n: number): string {
+  return SHAPES.later[Math.abs(Math.floor(n)) % SHAPES.later.length];
+}
+
+/** A line that opens with @someone who is not on the team is an aside to another attendee, never a question for her (William's grade on "@iPhone $$?", Oct 22). "@Katherine" and "@Kaitlyn" are for her. */
+export const TEAM_HANDLES = ["katherine", "kaitlyn", "kevin", "william", "akash", "team", "everyone", "all", "mods", "host"];
+export function isAsideToAttendee(body: string): boolean {
+  const m = /^\s*@([^\s:,]+)/.exec(body);
+  if (!m) return false;
+  const who = m[1].toLowerCase().replace(/[^a-z]/g, "");
+  if (who.length < 3) return false;
+  return !TEAM_HANDLES.some((h) => who.startsWith(h) || h.startsWith(who));
+}
 const q = (list: string[]) => list.map((s) => JSON.stringify(s)).join(" · ");
 
 const PERSONA = `You are Kaitlyn, a moderator in the live chat of William's "AI For Agents Masterclass" (Book More Showings, Edmonton). You post as "${KAITLYN}". Real estate agents are watching William present on screen; you answer the way a teammate who knows the product does: short, plain, friendly, never salesy.
@@ -98,9 +114,15 @@ VARIETY
   nothing in the directory: ${q(SHAPES.empty)}
   booked: ${q(SHAPES.booked)}
   price: the FACTS sentence word for word, with at most a two-word lead-in that changes each time (${q(SHAPES.price)}, or nothing).
-  FACTS say the call handles it (pricing levels, compliance specifics, setup for their market): ${q(SHAPES.call)} (only when FACTS say the presentation covers it)
+  FACTS say the call handles it (pricing levels, compliance specifics, setup for their market), once booking is open: ${q(SHAPES.call)} (only when FACTS say the presentation covers it)
+  the same questions before the pitch: ${q(SHAPES.later)}
   thanks: ${q(SHAPES.thanks)}
   he is about to cover it (only when COMING UP shows it): ${q(SHAPES.soon)}
+
+BEFORE THE PITCH (ROOM says "before the pitch"; William, Oct 22: nobody hears about the call until he gets to the part where they book it)
+- Never the words call, booking, consult or the button before booking is open. A price, cost, fee, contract or "what's included" question gets one of the "before the pitch" shapes, sure, category price, no figure, and a second price ask before the pitch is a skip (never a ghost before the pitch). The one exception: "how much is Katherine AI / the AI" has its KNOWLEDGE answer with the $250 figure at any minute.
+- Setup for their market, compliance specifics, commitment levels and the other things FACTS send to the call get "he covers that later in the class" instead of the call shapes. "How do I book?" before the pitch: "the booking button shows up near the end of the class".
+- From the pitch on, the rules above apply word for word.
 
 WHAT HE IS SAYING (the turn carries WILLIAM ON SCREEN, COMING UP and SEGMENT whenever the transcript of the presentation is known)
 - Read their line as a reply to him first. An answer to something he just asked the room ("type YES", "S, B or SB", "what do you use AI for") is a skip whatever the words are, with "answering him on screen" in why. Katherine's polls are the usual case. A city or state in the roll-call window (ROOM says so, the first five minutes) is the same: he asked where they are from, skip with "roll-call" in why, no reaction. From minute five a bare city or state gets the count (the markets rule).
@@ -212,10 +234,12 @@ export function marketLine(body: string, markets: MarketCount[]): string | null 
   return "directory has no market by that name (none there yet)";
 }
 
-/** What a reply may never contain, whatever the model wrote; the reply becomes ask_william with the draft kept. */
-export function guard(text: string): string | null {
-  // The two figures William approved Oct 17 (Katherine's subscription, the ad-budget example) pass; every other figure does not.
-  const t = text.replace(/\$250 a month/gi, "").replace(/\$10 a day/gi, "");
+/** What a reply may never contain, whatever the model wrote; the reply becomes ask_william with the draft kept. `beforePitch`: nobody is sent to the call before booking opens (SPEC-friday-unattended.md, C). */
+export function guard(text: string, beforePitch = false): string | null {
+  // The call as a thing to book ("a quick call", "the free 15-minute call", "our call", "call with the team", "book a spot", "consult"); "she calls the leads" and "call them yourself" are not booking talk (review of Oct 22).
+  if (beforePitch && /\b(?:a|an|the|your|our|this|that|free|quick|strategy|discovery|intro|onboarding|setup)\s+(?:[\w-]+\s+){0,3}call\b|\bcall with\b|\bbook(?:ing|ed)?\b[^.!?]{0,40}\bcall\b|\bconsult(?:ation)?\b|\bbook(?:ing)?\s+(?:a |the |your )?(?:spot|time|slot)\b/i.test(text)) return "call talk before the pitch";
+  // The two figures William approved Oct 17 (Katherine's subscription, in any spelling, and the ad-budget example) pass; every other figure does not.
+  const t = text.replace(/\$250\s?(?:a month|\/\s?mo(?:nth)?|per month|monthly)/gi, "").replace(/\$10 a day/gi, "");
   // A figure with "a month" is a price; "one to four a month" (how often William presents) is not.
   if (/\$|\b\d+\s?(?:cents?|usd|cad|dollars|bucks)\b|\b\d[\d,.]*k?\s?(?:(?:\/|per|a)\s?mo(?:nth)?|monthly)\b/i.test(t)) return "a price";
   // Promising a guarantee is out; saying there is none (William's approved answer) is fine.
@@ -235,10 +259,10 @@ export function withoutMention(text: string, firstName: string): string {
   return text.replace(re, "").trim() || text;
 }
 
-/** The model's tool input, checked: unknown actions skip, a reply without words skips, an unsure reply waits for a moderator, reactions only from the fixed set. */
-export function parseDecision(input: unknown): Decision {
+/** The model's tool input, checked: unknown actions skip, a reply without words skips, an unsure reply waits for a moderator, reactions only from the fixed set. `beforePitch` (SPEC-friday-unattended.md, C): a price reply gets a "later" shape in code so the first ask is always answered and never with the call; any other reply that still says "call" is silenced and flagged. */
+export function parseDecision(input: unknown, opts: { beforePitch?: boolean; pick?: number } = {}): Decision {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
-  const text = tidy(String(o.text ?? "")).slice(0, MAX_TEXT);
+  let text = tidy(String(o.text ?? "")).slice(0, MAX_TEXT);
   let action: Action = (ACTIONS as readonly string[]).includes(String(o.action)) ? (o.action as Action) : "skip";
   const category: Category = (CATEGORIES as readonly string[]).includes(String(o.category)) ? (o.category as Category) : "other";
   const react = isEmoji(String(o.react ?? "")) ? String(o.react) : "";
@@ -246,16 +270,24 @@ export function parseDecision(input: unknown): Decision {
   if (action === "reply" && !text) action = "skip";
   // A reply she is not sure of never posts: the draft goes to the desk for a moderator to replace or send (William, Oct 14).
   if (action === "reply" && o.sure === false) { action = "ask_william"; why = `not sure; ${why}`.slice(0, 140); }
-  const bad = action === "reply" ? guard(text) : null;
+  // Before the pitch a BMS price question gets the "later" line whatever the model drafted, unsure drafts and ask_william included (the first ask is always answered, with nobody on the desk to answer it otherwise); the Katherine figure (an allowed $250) is the one price answer that stands; the price-push ghost starts at the pitch (a second ask before it is a skip).
+  if (opts.beforePitch && category === "price") {
+    if (action === "ghost") { action = "skip"; why = `before the pitch, no price ghost; ${why}`.slice(0, 140); }
+    else if ((action === "reply" || action === "ask_william") && !/\$250/.test(text)) { action = "reply"; text = laterShape(opts.pick ?? Math.floor(Math.random() * 1000)); why = `before the pitch; ${why}`.slice(0, 140); }
+  }
+  const bad = action === "reply" ? guard(text, Boolean(opts.beforePitch)) : null;
   if (bad) { action = "ask_william"; why = `draft mentions ${bad}; ${why}`.slice(0, 140); }
   // A line with an AI tell never posts on its own; the desk sees what tripped it (SPEC-kaitlyn-autopilot.md, B).
   const tell = action === "reply" ? tells(text)[0] : undefined;
   if (tell) { action = "ask_william"; why = `sounds like a bot: ${tell}; ${why}`.slice(0, 140); }
+  // Her lines clear the room's own chat filter like anyone's (security pass, Oct 22): a prompt-injected link or a slur never posts under the moderator badge.
+  const dirty = action === "reply" ? checkMessage(text) : null;
+  if (dirty && !dirty.ok) { action = "ask_william"; why = `draft fails the chat filter (${dirty.kind}); ${why}`.slice(0, 140); }
   const kbo = o.kb && typeof o.kb === "object" ? (o.kb as Record<string, unknown>) : null;
   const key = kbKey(kbo?.key);
   const kb = key && action !== "skip" ? { key, question: kbQuestion(kbo?.question) } : null;
   // A ghost's text is the private line they still get; it clears the same guard and tells as a reply, or the ghost stands without it.
-  const ghostText = action === "ghost" && text && !guard(text) && !tells(text).length ? text : "";
+  const ghostText = action === "ghost" && text && !guard(text) && !tells(text).length && checkMessage(text).ok ? text : "";
   return { action, category, text: action === "skip" ? "" : action === "ghost" ? ghostText : text, react, why, kb, sure: action === "reply" || (action === "ghost" && o.sure === true) };
 }
 
@@ -294,8 +326,8 @@ export function extractJson(text: string): unknown {
   }
 }
 
-/** One Messages API call, the system prompt cached, the answer a JSON object. Null on any failure. */
-export async function decide(system: string, turn: string): Promise<{ decision: Decision; ms: number } | null> {
+/** One Messages API call, the system prompt cached, the answer a JSON object. Null on any failure. `opts` reach parseDecision (the pre-pitch rule). */
+export async function decide(system: string, turn: string, opts: { beforePitch?: boolean; pick?: number } = {}): Promise<{ decision: Decision; ms: number } | null> {
   if (!KEY) return null;
   const t0 = Date.now();
   try {
@@ -316,7 +348,7 @@ export async function decide(system: string, turn: string): Promise<{ decision: 
       console.error("[kaitlyn] no JSON in the answer", { stop_reason: j.stop_reason });
       return null;
     }
-    return { decision: parseDecision(parsed), ms: Date.now() - t0 };
+    return { decision: parseDecision(parsed, opts), ms: Date.now() - t0 };
   } catch (err) {
     console.error("[kaitlyn] model call threw", { err: String(err) });
     return null;
@@ -383,45 +415,6 @@ async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopil
   await postToChatChannel(`Autopilot off: ${name} is back on the desk.`);
 }
 
-/** Whether this person already got (or is about to get) her hand-off line tonight: any of their cards with sent_body set, a claim included; `except` leaves out the caller's own claimed card (one per person per night, decision 5 of Oct 17). */
-async function handedOff(reg: Reg, except = 0): Promise<boolean> {
-  return Boolean((await db().from("kaitlyn_decisions").select("id").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("registrant_id", reg.id).eq("action", "ask_william").not("sent_body", "is", null).neq("id", except).limit(1)).data?.length);
-}
-
-/** Claims a card for the hand-off (sent_body set where it was null), so the fast path and a sweep on another instance cannot both post to the same person; false when someone got there first. */
-async function claimHandoff(did: number): Promise<boolean> {
-  const claim = await db().from("kaitlyn_decisions").update({ sent_body: "(hand-off)" }).eq("id", did).is("sent_body", null).select("id");
-  return Boolean(claim.data?.length);
-}
-
-/** The hand-off line to this person (private when they are ghosted), recorded on the claimed card; a failed post gives the claim back. */
-async function postHandoff(reg: Reg, did: number, offset: number): Promise<boolean> {
-  const body = `@${reg.first_name} ${handoffLine()}`;
-  const mid = await postAsKaitlyn(reg, body, offset, "autopilot");
-  await db().from("kaitlyn_decisions").update({ sent_body: mid ? body : null, sent_message_id: mid }).eq("id", did);
-  return Boolean(mid);
-}
-
-/** When she does not know and nobody is on the desk: one hand-off line per person per night; the question stays pending for a human (decision 5). */
-async function handoff(reg: Reg, message: { id: number; offset: number }, did: number, thought: number): Promise<void> {
-  if ((await handedOff(reg)) || !(await claimHandoff(did))) return;
-  const t0 = Date.now();
-  const wait = delayMs("auto", Math.random, 70) - thought;
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  // Checked again after the pause: another hand-off to them meanwhile, a moderator's answer, her own reply inside the window, or a moderator back on the desk all mean silence (and the claim goes back).
-  const back = await lastDeskSeen(reg.event_id, reg.session_date);
-  if ((await handedOff(reg, did)) || (await takenBy(reg, message.id, null)) || (back !== null && Date.now() - back < AUTOPILOT_AFTER_MS)) {
-    await db().from("kaitlyn_decisions").update({ sent_body: null }).eq("id", did).eq("sent_body", "(hand-off)");
-    return;
-  }
-  await postHandoff(reg, did, message.offset + (Date.now() - t0) / 1000);
-}
-
-/** A "needs you" card is due her hand-off line when it has sat pending 90 s, nobody handed off to this person tonight, and no moderator answered them. */
-export function handoffDue(card: { status: string; created_at: string }, nowMs: number, handed: boolean, humanReplied: boolean): boolean {
-  return card.status === "pending" && nowMs - new Date(card.created_at).getTime() >= HANDOFF_AFTER_MS && !handed && !humanReplied;
-}
-
 /** The desk's first refusal (SPEC-kaitlyn-solo.md, B): a sure reply outside the routine set waits this long on the desk, then posts itself in assisted and auto. Oct 20: five such cards never went out. */
 export const DESK_FIRST_MS = 90_000;
 
@@ -430,9 +423,14 @@ export function deskFirstDue(card: { status: string; action: string; created_at:
   return card.status === "pending" && card.action === "reply" && (mode === "assisted" || mode === "auto") && nowMs - new Date(card.created_at).getTime() >= DESK_FIRST_MS && !humanReplied;
 }
 
-/** The desk had first refusal (SPEC-kaitlyn-solo.md, B): every sure reply card left pending 90 s in assisted or auto posts itself, unless a moderator answered the person or she replied to them a moment ago. The row is claimed (pending → auto) before the post, so two instances never post the same line. */
-async function sweepDeskFirst(eventId: string, sessionDate: string, offset: number, mode: Mode, now: number): Promise<number> {
+const sweepAt = new Map<string, number>();
+/** Called from the room's heartbeat. The desk had first refusal (SPEC-kaitlyn-solo.md, B): every sure reply card left pending 90 s in assisted or auto posts itself, unless a moderator answered the person or she replied to them a moment ago. The row is claimed (pending → auto) before the post, so two instances never post the same line. At most one sweep per event every 10 s per instance. The Autopilot switch has no say here since Oct 23 (SPEC-friday-unattended.md, B): Off only means she never takes over an empty desk; an unknown question gets no line at all any more, only the card, the Slack line, the knowledge row and the digest. */
+export async function sweepDeskFirst(eventId: string, sessionDate: string, offset: number, mode: Mode): Promise<number> {
   if (mode !== "assisted" && mode !== "auto") return 0;
+  const key = `${eventId}:${sessionDate}`;
+  const now = Date.now();
+  if ((sweepAt.get(key) ?? 0) > now - 10_000) return 0;
+  sweepAt.set(key, now);
   const cards = (await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, status, action, text, why, kb_key, created_at").eq("event_id", eventId).eq("session_date", sessionDate).eq("action", "reply").eq("status", "pending").lt("created_at", new Date(now - DESK_FIRST_MS).toISOString()).order("id").limit(20)).data ?? [];
   let posted = 0;
   for (const c of cards) {
@@ -452,32 +450,6 @@ async function sweepDeskFirst(eventId: string, sessionDate: string, offset: numb
     await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", c.id);
     posted += 1;
     if (reg.source !== "test") await postToChatChannel(`Kaitlyn posted after 90 s on the desk · ${reg.first_name}: ${JSON.stringify(text)}`);
-  }
-  return posted;
-}
-
-const sweepAt = new Map<string, number>();
-/** Called from the room's heartbeat (SPEC-kaitlyn-ghosts.md, A3): the hand-off line for every card the desk left for 90 s, open tab or not, and the desk-first replies (SPEC-kaitlyn-solo.md, B). At most one sweep per event every 10 s per instance; Off on the Autopilot switch means never. */
-export async function sweepHandoffs(eventId: string, sessionDate: string, autopilot: Autopilot, offset: number, mode: Mode = "shadow"): Promise<number> {
-  if (autopilot === "off") return 0;
-  const key = `${eventId}:${sessionDate}`;
-  const now = Date.now();
-  if ((sweepAt.get(key) ?? 0) > now - 10_000) return 0;
-  sweepAt.set(key, now);
-  let posted = await sweepDeskFirst(eventId, sessionDate, offset, mode, now);
-  const cards = (await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, status, created_at").eq("event_id", eventId).eq("session_date", sessionDate).eq("action", "ask_william").eq("status", "pending").is("sent_body", null).lt("created_at", new Date(now - HANDOFF_AFTER_MS).toISOString()).order("id").limit(20)).data ?? [];
-  const seen = new Set<string>();
-  for (const c of cards) {
-    const rid = String(c.registrant_id);
-    if (seen.has(rid)) continue;
-    seen.add(rid);
-    const r = (await db().from("registrants").select("id, event_id, session_date, first_name, source").eq("id", rid).maybeSingle()).data;
-    if (!r) continue;
-    const reg: Reg = { id: r.id as string, event_id: r.event_id as string, session_date: r.session_date as string, first_name: r.first_name as string, source: String(r.source ?? "") };
-    const did = c.id as number;
-    const human = (await takenBy(reg, c.message_id as number, null)) === "a moderator answered first";
-    if (!handoffDue({ status: String(c.status), created_at: String(c.created_at) }, now, await handedOff(reg), human)) continue;
-    if ((await claimHandoff(did)) && (await postHandoff(reg, did, offset))) posted += 1;
   }
   return posted;
 }
@@ -524,11 +496,15 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     // Autopilot: with nobody on the desk, shadow and assisted act as auto for this message; her unsure lines still wait (SPEC-kaitlyn-autopilot.md, C).
     const auto = engaged(autopilot, seen, a.message.sessionMinute ?? ctx.minute, Date.now());
     const eff: Mode = auto && mode !== "auto" ? "auto" : mode;
-    const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[], (fixQ.data ?? []) as Correction[], a.event.outline ?? null, (ghostQ.data ?? []) as Ghost[]), userTurn(ctx));
+    // Before the pitch nobody hears about the call (SPEC-friday-unattended.md, C): parseDecision swaps a price reply for a "later" shape and silences any other reply that says "call".
+    const beforePitch = ctx.pitchMinute !== null && ctx.minute < ctx.pitchMinute;
+    const out = await decide(systemPrompt(a.event.kaitlyn_facts, (kbQ.data ?? []) as KbRow[], (fixQ.data ?? []) as Correction[], a.event.outline ?? null, (ghostQ.data ?? []) as Ghost[]), userTurn(ctx), { beforePitch, pick: message.id });
     if (!out) return;
     const d = { ...out.decision, text: withoutMention(out.decision.text, reg.first_name) };
     // The roll-call guard (SPEC-kaitlyn-ghosts.md, D): a bare city or state in the first five minutes is a skip whatever the model drafted, so assisted never answers the roll-call; a skip is never a card.
     if (d.action === "reply" && d.category === "market" && isRollCallDrop(message.body, message.offset, a.event.cta_at_seconds ?? null)) Object.assign(d, { action: "skip" as const, text: "", react: "", kb: null, sure: false, why: `roll-call; ${d.why}`.slice(0, 140) });
+    // A line to another attendee ("@iPhone $$?") is theirs, not hers (William's grade, Oct 22): a skip whatever the model drafted.
+    if ((d.action === "reply" || d.action === "ask_william") && isAsideToAttendee(message.body)) Object.assign(d, { action: "skip" as const, text: "", react: "", kb: null, sure: false, why: `aside to another attendee; ${d.why}`.slice(0, 140) });
     if (d.kb) await touchKb(reg.event_id, d.kb);
     const itself = postsItself(eff, d);
     // Shadow keeps every actionable decision (a reaction included) for a moderator; the others act on the routine ones here.
@@ -541,7 +517,6 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (d.react) { await reactAsKaitlyn(message.id, d.react); await db().from("kaitlyn_decisions").update({ reacted_at: new Date().toISOString() }).eq("id", did); }
     if (pending) {
       if (reg.source !== "test") await postToChatChannel(`Kaitlyn needs you · ${reg.ghosted ? "(ghosted) " : ""}${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} → ${d.action.replace("_", " ")}${d.text ? ` ${JSON.stringify(d.text)}` : ""} (${d.why})`);
-      if (auto && d.action === "ask_william") await handoff(reg, message, did, out.ms);
       return;
     }
     if (d.action === "ghost") {

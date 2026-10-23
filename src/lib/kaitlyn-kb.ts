@@ -60,7 +60,7 @@ export function ghostBlock(rows: Ghost[]): string {
 /** "Answered" for the digest and the audit (SPEC-kaitlyn-ghosts.md, E): a moderator line mentioning the person inside this window after their line. */
 export const ANSWER_WINDOW_MS = 15 * 60_000;
 
-/** Whether a moderator answered this person within the window of their line at `atMs`; her hand-off line (`handoffIds`) promises an answer and is not one. */
+/** Whether a moderator answered this person within the window of their line at `atMs`; a hand-off line of hers from before Oct 23 (`handoffIds`, the line is gone since SPEC-friday-unattended.md B) promised an answer and is not one. */
 export function answeredWithin(atMs: number, rid: string, told: Array<{ id?: number; mentions: string[]; created_at: string }>, handoffIds: Set<number> = new Set()): boolean {
   return told.some((m) => {
     if (m.id !== undefined && handoffIds.has(m.id)) return false;
@@ -101,7 +101,7 @@ export function postedFrom(rows: Array<{ status: string; skip_reason?: string | 
 /** The owed line only from here (SPEC-post-session.md, B): a quiet night owes a handful between runs; a stalled push owes hundreds. */
 export const OWED_FLOOR = 50;
 
-export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[]; /** outcome tags still to push to ActiveCampaign (SPEC-post-session.md, B) */ owed?: number }): string | null {
+export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[]; /** outcome tags still to push to ActiveCampaign (SPEC-post-session.md, B) */ owed?: number; /** the last link sweep's counts (SPEC-friday-unattended.md, E4): a Zap that stops writing shows here the next morning */ links?: { at?: string; written: number; created: number; pending: number; prev?: { at: string; written: number; created: number; pending: number } | null } | null; now?: Date }): string | null {
   const n = o.questions.length;
   const plural = (k: number, one: string, many: string) => (k === 1 ? one : many);
   const lines: string[] = [];
@@ -124,6 +124,11 @@ export function digestText(o: { questions: Array<{ question: string; asked: numb
   }
   const st = o.stale ?? [];
   if (st.length) lines.push(`${st.length} ${plural(st.length, "answer has", "answers have")} waited over a week for your OK: ${st.join(", ")}. ${o.url}`);
+  // Both of yesterday's runs (3 PM and 3 AM) count; the previous run rides inside the last one.
+  const dayAgo = (o.now ?? new Date()).getTime() - 24 * 3600 * 1000;
+  const runs = [o.links, o.links?.prev].filter((r): r is NonNullable<typeof r> => Boolean(r) && (!r!.at || new Date(r!.at).getTime() >= dayAgo));
+  const lk = runs.length ? { written: runs.reduce((n, r) => n + r.written, 0), created: runs.reduce((n, r) => n + r.created, 0), blank: Math.max(0, (o.links?.pending ?? 0) - (o.links?.written ?? 0)) } : null;
+  if (lk && (lk.written || lk.blank > 0)) lines.push(`Links: the sweep gave ${lk.written} contact${lk.written === 1 ? "" : "s"} a personal link yesterday${lk.created ? ` (${lk.created} needed a room row)` : ""}${lk.blank > 0 ? `; ${lk.blank} still blank` : ""}.`);
   if (o.owed === -1) lines.push("Outcome tags owed to ActiveCampaign: unknown (the plan failed; check the push).");
   else if (o.owed !== undefined && o.owed >= OWED_FLOOR) lines.push(`Outcome tags owed to ActiveCampaign: ${o.owed} (the push is behind).`);
   return lines.length ? lines.join("\n") : null;
@@ -144,16 +149,4 @@ export function factsLost(original: string, rewrite: string): string[] {
     }
   }
   return out;
-}
-
-const HANDOFF = [
-  "good one, I'll get the team to answer that properly and they'll follow up with you",
-  "let me pass that to the team so you get a proper answer, they'll reach out",
-  "I'll flag that for the team, they'll follow up with you on it",
-  "that one's better from the team, I'll have them follow up with you",
-];
-
-/** What she posts, once per person per night, when she does not know and nobody is on the desk (SPEC-kaitlyn-autopilot.md, decision 5). */
-export function handoffLine(pick: () => number = Math.random): string {
-  return HANDOFF[Math.min(HANDOFF.length - 1, Math.floor(pick() * HANDOFF.length))];
 }

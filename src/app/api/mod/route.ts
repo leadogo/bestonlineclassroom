@@ -9,7 +9,7 @@ import { asAutopilot, asMode, KAITLYN, postAsKaitlyn, reactAsKaitlyn, withoutMen
 import { postToChatChannel } from "@/lib/slack";
 import { withQuery } from "@/lib/params";
 import { ghostReason, skipReason } from "@/lib/moderation";
-import { peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
+import { isPerson, peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
 import { cuesFor, windowAt } from "@/lib/transcript";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
   const pitchAt = s.event.cta_at_seconds !== null ? s.session.start.getTime() + s.event.cta_at_seconds * 1000 : null;
   const ppl = await db()
     .from("attendance")
-    .select("last_seen_at, joined_at, seconds_watched, cta_clicked_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip, prior_sessions, auto_ghost_reason, flags)")
+    .select("last_seen_at, joined_at, seconds_watched, cta_clicked_at, registrant_id, registrant:registrants!inner(first_name, email, source, event_id, ghosted_at, ip, prior_sessions, auto_ghost_reason, flags, moved_in_at)")
     .eq("session_date", s.session.date)
     .eq("kind", "live")
     .eq("registrant.event_id", s.event.id)
@@ -69,32 +69,41 @@ export async function GET(request: Request) {
   const blocked = new Set(((await db().from("blocked_ips").select("ip")).data ?? []).map((b) => String(b.ip)));
   const rows = (ppl.data ?? []).filter((row) => (row.registrant as unknown as { source: string }).source !== "test" || true);
   const people = rows.map((row) => {
-    const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null; prior_sessions: number | null; auto_ghost_reason: string | null; flags: Record<string, unknown> | null };
+    const r = row.registrant as unknown as { first_name: string; email: string | null; source: string; ghosted_at: string | null; ip: string | null; prior_sessions: number | null; auto_ghost_reason: string | null; moved_in_at: string | null; flags: Record<string, unknown> | null };
     const flags = r.flags ?? {};
     const masked = r.email ? r.email.replace(/^(.{3}).*(@.*)$/, "$1…$2") : "guest";
     const joinedMs = new Date(row.joined_at as string).getTime();
     const seenMs = new Date(row.last_seen_at as string).getTime();
     return {
       first_name: r.first_name, source: r.source, last_seen_at: row.last_seen_at, joined_at: row.joined_at, registrant_id: row.registrant_id,
-      in_room: nowMs - seenMs < 120_000, minutes: Math.round(((row.seconds_watched as number) ?? 0) / 60), clicked_offer: Boolean(row.cta_clicked_at),
+      in_room: nowMs - seenMs < 120_000, person: isPerson({ seconds_watched: (row.seconds_watched as number | null) ?? 0, cta_clicked_at: (row.cta_clicked_at as string | null) ?? null }), minutes: Math.round(((row.seconds_watched as number) ?? 0) / 60), clicked_offer: Boolean(row.cta_clicked_at),
       at_pitch: pitchAt !== null && pitchAt <= nowMs && joinedMs <= pitchAt && seenMs + PRESENCE_GRACE_MS >= pitchAt,
-      ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked, prior_sessions: r.prior_sessions ?? 0, auto_ghost_reason: r.auto_ghost_reason,
+      moved_in: Boolean(r.moved_in_at), ghosted: Boolean(r.ghosted_at), has_ip: Boolean(r.ip), ip_blocked: Boolean(r.ip && blocked.has(r.ip)), email_masked: masked, prior_sessions: r.prior_sessions ?? 0, auto_ghost_reason: r.auto_ghost_reason,
       booking_href: bookingLink(s.event.cta_href, { first_name: r.first_name, registrant_id: row.registrant_id }),
       // Free training before the session (SPEC-free-training.md in the site repo): Jeremy's hot line, set by the site.
       hot: flags.hot === true, ultra_hot: flags.ultra_hot === true, training_minutes: typeof flags.training_minutes === "number" ? flags.training_minutes : 0,
     };
   });
   const real = people.filter((p) => p.source !== "test");
-  const registered = await db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", s.event.id).eq("session_date", s.session.date).neq("source", "test");
+  // Every count is persons (SPEC-link-opens.md, D). "arriving" is who is here under two minutes; "moved in" is who an older link brought in today.
+  const persons = real.filter((p) => p.person);
+  const [registered, movedIn] = await Promise.all([
+    db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", s.event.id).eq("session_date", s.session.date).neq("source", "test"),
+    db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", s.event.id).eq("session_date", s.session.date).neq("source", "test").not("moved_in_at", "is", null),
+  ]);
   const stats = {
     registered: registered.count ?? 0,
-    joined: real.length,
-    in_room: real.filter((p) => p.in_room).length,
-    peak: peakConcurrent(real.map((p) => ({ from: new Date(p.joined_at as string).getTime(), to: new Date(p.last_seen_at as string).getTime() }))),
+    moved_in: movedIn.count ?? 0,
+    joined: persons.length,
+    joined_tonight: persons.filter((p) => !p.moved_in).length,
+    visits: real.length,
+    in_room: persons.filter((p) => p.in_room).length,
+    arriving: real.filter((p) => p.in_room && !p.person).length,
+    peak: peakConcurrent(persons.map((p) => ({ from: new Date(p.joined_at as string).getTime(), to: new Date(p.last_seen_at as string).getTime() }))),
     pitch_at: pitchAt,
-    at_pitch: pitchAt !== null && pitchAt <= nowMs ? real.filter((p) => p.at_pitch).length : null,
-    clicked: real.filter((p) => p.clicked_offer).length,
-    stayed_15: real.filter((p) => p.minutes >= 15).length,
+    at_pitch: pitchAt !== null && pitchAt <= nowMs ? persons.filter((p) => p.at_pitch).length : null,
+    clicked: persons.filter((p) => p.clicked_offer).length,
+    stayed_15: persons.filter((p) => p.minutes >= 15).length,
     booked: (await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", s.event.id).eq("session_date", s.session.date).eq("status", "scheduled")).count ?? 0,
   };
   const team = ((await db().from("team_members").select("id, display_name")).data ?? []).map((m) => ({ id: `m:${m.id}`, name: m.display_name as string }));

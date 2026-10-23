@@ -54,6 +54,17 @@ export function retentionCurve(maxOffsets: number[], videoSeconds: number, stepS
 /** Heartbeats land every 15 s or so; a person is still there for this long after their last one (William, Sep 23: every counter uses the same rule). */
 export const PRESENCE_GRACE_MS = 120_000;
 
+/** A person watched two minutes or clicked the offer (SPEC-link-opens.md): scanner opens average 40 s with the video playing and never click. Every published count uses this (plus a chat line in the session, where the caller has them). */
+export const PERSON_SECONDS = 120;
+export function isPerson(r: { seconds_watched: number | null; cta_clicked_at: string | null }): boolean {
+  return (r.seconds_watched ?? 0) >= PERSON_SECONDS || r.cta_clicked_at !== null;
+}
+
+/** The render's move (SPEC-link-opens.md, A): an old link opened for a later session moves the person to it, unless this is a preview. A scanner's open moves the row too (the reminder touch); its beats are dropped at the heartbeat and it reports no room_join. */
+export function renderMove(rejoinDate: string | undefined, preview: boolean): boolean {
+  return Boolean(rejoinDate) && !preview;
+}
+
 /** How many intervals cover the instant `at`, each extended by the grace. */
 export function concurrentAt(intervals: Array<{ from: number; to: number }>, at: number, graceMs = PRESENCE_GRACE_MS): number {
   let n = 0;

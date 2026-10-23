@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { isPerson } from "@/lib/outcomes";
 import { getEvent } from "@/lib/events";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 
@@ -34,6 +35,8 @@ export async function GET(request: Request) {
       registration_id: r.site_registration_id,
       source: r.source,
       joined: Boolean(a),
+      // A person by the room's rule (SPEC-link-opens.md, decision 3): the site may switch its show rate to this when William says so.
+      person: Boolean(a && isPerson({ seconds_watched: a.seconds_watched ?? 0, cta_clicked_at: a.cta_clicked_at ?? null })),
       joined_at: a?.joined_at ?? null,
       minutes: a ? Math.round((a.seconds_watched ?? 0) / 60) : 0,
       at_pitch: Boolean(a && pitchAt !== null && new Date(a.joined_at).getTime() <= pitchAt && new Date(a.last_seen_at).getTime() >= pitchAt),
