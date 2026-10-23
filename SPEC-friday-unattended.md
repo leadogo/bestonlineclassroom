@@ -28,8 +28,9 @@ and the tag in under 25 s (row removed after); on the live `test-run` session, "
 goes over all of that in the last part" on her own, "@Sam how much is it" was skipped as an aside, and "do you integrate
 with Boomtown Pro version 9?" left a pending card and nothing in the room; the cron's incremental dry run read 9,720
 contacts in about two minutes and found 56 pending. **Settings for Friday:** `ailg-r` autopilot = on (set 10:21 PM),
-`kaitlyn_mode` assisted, Katherine AI on. The full by-hand sweep over the tag and both lists (883 pending at 10:00 PM)
-ran from 10:00 PM; its result and the Tuesday-list coverage are in the final message of the session and the memory note.
+`kaitlyn_mode` assisted, Katherine AI on. **The full by-hand sweep** over the tag and both lists ran 10:00 to 10:20 PM: 14,789 contacts checked, **882 repaired,
+820 room rows created, 0 failed, 0 still without a personal link**, so Tuesday's "30 day openers" email and the daily
+4 PM email carry a link for everyone on them; the cron keeps it that way from 3:25 AM Friday.
 
 ## What happened (Thu Oct 22), in numbers
 
