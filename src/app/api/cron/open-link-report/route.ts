@@ -7,6 +7,7 @@ import { SKOOL_MEMBERS, type BroadcastResult } from "@/lib/skool-broadcast-resul
 import { SKOOL_GROUP } from "@/lib/skool-broadcast";
 import { loadJoinSources } from "@/lib/join-sources-data";
 import { nightlyNotice } from "@/lib/notices";
+import { cronDue } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -40,13 +41,17 @@ async function funnel(eventId: string, from: string, to: string): Promise<Funnel
 /**
  * The nightly readout (SPEC-phase7.md), after the session, one 📊 per event: joins by source with the bookings; for an
  * event whose open link asks for an email, tonight's cards → emails → joined against the name-only nights before the
- * switch; how many clients the wall turned away today; the Skool broadcast's result when one went out. Schedule in
- * vercel.json (8:50 PM Mountain in summer, 7:50 PM in winter). `?dry=1` renders without posting.
+ * switch; how many clients the wall turned away today; the Skool broadcast's result when one went out. Two UTC entries in
+ * vercel.json (02:50 and 03:50) and the hour guard keep it at 8:50 PM Mountain in both DST states, clear of the 7:50
+ * night line; `?dry=1` renders without posting, `?force=1` ignores the hour.
  */
+const REPORT_HOUR = 20;
 export async function GET(request: Request) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const dry = new URL(request.url).searchParams.get("dry") === "1";
+  const params = new URL(request.url).searchParams;
+  const dry = params.get("dry") === "1";
   const now = new Date();
+  if (!dry && params.get("force") !== "1" && !cronDue(now, REPORT_HOUR)) return Response.json({ skipped: "not the hour", now: now.toISOString() });
   const { data: events } = await db().from("events").select("*");
   const notices: Notice[] = [];
   for (const e of ((events ?? []) as EventRow[]).filter((x) => !x.slug.startsWith("test"))) {

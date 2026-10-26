@@ -3,9 +3,8 @@
 // (`notice`: kind · headline · ask · numbers · note · detail) and the bridge renders them on the one schema every repo
 // shares; `text` stays only for the chat relay, which reads as a transcript. Best-effort: never throws, never blocks a
 // viewer. `renderNotice` / `noticeIssues` mirror the bridge's renderer and lint for dry runs and the tests.
-const BASE = process.env.BMS_OPS_URL ?? "";
-const SECRET = process.env.LARRY_BRIDGE_SECRET ?? "";
-const PERSONA = process.env.SLACK_PERSONA ?? "brandon";
+/** The bridge, read when a post is made (so a test can set the env). */
+const bridge = () => ({ base: process.env.BMS_OPS_URL ?? "", secret: process.env.LARRY_BRIDGE_SECRET ?? "", persona: process.env.SLACK_PERSONA ?? "brandon" });
 /** #autoweb-chat: the chat relay and Kaitlyn's desk lines. */
 export const CHAT_CHANNEL = process.env.SLACK_CHAT_CHANNEL_ID ?? "";
 /** #autoweb-intel (offer clicks as they happen, phase 5.1 intel-feed); the id leadogo's Brandon posts to. */
@@ -68,7 +67,8 @@ export function clipWords(text: string, max: number): string {
 }
 
 export function slackConfigured(): boolean {
-  return Boolean(BASE && SECRET && CHAT_CHANNEL);
+  const { base, secret } = bridge();
+  return Boolean(base && secret && CHAT_CHANNEL);
 }
 
 export type PostResult = { ok: boolean; ts?: string; error?: string };
@@ -81,16 +81,18 @@ export async function postToChatChannel(text: string): Promise<PostResult> {
 
 /** A post on the schema; `ts` edits that post in place instead of posting again, `threadTs` replies in a thread. */
 export async function postNotice(channel: string, notice: Notice, opts: { threadTs?: string | null; ts?: string | null } = {}): Promise<PostResult> {
-  if (!BASE || !SECRET || !channel) return { ok: false, error: "not_configured" };
+  const { base, secret } = bridge();
+  if (!base || !secret || !channel) return { ok: false, error: "not_configured" };
   return send(channel, { notice }, opts);
 }
 
 async function send(channel: string, body: { text: string } | { notice: Notice }, opts: { threadTs?: string | null; ts?: string | null }): Promise<PostResult> {
+  const { base, secret, persona } = bridge();
   try {
-    const res = await fetch(`${BASE.replace(/\/$/, "")}/api/internal/persona-post`, {
+    const res = await fetch(`${base.replace(/\/$/, "")}/api/internal/persona-post`, {
       method: "POST",
-      headers: { authorization: `Bearer ${SECRET}`, "content-type": "application/json" },
-      body: JSON.stringify({ persona: PERSONA, channel, ...body, strict: true, ...(opts.threadTs ? { thread_ts: opts.threadTs } : {}), ...(opts.ts ? { ts: opts.ts } : {}) }),
+      headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+      body: JSON.stringify({ persona, channel, ...body, strict: true, ...(opts.threadTs ? { thread_ts: opts.threadTs } : {}), ...(opts.ts ? { ts: opts.ts } : {}) }),
       signal: AbortSignal.timeout(8000),
     });
     const j = (await res.json().catch(() => null)) as { ok?: boolean; ts?: string; error?: string } | null;

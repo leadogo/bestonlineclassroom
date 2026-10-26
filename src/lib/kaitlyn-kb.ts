@@ -1,7 +1,7 @@
 // Kaitlyn's knowledge base, the pure parts (SPEC-kaitlyn-knowledge.md): the key the model names per decision, the
 // KNOWLEDGE block her prompt reads from `kaitlyn_kb`, the 9 AM digest's clock and text, the check that a humanizer rewrite
 // kept William's facts, and the line she posts when she does not know and nobody is on the desk.
-import { clipWords, HEADLINE_MAX_WORDS, williamMention, type Notice } from "./slack.ts";
+import { clipWords, escapeMrkdwn, HEADLINE_MAX_WORDS, williamMention, type Notice } from "./slack.ts";
 
 export type KbHandling = "open" | "answer" | "me" | "ignore";
 export type KbRow = { key: string; question: string; answer: string | null; approved: string | null; /** When William approved the line; a rewrite waiting for his OK has `approved` text and no date, and stays out of her prompt. */ approved_at: string | null; handling: KbHandling; asked: number };
@@ -107,12 +107,12 @@ export function digestNotice(o: { questions: Array<{ question: string; asked: nu
   const plural = (k: number, one: string, many: string) => (k === 1 ? one : many);
   // The thread: the questions, the link, and every audit line; the channel post keeps the ask and the agreement numbers.
   const lines: string[] = [];
-  if (n) lines.push(...o.questions.map((q) => `• ${q.question}${q.asked > 1 ? ` (×${q.asked})` : ""}`));
+  if (n) lines.push(...o.questions.map((q) => `• ${escapeMrkdwn(q.question)}${q.asked > 1 ? ` (×${q.asked})` : ""}`));
   if (n || o.waiting) lines.push(`${n ? `Answer ${plural(n, "it", "them")}` : "Approve"}: ${o.url}`);
   const u = o.unanswered ?? [];
-  if (u.length) lines.push(`Last night ${u.length} ${plural(u.length, "person", "people")} went unanswered: ${u.join(", ")}.`);
+  if (u.length) lines.push(`Last night ${u.length} ${plural(u.length, "person", "people")} went unanswered: ${u.map(escapeMrkdwn).join(", ")}.`);
   const g = o.ghosted ?? [];
-  if (g.length) lines.push(`You ghosted ${g.length} by hand: ${g.map((x) => (x.reason ? `${x.name} (${x.reason})` : x.name)).join(", ")}.`);
+  if (g.length) lines.push(`You ghosted ${g.length} by hand: ${g.map((x) => (x.reason ? `${escapeMrkdwn(x.name)} (${escapeMrkdwn(x.reason)})` : escapeMrkdwn(x.name))).join(", ")}.`);
   const p = o.posted;
   if (p?.posted) {
     const changed = [[p.fixed, "fixed"], [p.deleted, "deleted"], [p.edited, "edited before sending"], [p.wrong, "skipped as wrong"]].filter(([n]) => n).map(([n, w]) => `${n} you ${w}`);

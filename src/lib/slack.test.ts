@@ -1,7 +1,7 @@
 // The notice slots the bridge renders, mirrored for dry runs and the builder tests. Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clipChars, clipWords, NOTE_MAX_CHARS, noticeIssues, renderNotice, williamMention } from "./slack.ts";
+import { clipChars, clipWords, NOTE_MAX_CHARS, noticeIssues, postNotice, renderNotice, williamMention } from "./slack.ts";
 import { prettyPhone } from "./chat.ts";
 
 test("renderNotice: the kind's emoji, the headline bold, the ask line, three numbers on one line, the note with its period", () => {
@@ -24,6 +24,7 @@ test("prettyPhone and clipWords", () => {
   assert.equal(prettyPhone("+16475274777"), "(647) 527-4777");
   assert.equal(prettyPhone("647-527-4777"), "(647) 527-4777");
   assert.equal(prettyPhone("+44 20 7946 0958"), "+44 20 7946 0958");
+  assert.equal(prettyPhone("<!channel>"), "&lt;!channel&gt;", "a phone field that is not a number is typed text");
   assert.equal(prettyPhone(null), "");
   assert.equal(clipWords("What are your thoughts on the Close crm?", 7), "What are your thoughts on the Close…");
   assert.equal(clipWords("short", 7), "short");
@@ -38,4 +39,35 @@ test("williamMention: the real mention when SLACK_WILLIAM_USER_ID is set, plain 
   assert.equal(williamMention(), "<@U04MLPJAVUH>");
   assert.match(renderNotice({ kind: "ask", headline: "x", ask: { who: williamMention(), action: "fix it" } }), /^🎯 \*x\*\n→ <@U04MLPJAVUH> fix it\. ✅ here when done\.$/);
   delete process.env.SLACK_WILLIAM_USER_ID;
+});
+
+test("postNotice: not configured, a 400 with its reason, a network throw, ts and thread_ts through to the bridge (C5)", async () => {
+  const env = { BMS_OPS_URL: process.env.BMS_OPS_URL, LARRY_BRIDGE_SECRET: process.env.LARRY_BRIDGE_SECRET };
+  const realFetch = globalThis.fetch;
+  delete process.env.BMS_OPS_URL;
+  delete process.env.LARRY_BRIDGE_SECRET;
+  const notice = { kind: "receipt" as const, headline: "x" };
+  try {
+    assert.deepEqual(await postNotice("C1", notice), { ok: false, error: "not_configured" });
+    process.env.BMS_OPS_URL = "https://bms.test/";
+    process.env.LARRY_BRIDGE_SECRET = "s";
+    let seen: { url: string; body: Record<string, unknown>; auth: string | null } | null = null;
+    const answer = (status: number, body: unknown) => Object.assign(async (url: string | URL | Request, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      seen = { url: String(url), body: JSON.parse(String(init?.body)) as Record<string, unknown>, auth: headers.get("authorization") };
+      return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    }, {}) as typeof fetch;
+    globalThis.fetch = answer(200, { ok: true, posted_as: "brandon", ts: "1700000000.000100", thread_ts: "1700000000.000200" });
+    assert.deepEqual(await postNotice("C1", notice, { threadTs: "1699.1", ts: "1699.2" }), { ok: true, ts: "1700000000.000100" });
+    assert.equal(seen!.url, "https://bms.test/api/internal/persona-post");
+    assert.equal(seen!.auth, "Bearer s");
+    assert.deepEqual(seen!.body, { persona: "brandon", channel: "C1", notice, strict: true, thread_ts: "1699.1", ts: "1699.2" });
+    globalThis.fetch = answer(400, { ok: false, error: "notice.headline required" });
+    assert.deepEqual(await postNotice("C1", notice), { ok: false, error: "notice.headline required" });
+    globalThis.fetch = (async () => { throw new Error("boom"); }) as typeof fetch;
+    assert.deepEqual(await postNotice("C1", notice), { ok: false, error: "Error: boom" });
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
 });

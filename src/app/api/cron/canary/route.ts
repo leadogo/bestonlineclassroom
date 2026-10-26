@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import type { EventRow } from "@/lib/events";
 import { fourZones, localDate, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { postmarkConfigured } from "@/lib/postmark";
+import { cronDue } from "@/lib/tz";
 import { INTEL_CHANNEL, postNotice, renderNotice } from "@/lib/slack";
 import { canaryNotice, type CanaryCheck } from "@/lib/notices";
 
@@ -25,11 +26,15 @@ async function head(url: string, range = false): Promise<{ ok: boolean; status: 
  * The daily canary (SPEC-phase5.md guardrail 6): at 3:45 PM Mountain, before anyone can deploy for the evening, every
  * event that runs today is checked end to end: the video answers a byte range, the open page renders, the offer link
  * answers, the crowd exists, people are registered, reminders went out yesterday, mail and Slack are configured.
- * One line to #autoweb-intel, green or red. `?force=1` runs it any time; the schedule is in vercel.json.
+ * One health check to #autoweb-intel per event. Two UTC entries in vercel.json (21:45 and 22:45) and the hour guard keep
+ * it at 3:45 PM Mountain in both DST states; `?force=1` runs it any time.
  */
+const CANARY_HOUR = 15;
 export async function GET(request: Request) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const now = new Date();
+  const force = new URL(request.url).searchParams.get("force") === "1";
+  if (!force && !cronDue(now, CANARY_HOUR)) return Response.json({ skipped: "not the hour", now: now.toISOString() });
   const { data: events } = await db().from("events").select("*");
   const report: Array<{ event: string; runs: boolean; checks: CanaryCheck[] }> = [];
   for (const e of ((events ?? []) as EventRow[]).filter((x) => !x.slug.startsWith("test"))) {

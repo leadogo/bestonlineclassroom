@@ -79,6 +79,7 @@ test("digestNotice: nothing to say, answers waiting, one question, several with 
   const one = digestNotice({ questions: [{ question: "Do you work with Redfin agents?", asked: 1 }], people: 1, waiting: 0, url });
   assert.equal(clean(one), "🎯 *Kaitlyn couldn't answer 1 question last night (1 asked)*\n→ @Will answer them before tonight's room. ✅ here when done.");
   assert.deepEqual(one!.detail, ["• Do you work with Redfin agents?", `Answer it: ${url}`]);
+  assert.deepEqual(digestNotice({ questions: [{ question: "ping <!here>?", asked: 1 }], people: 1, waiting: 0, url, unanswered: ["<@U1>"] })!.detail, ["• ping &lt;!here&gt;?", `Answer it: ${url}`, "Last night 1 person went unanswered: &lt;@U1&gt;."], "attendee text never reads as mrkdwn");
   const many = digestNotice({ questions: [{ question: "Does it text in Spanish?", asked: 3 }, { question: "Do you work with Redfin agents?", asked: 1 }], people: 6, waiting: 2, url });
   assert.equal(clean(many), "🎯 *Kaitlyn: 2 answers need your OK · 2 questions she couldn't answer*\n→ @Will approve them before tonight's room. ✅ here when done.");
   assert.deepEqual(many!.detail, ["• Does it text in Spanish? (×3)", "• Do you work with Redfin agents?", `Answer them: ${url}`]);

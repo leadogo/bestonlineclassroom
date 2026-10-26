@@ -18,6 +18,7 @@ test("QR scan: 📱 QR scanned at 1:15 into the session (6:15 PM) → counts the
 
 test("client wall: 🚧 Client wall: Omayra (<email>) opened the join link for AI For Agents Masterclass 2026-10-25 and got the 404 → one shape; the cap refusal is a 🚨", () => {
   assert.equal(clean(clientWallNotice({ name: "Omayra", email: "omayra@example.com", path: "join", eventTitle: "AI For Agents Masterclass", date: "2026-10-25" })), "🚧 *Client wall: Omayra hit the 404 on the join link*\nomayra@example.com · AI For Agents Masterclass 2026-10-25");
+  assert.match(renderNotice(clientWallNotice({ name: "<!here>", email: "<a@b.c>", path: "join", eventTitle: "T", date: "2026-10-25" })), /^🚧 \*Client wall: &lt;!here&gt; hit the 404 on the join link\*\n&lt;a@b\.c&gt; · T 2026-10-25$/);
   assert.equal(clean(wallCapNotice(412, 300)), "🚨 *Client wall: a sync would have walled 412 people, nobody was walled*\ncap 300; check the snapshot bms-dashboard sent.");
 });
 
@@ -30,7 +31,7 @@ test("canary: 🟢 Canary: AI For Agents Masterclass runs at 5 PM Mountain. HTTP
   ];
   assert.equal(clean(canaryNotice({ title: "AI For Agents Masterclass", at: "5 PM Mountain", checks })), "✅ *Room health check: AI For Agents Masterclass is ready (5 PM Mountain)*\nvideo ✓ · open page ✓ · 753 simulated messages ✓ · 134 registered ✓");
   const failed = canaryNotice({ title: "AI For Agents Masterclass", at: "5 PM Mountain", checks: [{ ...checks[0], ok: false, detail: "HTTP 403 on a byte range" }, ...checks.slice(1)] });
-  assert.equal(clean(failed), "🎯 *Room health check failed: video*\n→ @Will fix before 5 PM Mountain. ✅ here when done.\nvideo: HTTP 403 on a byte range");
+  assert.equal(clean(failed), "🚨 *Room health check failed: video*\n→ @Will fix before 5 PM Mountain. ✅ here when done.\nvideo: HTTP 403 on a byte range", "an ask wearing the alarm sign (William's After)");
   assert.deepEqual(failed.detail, ["✗ video: HTTP 403 on a byte range", "✓ open page: HTTP 200", "✓ crowd: 753 simulated messages", "✓ registered: 134 hold a link for today"]);
 });
 
@@ -66,7 +67,10 @@ test("Kaitlyn needs you: Wayne Williams: \"What are your thoughts on the Close c
   const first = needsYouNotice({ name: "Wayne", ghosted: false, question: "What are your thoughts on the Close crm?", action: "ask_william", draft: "Zapier covers most CRMs, so Close works through that", asked: 1 });
   assert.equal(clean(first), "🎯 *Kaitlyn needs you — Wayne: \"What are your thoughts on the Close…\"*\n→ @Will answer on the desk or reply here. ✅ here when done.\n\"What are your thoughts on the Close crm?\" · her draft: \"Zapier covers most CRMs, so Close works through that\".");
   const again = needsYouNotice({ name: "Wayne", ghosted: true, question: "Close crm?", action: "ask_william", draft: "", asked: 3 });
-  assert.equal(clean(again), "🎯 *Kaitlyn needs you — (ghosted) Wayne: \"Close crm?\"*\n→ @Will answer on the desk or reply here. ✅ here when done.\nshe would ask william · asked 3×.");
+  assert.equal(clean(again), "🎯 *Kaitlyn needs you — Wayne: \"Close crm?\"*\n→ @Will answer on the desk or reply here. ✅ here when done.\nghosted · she would ask william · asked 3×.");
+  // The headline keeps to twelve words whoever asks (C4): a ghost with a seven-word question, a two-word name with eight.
+  assert.equal(clean(needsYouNotice({ name: "Wayne", ghosted: true, question: "What are your thoughts on the Close crm?", action: "ask_william", draft: "", asked: 1 })).split("\n")[0], "🎯 *Kaitlyn needs you — Wayne: \"What are your thoughts on the Close…\"*");
+  assert.equal(clean(needsYouNotice({ name: "Mary Ann", ghosted: false, question: "Does it work with the Close crm too?", action: "ask_william", draft: "", asked: 1 })).split("\n")[0], "🎯 *Kaitlyn needs you — Mary Ann: \"Does it work with the Close…\"*");
   assert.match(renderNotice(needsYouNotice({ name: "Wayne", ghosted: false, question: "Close crm?", action: "ghost", draft: "", asked: 2 })), /she would ghost · asked twice\.$/);
   // Attendee text never reads as mrkdwn, and a long draft stays under bms's note cap.
   const markup = needsYouNotice({ name: "<!channel>", ghosted: false, question: "ping <!here>?", action: "ask_william", draft: "x".repeat(600), asked: 1 });

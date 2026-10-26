@@ -1,6 +1,6 @@
 // The room's posts as notice slots (SPEC-slack-notifications, William's decisions of Oct 26 2026: every kept per-event
 // post has ONE shape, the canary reads as a health check, the 8:50 readout is one 📊). Pure; the routes read and post.
-import { clipChars, clipWords, escapeMrkdwn, prettyPhone, williamMention, type Notice } from "./slack.ts";
+import { clipChars, clipWords, escapeMrkdwn, HEADLINE_MAX_WORDS, prettyPhone, williamMention, type Notice } from "./slack.ts";
 import type { Funnel } from "./open-link.ts";
 import { openLinkLine } from "./open-link.ts";
 import { JOIN_SOURCES, type JoinSourcesResult } from "./join-sources.ts";
@@ -25,7 +25,7 @@ export function qrScanNotice(o: { at: string; clock: string; nth: number }): Not
 
 /** 🚧 → ✅ a paying client opened a join link and got the 404 wall. */
 export function clientWallNotice(o: { name: string; email: string | null; path: "join" | "replay"; eventTitle: string; date: string }): Notice {
-  return { kind: "receipt", emoji: "🚧", headline: `Client wall: ${escapeMrkdwn(o.name)} hit the 404 on the ${o.path} link`, numbers: [o.email ?? "no email", `${o.eventTitle} ${o.date}`] };
+  return { kind: "receipt", emoji: "🚧", headline: `Client wall: ${escapeMrkdwn(o.name)} hit the 404 on the ${o.path} link`, numbers: [o.email ? escapeMrkdwn(o.email) : "no email", `${o.eventTitle} ${o.date}`] };
 }
 
 /** A sync that would have walled too many people at once was refused. */
@@ -45,6 +45,7 @@ export function canaryNotice(o: { title: string; at: string; checks: CanaryCheck
   if (bad.length === 0) return { kind: "receipt", headline: `Room health check: ${o.title} is ready (${o.at})`, numbers: [o.checks.map((c) => `${c.short} ✓`).join(" · ")] };
   return {
     kind: "ask",
+    emoji: "🚨",
     headline: `Room health check failed: ${bad.map((c) => c.name).join(", ")}`,
     ask: { who: williamMention(), action: `fix before ${o.at}` },
     numbers: bad.map((c) => `${c.name}: ${c.detail}`),
@@ -81,14 +82,16 @@ export function autopilotNotice(o: { on: true; by: "switch" | "empty_desk" } | {
 
 /** 🎯 one per question Kaitlyn could not answer; a repeat edits the first post with `asked` (lo-kaitlyn-needs-you). */
 export function needsYouNotice(o: { name: string; ghosted: boolean; question: string; action: string; draft: string; asked: number }): Notice {
-  const who = `${o.ghosted ? "(ghosted) " : ""}${escapeMrkdwn(o.name)}`;
-  const clipped = clipWords(o.question, 7);
+  // "Kaitlyn needs you —" is four tokens and the name its own; the question takes what is left of the twelve (a two-word name leaves six).
+  const name = escapeMrkdwn(o.name.replace(/\s+/g, " ").trim());
+  const clipped = clipWords(o.question, Math.max(3, HEADLINE_MAX_WORDS - 4 - name.split(" ").length));
   const note = [
+    ...(o.ghosted ? ["ghosted"] : []),
     ...(clipped !== o.question ? [`"${escapeMrkdwn(o.question)}"`] : []),
     o.draft ? `her draft: "${escapeMrkdwn(o.draft)}"` : `she would ${o.action.replace("_", " ")}`,
     ...(o.asked > 1 ? [`asked ${o.asked === 2 ? "twice" : `${o.asked}×`}`] : []),
   ].join(" · ");
-  return { kind: "ask", headline: `Kaitlyn needs you — ${who}: "${escapeMrkdwn(clipped)}"`, ask: { who: williamMention(), action: "answer on the desk or reply here" }, note: clipChars(note) };
+  return { kind: "ask", headline: `Kaitlyn needs you — ${name}: "${escapeMrkdwn(clipped)}"`, ask: { who: williamMention(), action: "answer on the desk or reply here" }, note: clipChars(note) };
 }
 
 export function ghostNotice(o: { name: string; message: string; why: string }): Notice {
@@ -105,5 +108,5 @@ export function learnedNotice(o: { name: string; fact: string }): Notice {
 
 /** A client's complaint in the room, hidden and answered privately: the team follows up tomorrow. */
 export function complaintNotice(o: { name: string; email: string | null; message: string }): Notice {
-  return { kind: "alert", headline: `A client complaint in the room, answered privately: ${escapeMrkdwn(o.name)}`, numbers: [o.email ?? "no email"], note: clipChars(`"${escapeMrkdwn(clipWords(o.message, 40))}" · someone should follow up tomorrow`) };
+  return { kind: "alert", headline: `A client complaint in the room, answered privately: ${escapeMrkdwn(o.name)}`, numbers: [o.email ? escapeMrkdwn(o.email) : "no email"], note: clipChars(`"${escapeMrkdwn(clipWords(o.message, 40))}" · someone should follow up tomorrow`) };
 }

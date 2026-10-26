@@ -416,31 +416,90 @@ async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopil
   await postNotice(CHAT_CHANNEL, autopilotNotice({ on: false, name }));
 }
 
+/** The rows behind "Kaitlyn needs you" for one knowledge key tonight (migration 046: at most one row per key per session holds a ts). */
+export type NeedsYouStore = {
+  /** Writes 'pending' on this card: `claimed` = it is the key's card tonight (post fresh); `taken` = another card holds the key (edit its post); `error` = the column is not there yet (post once, no edit). */
+  claim(did: number): Promise<"claimed" | "taken" | "error">;
+  /** The card that holds the key tonight, its ts 'pending' while its post is in flight. */
+  holder(): Promise<{ id: number; slack_ts: string } | null>;
+  /** How many cards tonight carry the key up to this one: the "asked N×" count. */
+  asked(did: number): Promise<number>;
+  /** The real ts after a post; null releases the claim. */
+  setTs(id: number, ts: string | null): Promise<void>;
+};
+/** The claim's placeholder between the write and the post. */
+export const TS_PENDING = "pending";
+/** How long the loser of a burst waits for the winner's post to land before giving up on the edit. */
+export const HOLDER_WAIT = { TRIES: 6, MS: 500 } as const;
+
+export function needsYouStore(reg: Pick<Reg, "event_id" | "session_date">, kbKey: string): NeedsYouStore {
+  const mine = () => db().from("kaitlyn_decisions");
+  return {
+    async claim(did) {
+      // The partial unique index refuses a second non-null ts for the key tonight (23505); a column still missing (42703, before migration 046) is logged and the card posts without the edit.
+      const { data, error } = await mine().update({ slack_ts: TS_PENDING }).eq("id", did).is("slack_ts", null).select("id");
+      if (error) {
+        if (error.code === "23505") return "taken";
+        console.error("[kaitlyn] needs-you claim failed", { code: error.code });
+        return "error";
+      }
+      return data?.length ? "claimed" : "taken";
+    },
+    async holder() {
+      const { data, error } = await mine().select("id, slack_ts").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).not("slack_ts", "is", null).limit(1).maybeSingle();
+      if (error) console.error("[kaitlyn] needs-you holder read failed", { code: error.code });
+      return (data as { id: number; slack_ts: string } | null) ?? null;
+    },
+    async asked(did) {
+      const { count } = await mine().select("id", { count: "exact", head: true }).eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).lte("id", did);
+      return Math.max(1, count ?? 1);
+    },
+    async setTs(id, ts) {
+      const { error } = await mine().update({ slack_ts: ts }).eq("id", id);
+      if (error) console.error("[kaitlyn] needs-you ts write failed", { code: error.code });
+    },
+  };
+}
+
+type NeedsYouDeps = { store?: NeedsYouStore; post?: typeof postNotice; wait?: (ms: number) => Promise<void> };
+
 /**
  * "Kaitlyn needs you" in #autoweb-chat, one 🎯 per question tonight (SPEC-slack-notifications, Oct 26 2026): the first
- * card for a knowledge key posts and keeps the Slack ts on its row (migration 046); a later card for the same key in the
- * same session edits that post with how often it was asked instead of posting again. A card with no key always posts.
+ * card for a knowledge key claims the key (atomic, the index), posts, and keeps the Slack ts on its row; a later card for
+ * the same key in the same session edits that post with how often it was asked instead of posting again — a burst of two
+ * cards is one post and one edit. A card with no key always posts. A first post that is gone (deleted on the desk) is
+ * released and the repeat posts a fresh card. `deps` are for the tests.
  */
-async function tellNeedsYou(reg: Reg, did: number, kbKey: string | null, o: { question: string; action: string; draft: string }): Promise<void> {
-  let first: { id: number; slack_ts: string } | null = null;
-  let asked = 1;
-  if (kbKey) {
-    const [earlier, count] = await Promise.all([
-      db().from("kaitlyn_decisions").select("id, slack_ts").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).not("slack_ts", "is", null).order("id").limit(1).maybeSingle(),
-      db().from("kaitlyn_decisions").select("id", { count: "exact", head: true }).eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).lte("id", did),
-    ]);
-    first = (earlier.data as { id: number; slack_ts: string } | null) ?? null;
-    asked = Math.max(1, count.count ?? 1);
+export async function tellNeedsYou(reg: Reg, did: number, kbKey: string | null, o: { question: string; action: string; draft: string }, deps: NeedsYouDeps = {}): Promise<"posted" | "edited" | "skipped"> {
+  const post = deps.post ?? postNotice;
+  const notice = (asked: number) => needsYouNotice({ name: reg.first_name, ghosted: Boolean(reg.ghosted), asked, ...o });
+  if (!kbKey) return (await post(CHAT_CHANNEL, notice(1))).ok ? "posted" : "skipped";
+  const store = deps.store ?? needsYouStore(reg, kbKey);
+  const wait = deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const fresh = async (): Promise<"posted" | "skipped"> => {
+    const sent = await post(CHAT_CHANNEL, notice(await store.asked(did)));
+    await store.setTs(did, sent.ok && sent.ts ? sent.ts : null);
+    return sent.ok ? "posted" : "skipped";
+  };
+  const state = await store.claim(did);
+  if (state === "claimed") return fresh();
+  if (state === "error") return (await post(CHAT_CHANNEL, notice(1))).ok ? "posted" : "skipped";
+  // Another card holds the key: its post may still be in flight.
+  let holder: { id: number; slack_ts: string } | null = null;
+  for (let i = 0; i < HOLDER_WAIT.TRIES; i++) {
+    holder = await store.holder();
+    if (holder && holder.slack_ts !== TS_PENDING) break;
+    await wait(HOLDER_WAIT.MS);
   }
-  const notice = needsYouNotice({ name: reg.first_name, ghosted: Boolean(reg.ghosted), asked: first ? asked : 1, ...o });
-  let sent = await postNotice(CHAT_CHANNEL, notice, first ? { ts: first.slack_ts } : {});
-  // The first post gone (deleted on the desk, cant_update_message): a fresh card, and the dead ts comes off its row so the next repeat edits the new one.
-  if (!sent.ok && first) {
-    await db().from("kaitlyn_decisions").update({ slack_ts: null }).eq("id", first.id);
-    first = null;
-    sent = await postNotice(CHAT_CHANNEL, notice);
+  if (!holder || holder.slack_ts === TS_PENDING) {
+    console.warn("[kaitlyn] needs-you holder never landed; repeat not posted", { key: kbKey });
+    return "skipped";
   }
-  if (sent.ok && sent.ts && !first) await db().from("kaitlyn_decisions").update({ slack_ts: sent.ts }).eq("id", did);
+  const edited = await post(CHAT_CHANNEL, notice(await store.asked(did)), { ts: holder.slack_ts });
+  if (edited.ok) return "edited";
+  // The first post is gone (deleted on the desk, cant_update_message): release it, take the key, post a fresh card.
+  await store.setTs(holder.id, null);
+  return (await store.claim(did)) === "claimed" ? fresh() : "skipped";
 }
 
 /** The desk's first refusal (SPEC-kaitlyn-solo.md, B): a sure reply outside the routine set waits this long on the desk, then posts itself in assisted and auto. Oct 20: five such cards never went out. */
