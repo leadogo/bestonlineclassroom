@@ -1,6 +1,7 @@
 // Kaitlyn's knowledge base, the pure parts (SPEC-kaitlyn-knowledge.md): the key the model names per decision, the
 // KNOWLEDGE block her prompt reads from `kaitlyn_kb`, the 9 AM digest's clock and text, the check that a humanizer rewrite
 // kept William's facts, and the line she posts when she does not know and nobody is on the desk.
+import { clipWords, HEADLINE_MAX_WORDS, type Notice } from "./slack.ts";
 
 export type KbHandling = "open" | "answer" | "me" | "ignore";
 export type KbRow = { key: string; question: string; answer: string | null; approved: string | null; /** When William approved the line; a rewrite waiting for his OK has `approved` text and no date, and stays out of her prompt. */ approved_at: string | null; handling: KbHandling; asked: number };
@@ -101,18 +102,13 @@ export function postedFrom(rows: Array<{ status: string; skip_reason?: string | 
 /** The owed line only from here (SPEC-post-session.md, B): a quiet night owes a handful between runs; a stalled push owes hundreds. */
 export const OWED_FLOOR = 50;
 
-export function digestText(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[]; /** outcome tags still to push to ActiveCampaign (SPEC-post-session.md, B) */ owed?: number; /** the last link sweep's counts (SPEC-friday-unattended.md, E4): a Zap that stops writing shows here the next morning */ links?: { at?: string; written: number; created: number; pending: number; prev?: { at: string; written: number; created: number; pending: number } | null } | null; now?: Date }): string | null {
+export function digestNotice(o: { questions: Array<{ question: string; asked: number }>; people: number; waiting: number; url: string; unanswered?: string[]; ghosted?: Array<{ name: string; reason: string | null }>; posted?: Posted; stale?: string[]; /** outcome tags still to push to ActiveCampaign (SPEC-post-session.md, B) */ owed?: number; /** the last link sweep's counts (SPEC-friday-unattended.md, E4): a Zap that stops writing shows here the next morning */ links?: { at?: string; written: number; created: number; pending: number; prev?: { at: string; written: number; created: number; pending: number } | null } | null; now?: Date }): Notice | null {
   const n = o.questions.length;
   const plural = (k: number, one: string, many: string) => (k === 1 ? one : many);
+  // The thread: the questions, the link, and every audit line; the channel post keeps the ask and the agreement numbers.
   const lines: string[] = [];
-  if (n) {
-    lines.push(
-      `Kaitlyn couldn't answer ${n} ${plural(n, "question", "questions")} last night (${o.people} ${plural(o.people, "person", "people")} asked):`,
-      ...o.questions.map((q) => `• ${q.question}${q.asked > 1 ? ` (×${q.asked})` : ""}`),
-      `Answer ${plural(n, "it", "them")}: ${o.url}`,
-    );
-    if (o.waiting) lines.push(`${o.waiting} ${plural(o.waiting, "answer is", "answers are")} waiting for your OK.`);
-  } else if (o.waiting) lines.push(`${o.waiting} of Kaitlyn's answers ${plural(o.waiting, "is", "are")} waiting for your OK: ${o.url}`);
+  if (n) lines.push(...o.questions.map((q) => `• ${q.question}${q.asked > 1 ? ` (×${q.asked})` : ""}`));
+  if (n || o.waiting) lines.push(`${n ? `Answer ${plural(n, "it", "them")}` : "Approve"}: ${o.url}`);
   const u = o.unanswered ?? [];
   if (u.length) lines.push(`Last night ${u.length} ${plural(u.length, "person", "people")} went unanswered: ${u.join(", ")}.`);
   const g = o.ghosted ?? [];
@@ -131,7 +127,18 @@ export function digestText(o: { questions: Array<{ question: string; asked: numb
   if (lk && (lk.written || lk.blank > 0)) lines.push(`Links: the sweep gave ${lk.written} contact${lk.written === 1 ? "" : "s"} a personal link yesterday${lk.created ? ` (${lk.created} needed a room row)` : ""}${lk.blank > 0 ? `; ${lk.blank} still blank` : ""}.`);
   if (o.owed === -1) lines.push("Outcome tags owed to ActiveCampaign: unknown (the plan failed; check the push).");
   else if (o.owed !== undefined && o.owed >= OWED_FLOOR) lines.push(`Outcome tags owed to ActiveCampaign: ${o.owed} (the push is behind).`);
-  return lines.length ? lines.join("\n") : null;
+  const numbers = p?.posted ? [`${p.posted} posted last night`, `${p.stood} stood`, `${Math.round((100 * p.stood) / p.posted)}% agreement`] : [];
+  const waiting = o.waiting ? `${o.waiting} ${plural(o.waiting, "answer needs", "answers need")} your OK` : "";
+  const unanswered = n ? `${n} ${plural(n, "question", "questions")} she couldn't answer` : "";
+  if (o.waiting || n) {
+    // Something for Will: the staged answers to approve, the questions to answer, or both.
+    const headline = waiting && unanswered ? `Kaitlyn: ${waiting} · ${unanswered}` : waiting ? `Kaitlyn: ${waiting}` : `Kaitlyn couldn't answer ${n} ${plural(n, "question", "questions")} last night (${o.people} asked)`;
+    return { kind: "ask", headline, ask: { who: "Will", action: `${o.waiting ? "approve" : "answer"} them before tonight's room` }, numbers, detail: lines };
+  }
+  if (!lines.length && !numbers.length) return null;
+  // Nothing to answer or approve: the night's audit as a read, its first line the headline.
+  const headline = p?.posted ? `Kaitlyn posted ${p.posted} last night, ${p.stood} stood (${Math.round((100 * p.stood) / p.posted)}% agreement)` : clipWords(lines[0].replace(/[.:]$/, ""), HEADLINE_MAX_WORDS);
+  return { kind: "read", headline, numbers, detail: lines };
 }
 
 /** Facts in William's words that a rewrite dropped: numbers, dollar figures, links, and names (capitalised words that do not start a sentence). Empty when the rewrite kept them all. */

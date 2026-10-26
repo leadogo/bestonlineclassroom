@@ -51,9 +51,3 @@ export function joinSources(input: { clicks: ClickRow[]; joins: JoinRow[]; booki
   }
   return out;
 }
-
-export function joinSourcesLine(title: string, date: string, r: JoinSourcesResult): string {
-  const part = (s: JoinSource) => `${s} ${r[s].joined}${r[s].booked ? ` (${r[s].booked} booked)` : ""}`;
-  const clicks = JOIN_SOURCES.filter((s) => s !== "direct").map((s) => `${s} ${r[s].clicked}`).join(" · ");
-  return `🔗 *Joins by source, ${title} ${date}:* ${JOIN_SOURCES.map(part).join(" · ")} · link clicks: ${clicks}`;
-}

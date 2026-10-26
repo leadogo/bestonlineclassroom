@@ -1,12 +1,12 @@
 import { db } from "@/lib/db";
 import { localDate, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import type { EventRow } from "@/lib/events";
-import { openLinkLine, shiftDay, type Funnel } from "@/lib/open-link";
-import { postToIntel } from "@/lib/slack";
-import { SKOOL_MEMBERS, resultLine, type BroadcastResult } from "@/lib/skool-broadcast-results";
+import { shiftDay, type Funnel } from "@/lib/open-link";
+import { INTEL_CHANNEL, postNotice, renderNotice, type Notice } from "@/lib/slack";
+import { SKOOL_MEMBERS, type BroadcastResult } from "@/lib/skool-broadcast-results";
 import { SKOOL_GROUP } from "@/lib/skool-broadcast";
 import { loadJoinSources } from "@/lib/join-sources-data";
-import { joinSourcesLine } from "@/lib/join-sources";
+import { nightlyNotice } from "@/lib/notices";
 
 export const dynamic = "force-dynamic";
 
@@ -38,35 +38,37 @@ async function funnel(eventId: string, from: string, to: string): Promise<Funnel
 }
 
 /**
- * The nightly open-link line (SPEC-phase7.md), after the session: for an event whose open link asks for an email,
- * tonight's cards → emails → joined against the name-only nights before the switch; for every event, how many
- * clients the wall turned away today. Schedule in vercel.json (8:50 PM Mountain in summer, 7:50 PM in winter).
+ * The nightly readout (SPEC-phase7.md), after the session, one 📊 per event: joins by source with the bookings; for an
+ * event whose open link asks for an email, tonight's cards → emails → joined against the name-only nights before the
+ * switch; how many clients the wall turned away today; the Skool broadcast's result when one went out. Schedule in
+ * vercel.json (8:50 PM Mountain in summer, 7:50 PM in winter). `?dry=1` renders without posting.
  */
 export async function GET(request: Request) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const dry = new URL(request.url).searchParams.get("dry") === "1";
   const now = new Date();
   const { data: events } = await db().from("events").select("*");
-  const lines: string[] = [];
+  const notices: Notice[] = [];
   for (const e of ((events ?? []) as EventRow[]).filter((x) => !x.slug.startsWith("test"))) {
     const schedule = scheduleOf(e);
     const today = localDate(schedule, now);
     if (!sessionFor(schedule, today)) continue;
-    if (e.open_link_field === "email" && e.open_link_email_since) {
-      const tonight = await funnel(e.id, today, today);
-      const baseline = await funnel(e.id, shiftDay(e.open_link_email_since, -BASELINE_NIGHTS), shiftDay(e.open_link_email_since, -1));
-      lines.push(openLinkLine(e.title, today, tonight, baseline, BASELINE_NIGHTS));
-    }
+    const openLink = e.open_link_field === "email" && e.open_link_email_since
+      ? { title: e.title, date: today, tonight: await funnel(e.id, today, today), baseline: await funnel(e.id, shiftDay(e.open_link_email_since, -BASELINE_NIGHTS), shiftDay(e.open_link_email_since, -1)), nights: BASELINE_NIGHTS }
+      : null;
     const walled = await db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", e.id).eq("session_date", today).eq("block_reason", "client");
     const hits = await db().from("link_clicks").select("id", { count: "exact", head: true }).eq("event_id", e.id).eq("session_date", today).eq("outcome", "walled");
-    lines.push(joinSourcesLine(e.title, today, await loadJoinSources(e.id, today, e.cta_at_seconds ?? 4500)));
-    const broadcast = await db().from("skool_broadcasts").select("id, weekday, title").eq("group_slug", SKOOL_GROUP).eq("broadcast_date", today).eq("status", "posted").maybeSingle();
-    if (broadcast.data && e.slug === "ailg-r") {
+    const joins = await loadJoinSources(e.id, today, e.cta_at_seconds ?? 4500);
+    const posted = await db().from("skool_broadcasts").select("id, weekday, title").eq("group_slug", SKOOL_GROUP).eq("broadcast_date", today).eq("status", "posted").maybeSingle();
+    let broadcast: { weekday: string; date: string; title: string; result: BroadcastResult } | null = null;
+    if (posted.data && e.slug === "ailg-r") {
       const result = await scoreBroadcast(e.id, today, e.cta_at_seconds ?? 4500);
-      await db().from("skool_broadcasts").update({ result, scored_at: now.toISOString() }).eq("id", broadcast.data.id);
-      lines.push(resultLine(broadcast.data.weekday as string, today, broadcast.data.title as string, result));
+      if (!dry) await db().from("skool_broadcasts").update({ result, scored_at: now.toISOString() }).eq("id", posted.data.id);
+      broadcast = { weekday: posted.data.weekday as string, date: today, title: posted.data.title as string, result };
     }
-    lines.push(`🚧 Client wall, ${e.title} ${today}: ${walled.count ?? 0} client${walled.count === 1 ? "" : "s"} held a link, ${hits.count ?? 0} opened it and got the 404.`);
+    const label = new Intl.DateTimeFormat("en-US", { timeZone: e.timezone, weekday: "short", month: "short", day: "numeric" }).format(new Date(`${today}T12:00:00Z`)).replace(",", "");
+    notices.push(nightlyNotice({ label, joins, openLink, wall: { held: walled.count ?? 0, hit: hits.count ?? 0 }, broadcast }));
   }
-  const posted = lines.length ? await postToIntel(lines.join("\n")) : { ok: true };
-  return Response.json({ ok: posted.ok, lines }, { headers: { "cache-control": "no-store" } });
+  const results = dry ? [] : await Promise.all(notices.map((n) => postNotice(INTEL_CHANNEL, n)));
+  return Response.json({ ok: results.every((r) => r.ok), lines: notices.map(renderNotice) }, { headers: { "cache-control": "no-store" } });
 }

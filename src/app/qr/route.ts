@@ -2,7 +2,9 @@ import { after } from "next/server";
 import { logClick } from "@/lib/clicks";
 import { getEvent } from "@/lib/events";
 import { withQuery } from "@/lib/params";
-import { postToIntel } from "@/lib/slack";
+import { INTEL_CHANNEL, postNotice } from "@/lib/slack";
+import { qrScanNotice } from "@/lib/notices";
+import { db } from "@/lib/db";
 import { currentOrNextSession, scheduleOf } from "@/lib/daily-schedule";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +24,8 @@ export async function GET(request: Request) {
   const ua = request.headers.get("user-agent");
   after(async () => {
     await logClick({ path: "qr", outcome: "scan", eventId: event.id, sessionDate: session.date, src: "qr", userAgent: ua });
-    await postToIntel(`📱 QR scanned at ${at} into the session (${new Date().toLocaleTimeString("en-US", { timeZone: event.timezone, hour: "numeric", minute: "2-digit" })})`);
+    const scans = await db().from("link_clicks").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", session.date).eq("path", "qr").eq("outcome", "scan");
+    await postNotice(INTEL_CHANNEL, qrScanNotice({ at, clock: new Date().toLocaleTimeString("en-US", { timeZone: event.timezone, hour: "numeric", minute: "2-digit" }), nth: scans.count ?? 1 }));
   });
   return Response.redirect(withQuery(event.cta_href, { utm_source: "qr", utm_medium: "video", utm_campaign: "ailgr-pitch", src: "qr" }), 302);
 }

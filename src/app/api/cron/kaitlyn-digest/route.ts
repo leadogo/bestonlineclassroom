@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
-import { answeredWithin, digestDue, digestText, postedFrom } from "@/lib/kaitlyn-kb";
+import { answeredWithin, digestDue, digestNotice, postedFrom } from "@/lib/kaitlyn-kb";
 import { planOutcomeTags } from "@/lib/outcome-push";
-import { postToIntel } from "@/lib/slack";
+import { INTEL_CHANNEL, postNotice, renderNotice } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,8 +11,8 @@ const DAY_MS = 24 * 3600 * 1000;
 
 /**
  * The 9 AM knowledge digest (SPEC-kaitlyn-knowledge.md): once a day, at 9 in the webinar's zone, one line to
- * #autoweb-intel per webinar with Kaitlyn on, listing the questions she could not answer since yesterday's 9 AM and how
- * many answers wait for William's OK. Nothing posts on a quiet night. The cron runs hourly (vercel.json) so the clock
+ * #autoweb-intel per webinar with Kaitlyn on: a 🎯 to Will with the answers waiting for his OK and the questions she
+ * could not answer since yesterday's 9 AM (the questions and the audit lines in the thread). Nothing posts on a quiet night. The cron runs hourly (vercel.json) so the clock
  * change never moves it; `?dry=1` returns the text without posting or recording; `?force=1` ignores the clock.
  */
 export async function GET(request: Request) {
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       db().from("kaitlyn_decisions").select("status, skip_reason").eq("event_id", e.id).gte("created_at", since).limit(2000),
       db().from("kaitlyn_kb").select("key").eq("event_id", e.id).not("answer", "is", null).is("approved_at", null).neq("handling", "ignore").lt("answered_at", new Date(now.getTime() - 7 * DAY_MS).toISOString()).order("key").limit(20),
     ]);
-    const text = digestText({
+    const notice = digestNotice({
       questions: (open.data ?? []).map((r) => ({ question: r.question as string, asked: perKey.get(r.key as string) ?? 1 })),
       people: new Set(asks.map((a) => a.registrant_id as string)).size,
       waiting: waiting.count ?? 0,
@@ -69,8 +69,9 @@ export async function GET(request: Request) {
       owed,
       links: (e.ac_links_last as { written: number; created: number; pending: number } | null) ?? null,
     });
+    const text = notice ? renderNotice(notice) : null;
     if (!dry) {
-      const sent = text ? await postToIntel(text) : { ok: true };
+      const sent = notice ? await postNotice(INTEL_CHANNEL, notice) : { ok: true };
       // A Slack hiccup leaves the day unrecorded, so the next hourly run tries again.
       if (sent.ok) await db().from("events").update({ kaitlyn_digest_on: today }).eq("id", e.id);
     }

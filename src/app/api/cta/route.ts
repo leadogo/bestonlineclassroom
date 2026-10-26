@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { moveIn, reportRoomJoin, roomDateFor, type Movable } from "@/lib/move-in";
 import { tagNow } from "@/lib/tagging";
 import { TOKEN_RE } from "@/lib/registrants";
-import { postToIntel } from "@/lib/slack";
+import { INTEL_CHANNEL, postNotice } from "@/lib/slack";
+import { joinClickNotice } from "@/lib/notices";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       const at = `${Math.floor(secs / 3600)}:${String(Math.floor((secs % 3600) / 60)).padStart(2, "0")}`;
       const n = await db().from("attendance").select("registrant_id, registrant:registrants!inner(event_id)", { count: "exact", head: true }).eq("session_date", date).eq("kind", "live").not("cta_clicked_at", "is", null).eq("registrant.event_id", r.event_id);
       const nth = n.count ?? 0;
-      await postToIntel(`🔔 *${r.first_name}*${r.phone ? ` · ${r.phone}` : ""} clicked *${ev.cta_label ?? "the offer"}*${kind === "replay" ? " on the replay" : ` at ${at} into the session`}${nth ? ` · click #${nth} tonight` : ""}`);
+      await postNotice(INTEL_CHANNEL, joinClickNotice({ name: r.first_name, phone: r.phone, label: ev.cta_label, at, replay: kind === "replay", nth }));
     });
   }
   return new Response(null, { status: 204 });

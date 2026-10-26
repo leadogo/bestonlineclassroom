@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { linkPlan, linkSlot, linkSources, sessionDateFor, sweepLine } from "./ac-links.ts";
+import { linkPlan, linkSlot, linkSources, sessionDateFor, sweepFailedNotice, sweepNotice } from "./ac-links.ts";
+import { noticeIssues, renderNotice } from "./slack.ts";
 
 test("linkSources: incremental filters the tag by created_after and the lists by updated_after; full has no window", () => {
   const inc = linkSources(false, "2026-10-20");
@@ -41,7 +42,13 @@ test("linkSlot: the 3 AM slot from 3 to 14 Edmonton, the 3 PM slot from 15, none
   assert.equal(linkSlot(new Date("2026-10-23T07:30:00Z")), null);
 });
 
-test("sweepLine: OK when nothing is left, 'still blank' otherwise", () => {
-  assert.match(sweepLine({ scanned: 100, pending: 3, written: 3, created: 1, failed: 0, truncated: false, sample: [], scope: "3 days" }, "2026-10-23T15"), /^Links OK .*3 days.*3 repaired, 1 room rows created, 0 of 100/);
-  assert.match(sweepLine({ scanned: 100, pending: 5, written: 2, created: 0, failed: 3, truncated: true, sample: [], scope: "full" }, null), /^Links: still blank .*full.*3 of 100 .*3 failed.*budget hit/);
+test("sweepNotice: a clean sweep posts nothing (Oct 26 2026, 'Links OK (… sweep, 3 days): 1 repaired, 0 room rows created, 0 of 10022 …' is gone); a repair or a contact still blank is a 🚨", () => {
+  assert.equal(sweepNotice({ scanned: 10022, pending: 0, written: 0, created: 0, failed: 0, truncated: false, sample: [], scope: "3 days" }, "2026-10-23T03"), null);
+  const repaired = sweepNotice({ scanned: 10022, pending: 1, written: 1, created: 0, failed: 0, truncated: false, sample: [], scope: "3 days" }, "2026-10-23T03")!;
+  assert.deepEqual(noticeIssues(repaired), []);
+  assert.equal(renderNotice(repaired), "🚨 *Links sweep: 1 contact had no personal link, repaired*\n1 repaired · 0 room rows created · 0 of 10022 checked still blank\n2026-10-23T03 sweep, 3 days.");
+  const blank = sweepNotice({ scanned: 100, pending: 5, written: 2, created: 0, failed: 3, truncated: true, sample: [], scope: "full" }, null)!;
+  assert.deepEqual(noticeIssues(blank), []);
+  assert.equal(renderNotice(blank), "🚨 *Links sweep: 3 contacts still have no personal link*\n2 repaired · 0 room rows created · 3 of 100 checked still blank\nforced sweep, full · 3 failed · budget hit, the next run continues.");
+  assert.equal(renderNotice(sweepFailedNotice("ActiveCampaign read failed: /contacts")), "🚨 *Links sweep failed: contacts may get a blank promo*\nActiveCampaign read failed: /contacts · next try in an hour.");
 });

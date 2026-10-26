@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { joinSources, joinSourcesLine } from "./join-sources.ts";
+import { joinSources } from "./join-sources.ts";
 
 const clicks = [
   { registrant_id: "a", at: "2026-10-18T22:50:00Z", src: "email", outcome: "countdown" },
@@ -27,5 +27,4 @@ test("a join is credited to the last tagged click before it; untagged is direct;
 
 test("the line reads joins per source with bookings in brackets", () => {
   const r = joinSources({ clicks, joins, bookings: [{ registrant_id: "a" }], ctaAtSeconds: 4500 });
-  assert.match(joinSourcesLine("AI For Agents Masterclass", "2026-10-18", r), /sms 1 \(1 booked\) · skool 1 · calendar 0 · direct 1 · link clicks: email 2 · sms 2/);
 });

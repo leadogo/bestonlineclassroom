@@ -14,7 +14,8 @@ import { asksForReplay } from "./katherine.ts";
 import { asksMarket, asksOutright, findMarkets, findRegion, findStates, onlyStates, placeOf, regionPlaces, rollup, type MarketCount, type Rollup } from "./market-answer.ts";
 import { EMOJIS, isEmoji } from "./moderation.ts";
 import { toggleReaction } from "./reactions.ts";
-import { postToChatChannel, postToIntel } from "./slack.ts";
+import { CHAT_CHANNEL, INTEL_CHANNEL, postNotice } from "./slack.ts";
+import { autopilotNotice, complaintNotice, deskPassedNotice, ghostNotice, needsYouNotice } from "./notices.ts";
 import { cuesFor, onScreen, type OnScreen } from "./transcript.ts";
 
 export { KAITLYN };
@@ -409,10 +410,30 @@ async function takenBy(reg: Reg, messageId: number, nextKey: string | null): Pro
 async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopilot: Autopilot): Promise<void> {
   const prev = await db().from("kaitlyn_decisions").select("autopilot").eq("event_id", reg.event_id).eq("session_date", reg.session_date).lt("id", did).order("id", { ascending: false }).limit(1).maybeSingle();
   if ((prev.data ? Boolean(prev.data.autopilot) : false) === auto) return;
-  if (auto) { await postToChatChannel(autopilot === "on" ? "Autopilot on: the switch is On, Kaitlyn is answering on her own tonight." : "Autopilot on: nobody on the desk for 3 min, Kaitlyn is answering."); return; }
+  if (auto) { await postNotice(CHAT_CHANNEL, autopilotNotice({ on: true, by: autopilot === "on" ? "switch" : "empty_desk" })); return; }
   const who = await db().from("team_presence").select("member_id, member:team_members!inner(display_name)").eq("event_id", reg.event_id).eq("session_date", reg.session_date).order("last_seen_at", { ascending: false }).limit(1).maybeSingle();
   const name = (who.data?.member as unknown as { display_name?: string } | null)?.display_name ?? "a moderator";
-  await postToChatChannel(`Autopilot off: ${name} is back on the desk.`);
+  await postNotice(CHAT_CHANNEL, autopilotNotice({ on: false, name }));
+}
+
+/**
+ * "Kaitlyn needs you" in #autoweb-chat, one 🎯 per question tonight (SPEC-slack-notifications, Oct 26 2026): the first
+ * card for a knowledge key posts and keeps the Slack ts on its row (migration 046); a later card for the same key in the
+ * same session edits that post with how often it was asked instead of posting again. A card with no key always posts.
+ */
+async function tellNeedsYou(reg: Reg, did: number, kbKey: string | null, o: { question: string; action: string; draft: string }): Promise<void> {
+  let first: { id: number; slack_ts: string } | null = null;
+  let asked = 1;
+  if (kbKey) {
+    const [earlier, count] = await Promise.all([
+      db().from("kaitlyn_decisions").select("id, slack_ts").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).not("slack_ts", "is", null).order("id").limit(1).maybeSingle(),
+      db().from("kaitlyn_decisions").select("id", { count: "exact", head: true }).eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).lte("id", did),
+    ]);
+    first = (earlier.data as { id: number; slack_ts: string } | null) ?? null;
+    asked = Math.max(1, count.count ?? 1);
+  }
+  const sent = await postNotice(CHAT_CHANNEL, needsYouNotice({ name: reg.first_name, ghosted: Boolean(reg.ghosted), asked: first ? asked : 1, ...o }), first ? { ts: first.slack_ts } : {});
+  if (sent.ok && sent.ts && !first) await db().from("kaitlyn_decisions").update({ slack_ts: sent.ts }).eq("id", did);
 }
 
 /** The desk's first refusal (SPEC-kaitlyn-solo.md, B): a sure reply outside the routine set waits this long on the desk, then posts itself in assisted and auto. Oct 20: five such cards never went out. */
@@ -449,7 +470,7 @@ export async function sweepDeskFirst(eventId: string, sessionDate: string, offse
     if (!mid) { await db().from("kaitlyn_decisions").update({ status: "pending", decided_at: null }).eq("id", c.id); continue; }
     await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", c.id);
     posted += 1;
-    if (reg.source !== "test") await postToChatChannel(`Kaitlyn posted after 90 s on the desk · ${reg.first_name}: ${JSON.stringify(text)}`);
+    if (reg.source !== "test") await postNotice(CHAT_CHANNEL, deskPassedNotice({ name: reg.first_name, text }));
   }
   return posted;
 }
@@ -516,7 +537,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (eff === "shadow") return;
     if (d.react) { await reactAsKaitlyn(message.id, d.react); await db().from("kaitlyn_decisions").update({ reacted_at: new Date().toISOString() }).eq("id", did); }
     if (pending) {
-      if (reg.source !== "test") await postToChatChannel(`Kaitlyn needs you · ${reg.ghosted ? "(ghosted) " : ""}${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} → ${d.action.replace("_", " ")}${d.text ? ` ${JSON.stringify(d.text)}` : ""} (${d.why})`);
+      if (reg.source !== "test") await tellNeedsYou(reg, did, d.kb?.key ?? null, { question: message.body.slice(0, 200), action: d.action, draft: d.text });
       return;
     }
     if (d.action === "ghost") {
@@ -526,14 +547,14 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
         await db().from("chat_messages").update({ visibility: "author", updated_at: new Date().toISOString() }).eq("id", message.id);
       }
       await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did);
-      if (reg.source !== "test" && !reg.ghosted) await postToChatChannel(`Kaitlyn ghosted ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} (${d.why}). Unghost on the desk if that was wrong.`);
+      if (reg.source !== "test" && !reg.ghosted) await postNotice(CHAT_CHANNEL, ghostNotice({ name: reg.first_name, message: message.body.slice(0, 200), why: d.why }));
       // The line they still get, private (postAsKaitlyn reads the ghost); a client complaint also reaches the team so someone follows up.
       if (d.text) {
         const body = `@${reg.first_name} ${d.text}`;
         const mid = await postAsKaitlyn(reg, body, message.offset, auto ? "autopilot" : "kaitlyn");
         if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
       }
-      if (d.category === "support" && reg.source !== "test") await postToIntel(`A client complaint in the room tonight, hidden from the chat and answered privately: ${reg.first_name}${reg.email ? ` (${reg.email})` : ""}: ${JSON.stringify(message.body.slice(0, 300))}. Someone should follow up tomorrow.`);
+      if (d.category === "support" && reg.source !== "test") await postNotice(INTEL_CHANNEL, complaintNotice({ name: reg.first_name, email: reg.email ?? null, message: message.body.slice(0, 300) }));
       return;
     }
     if (!itself) return;

@@ -8,6 +8,7 @@ import { acApi, JOIN_FIELD, PERSONAL_RE, REGISTERED_TAG_ID, REPLAY_FIELD, watchL
 import { db, pageAll } from "./db.ts";
 import { cleanName } from "./chat-filter.ts";
 import { emailHash, isTestIdentity, nameFromEmail, newToken, normalizeEmail } from "./registrants.ts";
+import type { Notice } from "./slack.ts";
 
 export type AcContact = { id: string; email: string; firstName?: string; phone?: string; cdate: string };
 /** The lists whose emails carry %WEBINARJOINLINK%: 4740 "AI For Agents Masterclass" and 4743 "30 day openers". */
@@ -137,9 +138,19 @@ export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; even
   return result;
 }
 
-/** The Slack line after a run (SPEC-friday-unattended.md, E4). */
-export function sweepLine(r: SweepResult, slot: string | null): string {
+/** After a run (SPEC-friday-unattended.md, E4; Oct 26 2026: green is silent): nothing when every contact had a link, a 🚨 when the sweep repaired some or some are still blank. */
+export function sweepNotice(r: SweepResult, slot: string | null): Notice | null {
   const left = r.pending - r.written;
-  const head = left === 0 ? "Links OK" : "Links: still blank";
-  return `${head} (${slot ?? "forced"} sweep, ${r.scope}): ${r.written} repaired, ${r.created} room rows created, ${left} of ${r.scanned} contacts checked still without a personal link${r.failed ? `, ${r.failed} failed` : ""}${r.truncated ? ", budget hit, the next run continues" : ""}.`;
+  if (!left && !r.written && !r.failed) return null;
+  const contacts = (n: number) => `${n} contact${n === 1 ? "" : "s"}`;
+  return {
+    kind: "alert",
+    headline: left > 0 ? `Links sweep: ${contacts(left)} still ${left === 1 ? "has" : "have"} no personal link` : `Links sweep: ${contacts(r.written)} had no personal link, repaired`,
+    numbers: [`${r.written} repaired`, `${r.created} room rows created`, `${left} of ${r.scanned} checked still blank`],
+    note: [`${slot ?? "forced"} sweep, ${r.scope}`, ...(r.failed ? [`${r.failed} failed`] : []), ...(r.truncated ? ["budget hit, the next run continues"] : [])].join(" · "),
+  };
+}
+
+export function sweepFailedNotice(err: string): Notice {
+  return { kind: "alert", headline: "Links sweep failed: contacts may get a blank promo", note: `${err.slice(0, 120)} · next try in an hour` };
 }
