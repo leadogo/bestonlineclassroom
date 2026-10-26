@@ -8,7 +8,7 @@
     },
     {
       "path": "/api/cron/canary",
-      "schedule": "45 21 * * *"
+      "schedule": "45 21,22 * * *"
     },
     {
       "path": "/api/cron/reminders",
@@ -16,7 +16,7 @@
     },
     {
       "path": "/api/cron/open-link-report",
-      "schedule": "50 2 * * *"
+      "schedule": "50 2,3 * * *"
     },
     {
       "path": "/api/cron/kaitlyn-digest",

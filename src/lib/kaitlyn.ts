@@ -14,7 +14,8 @@ import { asksForReplay } from "./katherine.ts";
 import { asksMarket, asksOutright, findMarkets, findRegion, findStates, onlyStates, placeOf, regionPlaces, rollup, type MarketCount, type Rollup } from "./market-answer.ts";
 import { EMOJIS, isEmoji } from "./moderation.ts";
 import { toggleReaction } from "./reactions.ts";
-import { postToChatChannel, postToIntel } from "./slack.ts";
+import { CHAT_CHANNEL, INTEL_CHANNEL, postNotice } from "./slack.ts";
+import { autopilotNotice, complaintNotice, deskPassedNotice, ghostNotice, needsYouNotice } from "./notices.ts";
 import { cuesFor, onScreen, type OnScreen } from "./transcript.ts";
 
 export { KAITLYN };
@@ -409,10 +410,96 @@ async function takenBy(reg: Reg, messageId: number, nextKey: string | null): Pro
 async function autopilotTransition(reg: Reg, did: number, auto: boolean, autopilot: Autopilot): Promise<void> {
   const prev = await db().from("kaitlyn_decisions").select("autopilot").eq("event_id", reg.event_id).eq("session_date", reg.session_date).lt("id", did).order("id", { ascending: false }).limit(1).maybeSingle();
   if ((prev.data ? Boolean(prev.data.autopilot) : false) === auto) return;
-  if (auto) { await postToChatChannel(autopilot === "on" ? "Autopilot on: the switch is On, Kaitlyn is answering on her own tonight." : "Autopilot on: nobody on the desk for 3 min, Kaitlyn is answering."); return; }
+  if (auto) { await postNotice(CHAT_CHANNEL, autopilotNotice({ on: true, by: autopilot === "on" ? "switch" : "empty_desk" })); return; }
   const who = await db().from("team_presence").select("member_id, member:team_members!inner(display_name)").eq("event_id", reg.event_id).eq("session_date", reg.session_date).order("last_seen_at", { ascending: false }).limit(1).maybeSingle();
   const name = (who.data?.member as unknown as { display_name?: string } | null)?.display_name ?? "a moderator";
-  await postToChatChannel(`Autopilot off: ${name} is back on the desk.`);
+  await postNotice(CHAT_CHANNEL, autopilotNotice({ on: false, name }));
+}
+
+/** The rows behind "Kaitlyn needs you" for one knowledge key tonight (migration 046: at most one row per key per session holds a ts). */
+export type NeedsYouStore = {
+  /** Writes 'pending' on this card: `claimed` = it is the key's card tonight (post fresh); `taken` = another card holds the key (edit its post); `error` = the column is not there yet (post once, no edit). */
+  claim(did: number): Promise<"claimed" | "taken" | "error">;
+  /** The card that holds the key tonight, its ts 'pending' while its post is in flight. */
+  holder(): Promise<{ id: number; slack_ts: string } | null>;
+  /** How many cards tonight carry the key up to this one: the "asked N×" count. */
+  asked(did: number): Promise<number>;
+  /** The real ts after a post; null releases the claim. */
+  setTs(id: number, ts: string | null): Promise<void>;
+};
+/** The claim's placeholder between the write and the post. */
+export const TS_PENDING = "pending";
+/** How long the loser of a burst waits for the winner's post to land before giving up on the edit. */
+export const HOLDER_WAIT = { TRIES: 6, MS: 500 } as const;
+
+export function needsYouStore(reg: Pick<Reg, "event_id" | "session_date">, kbKey: string): NeedsYouStore {
+  const mine = () => db().from("kaitlyn_decisions");
+  return {
+    async claim(did) {
+      // The partial unique index refuses a second non-null ts for the key tonight (23505); a column still missing (42703, before migration 046) is logged and the card posts without the edit.
+      const { data, error } = await mine().update({ slack_ts: TS_PENDING }).eq("id", did).is("slack_ts", null).select("id");
+      if (error) {
+        if (error.code === "23505") return "taken";
+        console.error("[kaitlyn] needs-you claim failed", { code: error.code });
+        return "error";
+      }
+      return data?.length ? "claimed" : "taken";
+    },
+    async holder() {
+      const { data, error } = await mine().select("id, slack_ts").eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).not("slack_ts", "is", null).limit(1).maybeSingle();
+      if (error) console.error("[kaitlyn] needs-you holder read failed", { code: error.code });
+      return (data as { id: number; slack_ts: string } | null) ?? null;
+    },
+    async asked(did) {
+      const { count } = await mine().select("id", { count: "exact", head: true }).eq("event_id", reg.event_id).eq("session_date", reg.session_date).eq("kb_key", kbKey).lte("id", did);
+      return Math.max(1, count ?? 1);
+    },
+    async setTs(id, ts) {
+      const { error } = await mine().update({ slack_ts: ts }).eq("id", id);
+      if (error) console.error("[kaitlyn] needs-you ts write failed", { code: error.code });
+    },
+  };
+}
+
+type NeedsYouDeps = { store?: NeedsYouStore; post?: typeof postNotice; wait?: (ms: number) => Promise<void> };
+
+/**
+ * "Kaitlyn needs you" in #autoweb-chat, one 🎯 per question tonight (SPEC-slack-notifications, Oct 26 2026): the first
+ * card for a knowledge key claims the key (atomic, the index), posts, and keeps the Slack ts on its row; a later card for
+ * the same key in the same session edits that post with how often it was asked instead of posting again — a burst of two
+ * cards is one post and one edit. A card with no key always posts. A first post that is gone (deleted on the desk) is
+ * released and the repeat posts a fresh card. `deps` are for the tests.
+ */
+export async function tellNeedsYou(reg: Reg, did: number, kbKey: string | null, o: { question: string; action: string; draft: string }, deps: NeedsYouDeps = {}): Promise<"posted" | "edited" | "skipped"> {
+  const post = deps.post ?? postNotice;
+  const notice = (asked: number) => needsYouNotice({ name: reg.first_name, ghosted: Boolean(reg.ghosted), asked, ...o });
+  if (!kbKey) return (await post(CHAT_CHANNEL, notice(1))).ok ? "posted" : "skipped";
+  const store = deps.store ?? needsYouStore(reg, kbKey);
+  const wait = deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const fresh = async (): Promise<"posted" | "skipped"> => {
+    const sent = await post(CHAT_CHANNEL, notice(await store.asked(did)));
+    await store.setTs(did, sent.ok && sent.ts ? sent.ts : null);
+    return sent.ok ? "posted" : "skipped";
+  };
+  const state = await store.claim(did);
+  if (state === "claimed") return fresh();
+  if (state === "error") return (await post(CHAT_CHANNEL, notice(1))).ok ? "posted" : "skipped";
+  // Another card holds the key: its post may still be in flight.
+  let holder: { id: number; slack_ts: string } | null = null;
+  for (let i = 0; i < HOLDER_WAIT.TRIES; i++) {
+    holder = await store.holder();
+    if (holder && holder.slack_ts !== TS_PENDING) break;
+    await wait(HOLDER_WAIT.MS);
+  }
+  if (!holder || holder.slack_ts === TS_PENDING) {
+    console.warn("[kaitlyn] needs-you holder never landed; repeat not posted", { key: kbKey });
+    return "skipped";
+  }
+  const edited = await post(CHAT_CHANNEL, notice(await store.asked(did)), { ts: holder.slack_ts });
+  if (edited.ok) return "edited";
+  // The first post is gone (deleted on the desk, cant_update_message): release it, take the key, post a fresh card.
+  await store.setTs(holder.id, null);
+  return (await store.claim(did)) === "claimed" ? fresh() : "skipped";
 }
 
 /** The desk's first refusal (SPEC-kaitlyn-solo.md, B): a sure reply outside the routine set waits this long on the desk, then posts itself in assisted and auto. Oct 20: five such cards never went out. */
@@ -449,7 +536,7 @@ export async function sweepDeskFirst(eventId: string, sessionDate: string, offse
     if (!mid) { await db().from("kaitlyn_decisions").update({ status: "pending", decided_at: null }).eq("id", c.id); continue; }
     await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", c.id);
     posted += 1;
-    if (reg.source !== "test") await postToChatChannel(`Kaitlyn posted after 90 s on the desk · ${reg.first_name}: ${JSON.stringify(text)}`);
+    if (reg.source !== "test") await postNotice(CHAT_CHANNEL, deskPassedNotice({ name: reg.first_name, text }));
   }
   return posted;
 }
@@ -516,7 +603,7 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
     if (eff === "shadow") return;
     if (d.react) { await reactAsKaitlyn(message.id, d.react); await db().from("kaitlyn_decisions").update({ reacted_at: new Date().toISOString() }).eq("id", did); }
     if (pending) {
-      if (reg.source !== "test") await postToChatChannel(`Kaitlyn needs you · ${reg.ghosted ? "(ghosted) " : ""}${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} → ${d.action.replace("_", " ")}${d.text ? ` ${JSON.stringify(d.text)}` : ""} (${d.why})`);
+      if (reg.source !== "test") await tellNeedsYou(reg, did, d.kb?.key ?? null, { question: message.body.slice(0, 200), action: d.action, draft: d.text });
       return;
     }
     if (d.action === "ghost") {
@@ -526,14 +613,14 @@ export async function kaitlynHandle(a: { reg: Reg; event: { kaitlyn_mode: Mode; 
         await db().from("chat_messages").update({ visibility: "author", updated_at: new Date().toISOString() }).eq("id", message.id);
       }
       await db().from("kaitlyn_decisions").update({ status: "ghosted", decided_at: new Date().toISOString() }).eq("id", did);
-      if (reg.source !== "test" && !reg.ghosted) await postToChatChannel(`Kaitlyn ghosted ${reg.first_name}: ${JSON.stringify(message.body.slice(0, 200))} (${d.why}). Unghost on the desk if that was wrong.`);
+      if (reg.source !== "test" && !reg.ghosted) await postNotice(CHAT_CHANNEL, ghostNotice({ name: reg.first_name, message: message.body.slice(0, 200), why: d.why }));
       // The line they still get, private (postAsKaitlyn reads the ghost); a client complaint also reaches the team so someone follows up.
       if (d.text) {
         const body = `@${reg.first_name} ${d.text}`;
         const mid = await postAsKaitlyn(reg, body, message.offset, auto ? "autopilot" : "kaitlyn");
         if (mid) await db().from("kaitlyn_decisions").update({ sent_body: body, sent_message_id: mid }).eq("id", did);
       }
-      if (d.category === "support" && reg.source !== "test") await postToIntel(`A client complaint in the room tonight, hidden from the chat and answered privately: ${reg.first_name}${reg.email ? ` (${reg.email})` : ""}: ${JSON.stringify(message.body.slice(0, 300))}. Someone should follow up tomorrow.`);
+      if (d.category === "support" && reg.source !== "test") await postNotice(INTEL_CHANNEL, complaintNotice({ name: reg.first_name, email: reg.email ?? null, message: message.body.slice(0, 300) }));
       return;
     }
     if (!itself) return;

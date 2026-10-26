@@ -57,9 +57,19 @@ export function canPost(lastPostedAt: number | null, now: number): boolean {
   return lastPostedAt === null || now - lastPostedAt >= POST_GAP_MS;
 }
 
-/** What #autoweb-chat has always received: `Name / Email / Question`. Guests have no email. */
-export function slackLine(name: string, email: string | null, body: string): string {
-  return `${name} / ${email || "guest"} / ${body}`;
+/** Attendee-typed text must never read as mrkdwn in Slack: `<!channel>`, `<@U…>`, `<url|label>` (review of Oct 26 2026). */
+export const escapeMrkdwn = (value: string): string => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** "(647) 527-4777" for a North American number; anything else as given (escaped: it is typed text). */
+export function prettyPhone(raw: string | null | undefined): string {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  const ten = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  return ten.length === 10 ? `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}` : escapeMrkdwn(String(raw ?? "").trim());
+}
+
+/** The transcript line #autoweb-chat gets per message (William, Oct 26 2026: "include their phone as well if it's available"): name · phone · email · the message, no emoji, no bold. Guests have no email. */
+export function slackLine(name: string, phone: string | null, email: string | null, body: string): string {
+  return [escapeMrkdwn(name), ...(phone ? [prettyPhone(phone)] : []), email ? escapeMrkdwn(email) : "guest", `"${escapeMrkdwn(body)}"`].join(" · ");
 }
 
 /** Keeps the newest `max` items so a long session never grows the DOM without bound. */

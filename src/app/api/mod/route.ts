@@ -6,7 +6,8 @@ import { blockAtEdge, edgeConfigured, unblockAtEdge } from "@/lib/edge-block";
 import { forgetBlockedIps } from "@/lib/ip";
 import { toggleReaction } from "@/lib/reactions";
 import { asAutopilot, asMode, KAITLYN, postAsKaitlyn, reactAsKaitlyn, withoutMention } from "@/lib/kaitlyn";
-import { postToChatChannel } from "@/lib/slack";
+import { CHAT_CHANNEL, postNotice } from "@/lib/slack";
+import { learnedNotice } from "@/lib/notices";
 import { withQuery } from "@/lib/params";
 import { ghostReason, skipReason } from "@/lib/moderation";
 import { isPerson, peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
@@ -279,7 +280,7 @@ export async function POST(request: Request) {
       const { error } = await db().from("events").update({ kaitlyn_facts: facts }).eq("id", s.event.id);
       if (error) return Response.json({ error: "Could not save that." }, { status: 500 });
       forgetEvent(s.event.slug);
-      await postToChatChannel(`Kaitlyn learned (${member.display_name}): ${text}`);
+      await postNotice(CHAT_CHANNEL, learnedNotice({ name: member.display_name, fact: text }));
       return Response.json({ ok: true, line });
     }
     case "ghost":

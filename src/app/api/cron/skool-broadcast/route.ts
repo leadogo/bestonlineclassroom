@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { postToIntel } from "@/lib/slack";
+import { INTEL_CHANNEL, postNotice } from "@/lib/slack";
+import { broadcastNotice } from "@/lib/notices";
 import { CATEGORY, SKOOL_GROUP, isBroadcastMinute, mountainParts, pickBroadcast, BROADCASTS } from "@/lib/skool-broadcast";
 import { postToSkool } from "@/lib/skool-post";
 
@@ -31,9 +32,6 @@ export async function GET(request: Request) {
   const result = await postToSkool({ groupSlug: group, title: broadcast.title, body: broadcast.body, category: CATEGORY, emailAll: true, dryRun: dry });
   const status = dry ? "dry_run" : result.ok ? "posted" : "failed";
   await db().from("skool_broadcasts").insert({ group_slug: group, broadcast_date: date, weekday: broadcast.weekday, title: broadcast.title, body: broadcast.body, status, post_url: result.postUrl ?? null, error: result.error ?? null });
-  const line = result.ok
-    ? `✅ *Skool ${broadcast.weekday} broadcast ${dry ? "dry run filled and cancelled" : "posted"}* · ${group} · email toggle ${result.emailToggle ?? "unknown"}${result.postUrl ? ` · ${result.postUrl}` : ""}`
-    : `🚨 *Skool ${broadcast.weekday} broadcast failed* · ${group} · ${result.error ?? "unknown error"} · Browserbase session ${result.sessionId ?? "?"}`;
-  await postToIntel(line).catch(() => {});
+  await postNotice(INTEL_CHANNEL, broadcastNotice({ weekday: broadcast.weekday, dry, ok: result.ok, group, emailToggle: result.emailToggle, postUrl: result.postUrl, error: result.error, sessionId: result.sessionId })).catch(() => {});
   return Response.json({ ok: result.ok, status, emailToggle: result.emailToggle, postUrl: result.postUrl, error: result.error, sessionId: result.sessionId }, { status: result.ok ? 200 : 500 });
 }

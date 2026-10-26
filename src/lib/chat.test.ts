@@ -31,8 +31,11 @@ test("posting rule and Slack line", () => {
   assert.equal(canPost(null, 1000), true);
   assert.equal(canPost(1000, 2500), false);
   assert.equal(canPost(1000, 3000), true);
-  assert.equal(slackLine("Ana", "ana@x.com", "Is this recorded?"), "Ana / ana@x.com / Is this recorded?");
-  assert.equal(slackLine("Bo", null, "hi"), "Bo / guest / hi");
+  // Now: Mani Shooshtarizadeh / mani.shooshtari@icloud.com / Toronto → the phone when they gave one, the message quoted, no emoji (William, Oct 26 2026).
+  assert.equal(slackLine("Mani", "+16475274777", "mani.shooshtari@icloud.com", "Toronto"), "Mani · (647) 527-4777 · mani.shooshtari@icloud.com · \"Toronto\"");
+  assert.equal(slackLine("Ana", null, "ana@x.com", "Is this recorded?"), "Ana · ana@x.com · \"Is this recorded?\"");
+  assert.equal(slackLine("Bo", "", null, "hi"), "Bo · guest · \"hi\"");
+  assert.equal(slackLine("<!channel>", null, null, "see <@U1> & co"), "&lt;!channel&gt; · guest · \"see &lt;@U1&gt; &amp; co\"", "attendee text never reads as mrkdwn");
   assert.equal(trimList(Array.from({ length: 450 }, (_, i) => ({ key: String(i), name: "", role: "simulated" as const, body: "", at: i, reactions: {} }))).length, 400);
 });
 

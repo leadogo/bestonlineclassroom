@@ -2,6 +2,7 @@
 // rows and the two-minute rule William's Oct 20 report used. Pure; the cron route reads and posts.
 import { isPerson, peakConcurrent, PERSON_SECONDS, PRESENCE_GRACE_MS } from "./outcomes.ts";
 import { partsInTz } from "./tz.ts";
+import type { Notice } from "./slack.ts";
 
 export { isPerson, PERSON_SECONDS };
 export type LiveRow = { registrant_id: string; joined_at: string; last_seen_at: string; seconds_watched: number; cta_clicked_at: string | null; source?: string | null };
@@ -33,13 +34,17 @@ export function median(xs: number[]): number | null {
 
 export type Emails = { taps: number; watched: number; booked: number };
 
-/** One line, two when promo email taps exist that afternoon. The median names how many nights it covers (fewer than seven in the first week or on a two-night schedule). */
-export function nightReportText(o: { label: string; counts: NightCounts; booked: number; medians: { people: number | null; booked: number | null; nights: number }; emails?: Emails | null }): string {
+/** The night as one 📊: people and bookings against the median on the headline, the rest on the number line, the promo email taps as the note when there were any. The thread names how many nights the median covers (fewer than seven in the first week or on a two-night schedule). */
+export function nightReportNotice(o: { label: string; counts: NightCounts; booked: number; medians: { people: number | null; booked: number | null; nights: number }; emails?: Emails | null }): Notice {
   const c = o.counts;
-  const med = (n: number | null) => (n === null || !o.medians.nights ? "" : ` (${o.medians.nights}-night median ${n})`);
-  const parts = [`${c.people} people${med(o.medians.people)}`, `peak ${c.peak}`, ...(c.at_pitch !== null ? [`${c.at_pitch} at the pitch`] : []), `${c.clicked} offer clicks`, `${c.stayed_40} stayed 40+`, `${o.booked} booked${med(o.medians.booked)}`];
-  const line = `${o.label} · ${parts.join(" · ")}`;
-  return o.emails && o.emails.taps ? `${line}\nEmails: ${o.emails.taps} human taps → ${o.emails.watched} watched → ${o.emails.booked} booked` : line;
+  const med = (n: number | null) => (n === null || !o.medians.nights ? "" : ` (median ${n})`);
+  return {
+    kind: "read",
+    headline: `${o.label}: ${c.people} people${med(o.medians.people)}, ${o.booked} booked${med(o.medians.booked)}`,
+    numbers: [`peak ${c.peak}`, ...(c.at_pitch !== null ? [`${c.at_pitch} at the pitch`] : []), `${c.clicked} offer clicks · ${c.stayed_40} stayed 40+`],
+    note: o.emails && o.emails.taps ? `emails ${o.emails.taps} taps → ${o.emails.watched} watched → ${o.emails.booked} booked` : null,
+    detail: o.medians.nights ? [`the median covers the previous ${o.medians.nights} night${o.medians.nights === 1 ? "" : "s"}`] : [],
+  };
 }
 
 /** Due from 7:45 PM in the event's zone for the rest of that day (so a failed 7:50 post is retried at 8:50), once the session has ended, once a day. `today` is the local date to record. */

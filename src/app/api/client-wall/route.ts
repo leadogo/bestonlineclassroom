@@ -2,7 +2,8 @@ import { roomState, scheduleOf } from "@/lib/daily-schedule";
 import { db } from "@/lib/db";
 import { FLAG_CAP, MIN_SNAPSHOT, normalizeClients } from "@/lib/client-wall";
 import { MIN_MARKETS, normalizeMarkets } from "@/lib/market-answer";
-import { postToIntel } from "@/lib/slack";
+import { INTEL_CHANNEL, postNotice } from "@/lib/slack";
+import { wallCapNotice } from "@/lib/notices";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
   if (applied.error) return Response.json({ error: `Apply failed: ${applied.error.message}` }, { status: 500 });
   const result = (applied.data ?? {}) as { error?: string; would_flag?: number; flagged?: number; released?: number };
   if (result.error === "cap") {
-    await postToIntel(`🔴 Client wall: a sync would have walled ${result.would_flag} people at once (cap ${FLAG_CAP}); nobody was walled. Check the snapshot bms-dashboard sent.`).catch(() => {});
+    await postNotice(INTEL_CHANNEL, wallCapNotice(result.would_flag ?? 0, FLAG_CAP)).catch(() => {});
     return Response.json({ error: "cap", ...result }, { status: 409 });
   }
   const markets = body.markets === undefined ? undefined : await storeMarkets(body.markets, now).catch((e: unknown) => String(e));

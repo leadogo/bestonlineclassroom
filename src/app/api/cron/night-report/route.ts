@@ -1,8 +1,8 @@
 import { localDate, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { db, pageAll } from "@/lib/db";
 import { isScannerAgent } from "@/lib/scanner";
-import { median, nightCounts, nightReportDue, nightReportText, type LiveRow } from "@/lib/night-report";
-import { postToIntel } from "@/lib/slack";
+import { median, nightCounts, nightReportDue, nightReportNotice, type LiveRow } from "@/lib/night-report";
+import { INTEL_CHANNEL, postNotice, renderNotice } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -61,9 +61,10 @@ export async function GET(request: Request) {
     const bookedTonight = new Set((booked.get(today) ?? []).filter((x): x is string => Boolean(x)));
     const emails = { taps: tapped.size, watched: [...tapped].filter((id) => tonight.people_ids.has(id)).length, booked: [...tapped].filter((id) => bookedTonight.has(id)).length };
     const label = new Intl.DateTimeFormat("en-US", { timeZone: e.timezone, weekday: "short", month: "short", day: "numeric" }).format(session.start).replace(",", "");
-    const text = nightReportText({ label, counts: tonight, booked: (booked.get(today) ?? []).length, medians, emails });
+    const notice = nightReportNotice({ label, counts: tonight, booked: (booked.get(today) ?? []).length, medians, emails });
+    const text = renderNotice(notice);
     if (!dry) {
-      const sent = await postToIntel(text);
+      const sent = await postNotice(INTEL_CHANNEL, notice);
       // A Slack hiccup leaves the day unrecorded, so the next hourly run (due from 7:45 PM for the rest of the day) tries again.
       if (sent.ok) await db().from("events").update({ night_report_on: localToday }).eq("id", e.id);
     }

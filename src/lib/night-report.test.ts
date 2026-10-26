@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isPerson, median, nightCounts, nightReportDue, nightReportText, PERSON_SECONDS, type LiveRow } from "./night-report.ts";
+import { isPerson, median, nightCounts, nightReportDue, nightReportNotice, PERSON_SECONDS, type LiveRow } from "./night-report.ts";
+import { noticeIssues, renderNotice } from "./slack.ts";
 
 const start = Date.parse("2026-10-20T23:00:00Z"); // 5 PM Mountain
 const at = (ms: number) => new Date(start + ms).toISOString();
@@ -27,19 +28,23 @@ test("nightCounts: persons by the two-minute rule, peak and at-the-pitch over pe
   assert.equal(nightCounts(rows, null).at_pitch, null);
 });
 
-test("median and the text, with and without medians and the email line", () => {
+test("median and the night as one 📊 (Oct 23 2026: 'Fri Oct 23 · 40 people (7-night median 57) · peak 36 · 31 at the pitch · 18 offer clicks · 33 stayed 40+ · 15 booked (7-night median 10)'), with and without medians and the email line", () => {
   assert.equal(median([]), null);
   assert.equal(median([40]), 40);
   assert.equal(median([61, 40, 37, 28, 31, 38, 47]), 38);
   assert.equal(median([10, 20]), 15);
   const counts = nightCounts([row(1, 0, 8000, true), row(2, 0, 3000), row(3, 0, 50)], start + 4500 * 1000);
   // Row 2 leaves at 50 minutes, before the 75-minute pitch: one at the pitch.
-  assert.equal(nightReportText({ label: "Tue Oct 20", counts, booked: 37, medians: { people: 40, booked: 13, nights: 7 } }), "Tue Oct 20 · 2 people (7-night median 40) · peak 2 · 1 at the pitch · 1 offer clicks · 2 stayed 40+ · 37 booked (7-night median 13)");
-  assert.match(nightReportText({ label: "Tue Oct 20", counts, booked: 37, medians: { people: 40, booked: 13, nights: 3 } }), /\(3-night median 40\)/, "the median names its nights");
-  assert.doesNotMatch(nightReportText({ label: "Tue Oct 20", counts, booked: 37, medians: { people: 40, booked: 13, nights: 0 } }), /median/, "no nights, no median");
-  assert.equal(nightReportText({ label: "Tue Oct 20", counts: nightCounts([], null), booked: 0, medians: { people: null, booked: null, nights: 0 } }), "Tue Oct 20 · 0 people · peak 0 · 0 offer clicks · 0 stayed 40+ · 0 booked");
-  assert.match(nightReportText({ label: "Tue Oct 20", counts, booked: 37, medians: { people: 40, booked: 13, nights: 7 }, emails: { taps: 59, watched: 13, booked: 5 } }), /\nEmails: 59 human taps → 13 watched → 5 booked$/);
-  assert.doesNotMatch(nightReportText({ label: "Wed Oct 21", counts, booked: 9, medians: { people: 40, booked: 13, nights: 7 }, emails: { taps: 0, watched: 0, booked: 0 } }), /Emails/, "no promo taps, no line");
+  const n = nightReportNotice({ label: "Tue Oct 20", counts, booked: 37, medians: { people: 40, booked: 13, nights: 7 } });
+  assert.deepEqual(noticeIssues(n), []);
+  assert.equal(renderNotice(n), "📊 *Tue Oct 20: 2 people (median 40), 37 booked (median 13)*\npeak 2 · 1 at the pitch · 1 offer clicks · 2 stayed 40+");
+  assert.deepEqual(n.detail, ["the median covers the previous 7 nights"], "the thread names the median's nights");
+  assert.doesNotMatch(renderNotice(nightReportNotice({ label: "Tue Oct 20", counts, booked: 37, medians: { people: 40, booked: 13, nights: 0 } })), /median/, "no nights, no median");
+  assert.equal(renderNotice(nightReportNotice({ label: "Tue Oct 20", counts: nightCounts([], null), booked: 0, medians: { people: null, booked: null, nights: 0 } })), "📊 *Tue Oct 20: 0 people, 0 booked*\npeak 0 · 0 offer clicks · 0 stayed 40+");
+  const withEmails = nightReportNotice({ label: "Tue Oct 20", counts, booked: 37, medians: { people: 40, booked: 13, nights: 7 }, emails: { taps: 59, watched: 13, booked: 5 } });
+  assert.deepEqual(noticeIssues(withEmails), []);
+  assert.match(renderNotice(withEmails), /\nemails 59 taps → 13 watched → 5 booked\.$/);
+  assert.doesNotMatch(renderNotice(nightReportNotice({ label: "Wed Oct 21", counts, booked: 9, medians: { people: 40, booked: 13, nights: 7 }, emails: { taps: 0, watched: 0, booked: 0 } })), /emails/, "no promo taps, no line");
 });
 
 test("nightReportDue: from 7:45 PM in the zone for the rest of the day (a failed 7:50 post is retried at 8:50), after the session's end, once a day", () => {

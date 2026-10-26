@@ -15,6 +15,11 @@ export type Parts = {
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/** A cron with two UTC entries (one per DST state) runs on the one that lands on this hour in the zone (F4). */
+export function cronDue(now: Date, hour: number, tz = "America/Edmonton"): boolean {
+  return partsInTz(now, tz).hour === hour;
+}
+
 export function partsInTz(date: Date, tz: string): Parts {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,

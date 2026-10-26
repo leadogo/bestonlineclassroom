@@ -3,7 +3,8 @@
 // (client_wall_hit) so the insert trigger and the sync agree by construction.
 import { db } from "./db.ts";
 import { emailHash, normalizeEmail } from "./registrants.ts";
-import { postToIntel } from "./slack.ts";
+import { INTEL_CHANNEL, postNotice } from "./slack.ts";
+import { clientWallNotice } from "./notices.ts";
 
 export type WallRow = { client_id: string; name: string | null; status: string | null; emails: string[]; email_hashes: string[]; phones: string[]; client_since: string | null };
 
@@ -38,5 +39,5 @@ export async function tellWallHit(r: { id: string; first_name: string; email: st
   const since = new Date(Date.now() - 3_600_000).toISOString();
   const { count } = await db().from("link_clicks").select("id", { count: "exact", head: true }).eq("registrant_id", r.id).eq("outcome", "walled").gte("at", since);
   if ((count ?? 0) > 1) return;
-  await postToIntel(`🚧 Client wall: ${r.first_name}${r.email ? ` (${r.email})` : ""} opened the ${path} link for ${eventTitle} ${r.session_date} and got the 404.`);
+  await postNotice(INTEL_CHANNEL, clientWallNotice({ name: r.first_name, email: r.email, path, eventTitle, date: r.session_date }));
 }

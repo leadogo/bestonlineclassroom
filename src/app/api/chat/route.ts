@@ -23,7 +23,7 @@ const SELECT = "id, registrant_id, team_member_id, author_name, role, body, offs
 
 async function registrant(token: string) {
   if (!TOKEN_RE.test(token)) return null;
-  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, blocked_at, ghosted_at, ip, source, token, site_registration_id, room_join_reported_at, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases, kaitlyn_mode, kaitlyn_facts, cta_at_seconds, autopilot, captions_url, captions_offset_seconds, chapters, outline)").eq("token", token).maybeSingle();
+  const { data } = await db().from("registrants").select("id, event_id, session_date, first_name, email, phone, blocked_at, ghosted_at, ip, source, token, site_registration_id, room_join_reported_at, event:events(timezone, start_time, video_seconds, days, katherine_enabled, belief_phrases, kaitlyn_mode, kaitlyn_facts, cta_at_seconds, autopilot, captions_url, captions_offset_seconds, chapters, outline)").eq("token", token).maybeSingle();
   if (!data) return null;
   const ev = data.event as unknown as { timezone: string; start_time: string; video_seconds: number | null; days: number[]; katherine_enabled?: boolean; belief_phrases?: string[]; kaitlyn_mode?: string | null; kaitlyn_facts?: string | null; cta_at_seconds?: number | null; autopilot?: string | null; captions_url?: string | null; captions_offset_seconds?: number | string | null; chapters?: Array<{ at: number; label: string }>; outline?: string | null } | null;
   // The date the room shows (SPEC-link-opens.md, B): the running session when it is live and this row still sits behind it (a scanner-looking open the render did not move, a Linux-desktop agent). Reads and lines use it; a POSTed line moves the row.
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     console.error("[chat] insert failed", { code: ins.error.code });
     return Response.json({ error: "Please try again." }, { status: 500 });
   }
-  if (r.source !== "test" && !ghosted) after(() => postToChatChannel(slackLine(r.first_name, r.email, body)));
+  if (r.source !== "test" && !ghosted) after(() => postToChatChannel(slackLine(r.first_name, r.phone, r.email, body)));
   if (callMe && phone) after(() => forwardCallRequest({ registrantId: r.id, eventId: r.event_id, sessionDate: r.roomDate, firstName: r.first_name, email: r.email, phone, message: String(b.body ?? "").slice(0, 500), offset }));
   after(() => tagNow(r.id, "asked_question"));
   // Katherine answers the replay question (switch per event), a few seconds later, once per person.

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ASSISTED, asAutopilot, asMode, delayMs, DESK_FIRST_MS, deskFirstDue, engaged, extractJson, ghostsItself, guard, holdsReply, isAsideToAttendee, isRollCallDrop, laterShape, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, ROLL_CALL_WINDOW_S, rollCallOpen, SHAPES, systemPrompt, userTurn, withoutMention } from "./kaitlyn.ts";
+import { ASSISTED, asAutopilot, asMode, delayMs, DESK_FIRST_MS, deskFirstDue, engaged, extractJson, ghostsItself, guard, holdsReply, isAsideToAttendee, isRollCallDrop, laterShape, marketLine, parseDecision, PER_PERSON_MS, postsItself, ROLL_CALL_SLOT_MS, ROLL_CALL_WINDOW_S, rollCallOpen, SHAPES, systemPrompt, tellNeedsYou, TS_PENDING, userTurn, withoutMention, type NeedsYouStore } from "./kaitlyn.ts";
+import type { Notice } from "./slack.ts";
 import { tells } from "./humanize.ts";
 import { EXAMPLES } from "./kaitlyn-examples.ts";
 
@@ -297,4 +298,62 @@ test("rollCallOpen: before the pitch one city line per 10 s room-wide; the promp
   assert.equal(rollCallOpen(t0 - ROLL_CALL_SLOT_MS + 1, t0), false);
   const p = systemPrompt(null);
   assert.ok(p.includes("gets the count at any minute") && !p.includes("skip it, no count"));
+});
+
+// "Kaitlyn needs you" on a fake store (migration 046): the key's first card posts, the second edits, a burst is one post and one edit.
+function fakeStore(rows: Map<number, string | null>, opts: { claimError?: boolean } = {}): NeedsYouStore {
+  return {
+    async claim(did) {
+      if (opts.claimError) return "error";
+      if (rows.get(did) !== null && rows.get(did) !== undefined) return "taken";
+      if ([...rows.values()].some((ts) => ts !== null)) return "taken";
+      rows.set(did, TS_PENDING);
+      return "claimed";
+    },
+    async holder() {
+      const hit = [...rows.entries()].find(([, ts]) => ts !== null);
+      return hit ? { id: hit[0], slack_ts: hit[1] as string } : null;
+    },
+    async asked(did) { return [...rows.keys()].filter((id) => id <= did).length; },
+    async setTs(id, ts) { rows.set(id, ts); },
+  };
+}
+type Call = { notice: Notice; opts?: { ts?: string | null } };
+const poster = (calls: Call[], reply: (opts?: { ts?: string | null }) => { ok: boolean; ts?: string; error?: string } = () => ({ ok: true, ts: "1.1" })) => async (_channel: string, notice: Notice, opts?: { ts?: string | null }) => { calls.push({ notice, opts }); return reply(opts); };
+const reg = { id: "r1", event_id: "e1", session_date: "2026-10-23", first_name: "Wayne", source: "site" };
+const card = { question: "Close crm?", action: "ask_william", draft: "" };
+
+test("tellNeedsYou: the first card for a key posts, the second edits it with the count; two cards in a burst are one post and one edit (C1)", async () => {
+  const rows = new Map<number, string | null>([[1, null], [2, null]]);
+  const calls: Call[] = [];
+  const store = fakeStore(rows);
+  const [a, b] = await Promise.all([tellNeedsYou(reg, 1, "close-crm", card, { store, post: poster(calls), wait: async () => {} }), tellNeedsYou(reg, 2, "close-crm", card, { store, post: poster(calls), wait: async () => {} })]);
+  assert.deepEqual([a, b].sort(), ["edited", "posted"]);
+  assert.equal(calls.length, 2);
+  assert.equal(calls.filter((c) => c.opts?.ts).length, 1, "one edit");
+  assert.equal(calls.find((c) => c.opts?.ts)!.opts!.ts, "1.1", "the edit targets the first card's post");
+  assert.match(calls.find((c) => c.opts?.ts)!.notice.note!, /asked twice/);
+  assert.equal(rows.get(1), "1.1", "the winner keeps the ts");
+  assert.equal(rows.get(2), null, "the loser holds nothing");
+});
+
+test("tellNeedsYou: before migration 046 the claim errors and the card still posts once, no edit (C2); a card with no key always posts", async () => {
+  const calls: Call[] = [];
+  assert.equal(await tellNeedsYou(reg, 1, "close-crm", card, { store: fakeStore(new Map([[1, null]]), { claimError: true }), post: poster(calls) }), "posted");
+  assert.equal(await tellNeedsYou(reg, 2, null, card, { post: poster(calls) }), "posted");
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((c) => !c.opts?.ts));
+});
+
+test("tellNeedsYou: a repeat whose first post is gone releases the key and posts a fresh card (O3); a post that fails releases the claim", async () => {
+  const rows = new Map<number, string | null>([[1, "dead.ts"], [2, null]]);
+  const calls: Call[] = [];
+  const store = fakeStore(rows);
+  assert.equal(await tellNeedsYou(reg, 2, "close-crm", card, { store, post: poster(calls, (opts) => (opts?.ts ? { ok: false, error: "cant_update_message" } : { ok: true, ts: "2.2" })), wait: async () => {} }), "posted");
+  assert.equal(calls.length, 2, "the failed edit, then the fresh card");
+  assert.equal(rows.get(1), null, "the dead ts came off the first row");
+  assert.equal(rows.get(2), "2.2", "the repeat now holds the key");
+  const failing = new Map<number, string | null>([[3, null]]);
+  assert.equal(await tellNeedsYou(reg, 3, "close-crm", card, { store: fakeStore(failing), post: poster([], () => ({ ok: false, error: "HTTP 500" })) }), "skipped");
+  assert.equal(failing.get(3), null, "a failed post releases the claim so the next card can take it");
 });
