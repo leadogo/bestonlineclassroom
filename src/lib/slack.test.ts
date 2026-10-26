@@ -8,6 +8,7 @@ test("renderNotice: the kind's emoji, the headline bold, the ask line, three num
   const text = renderNotice({ kind: "ask", headline: "Kaitlyn: 3 answers need your OK", ask: { who: "Will", action: "approve them before tonight's room" }, numbers: ["63 posted last night", "48 stood", "76% agreement", "a fourth is cut"], note: "the questions are in the thread" });
   assert.equal(text, "🎯 *Kaitlyn: 3 answers need your OK*\n→ @Will approve them before tonight's room. ✅ here when done.\n63 posted last night · 48 stood · 76% agreement\nthe questions are in the thread.");
   assert.equal(renderNotice({ kind: "receipt", headline: "Autopilot on: Kaitlyn is answering on her own tonight." }), "✅ *Autopilot on: Kaitlyn is answering on her own tonight*");
+  assert.equal(renderNotice({ kind: "receipt", emoji: "🔔", headline: "a feed with its own sign" }), "🔔 *a feed with its own sign*", "a per-event feed's emoji replaces the kind's");
 });
 
 test("noticeIssues: the headline cap, an emoji of its own, an ask on the wrong kind, too many numbers, too many lines", () => {

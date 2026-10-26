@@ -13,6 +13,7 @@ const withPhone = (headline: string, phone: string | null | undefined): string =
 export function joinClickNotice(o: { name: string; phone: string | null; label: string | null; at: string; replay: boolean; nth: number }): Notice {
   return {
     kind: "receipt",
+    emoji: "🔔",
     headline: withPhone(`${o.name} clicked ${o.label ?? "the offer"} ${o.replay ? "on the replay" : `at ${o.at}`}`, o.phone),
     numbers: o.nth ? [`click #${o.nth} tonight`] : [],
   };
@@ -20,12 +21,12 @@ export function joinClickNotice(o: { name: string; phone: string | null; label: 
 
 /** 📱 → ✅ one line per QR scan, counting the night's scans. */
 export function qrScanNotice(o: { at: string; clock: string; nth: number }): Notice {
-  return { kind: "receipt", headline: `QR scanned at ${o.at} · ${o.clock} · scan #${o.nth} tonight` };
+  return { kind: "receipt", emoji: "📱", headline: `QR scanned at ${o.at} · ${o.clock} · scan #${o.nth} tonight` };
 }
 
 /** 🚧 → ✅ a paying client opened a join link and got the 404 wall. */
 export function clientWallNotice(o: { name: string; email: string | null; path: "join" | "replay"; eventTitle: string; date: string }): Notice {
-  return { kind: "receipt", headline: `Client wall: ${o.name} hit the 404 on the ${o.path} link`, numbers: [o.email ?? "no email", `${o.eventTitle} ${o.date}`] };
+  return { kind: "receipt", emoji: "🚧", headline: `Client wall: ${o.name} hit the 404 on the ${o.path} link`, numbers: [o.email ?? "no email", `${o.eventTitle} ${o.date}`] };
 }
 
 /** A sync that would have walled too many people at once was refused. */

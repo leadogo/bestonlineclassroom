@@ -13,7 +13,8 @@ export const INTEL_CHANNEL = process.env.SLACK_INTEL_CHANNEL_ID ?? "C0BNUAWDURL"
 
 export type NoticeKind = "ask" | "read" | "alert" | "receipt" | "digest";
 export type NoticeAsk = { who: string; action: string; by?: string | null; ack?: boolean };
-export type Notice = { kind: NoticeKind; headline: string; ask?: NoticeAsk | null; numbers?: readonly string[]; note?: string | null; detail?: readonly string[] };
+/** `emoji`: a per-event feed William kept carries its own sign (🔔 📱 🚧) in place of the kind's; the bridge honours it once bms deploys `notice.emoji`, and ignores it until then. */
+export type Notice = { kind: NoticeKind; headline: string; emoji?: string; ask?: NoticeAsk | null; numbers?: readonly string[]; note?: string | null; detail?: readonly string[] };
 export const NOTICE_EMOJI: Record<NoticeKind, string> = { ask: "🎯", read: "📊", alert: "🚨", receipt: "✅", digest: "📋" };
 export const HEADLINE_MAX_WORDS = 12;
 export const NUMBERS_MAX = 3;
@@ -23,7 +24,7 @@ const tidy = (text: string): string => text.replace(/\s+/g, " ").trim().replace(
 
 /** The channel text the bridge renders (bms lib/slack/notice.ts): the kind's emoji, the headline bold, the ask line, at most three numbers on one line, the note. */
 export function renderNotice(n: Notice): string {
-  const lines = [`${NOTICE_EMOJI[n.kind]} *${tidy(n.headline)}*`];
+  const lines = [`${n.emoji ?? NOTICE_EMOJI[n.kind]} *${tidy(n.headline)}*`];
   if (n.ask) {
     const who = n.ask.who.startsWith("<@") || n.ask.who.startsWith("@") ? n.ask.who : `@${n.ask.who}`;
     lines.push(`→ ${who} ${tidy(n.ask.action)}${n.ask.by ? ` by ${n.ask.by}` : ""}.${n.ask.ack === false ? "" : " ✅ here when done."}`);

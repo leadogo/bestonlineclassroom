@@ -7,16 +7,16 @@ import { noticeIssues, renderNotice, type Notice } from "./slack.ts";
 const clean = (n: Notice) => { assert.deepEqual(noticeIssues(n), [], renderNotice(n)); return renderNotice(n); };
 
 test("join click: 🔔 *Mani* · +1647… clicked *Join & Claim Bonus* at 1:15 into the session · click #1 tonight → one ✅ with the phone on the headline", () => {
-  assert.equal(clean(joinClickNotice({ name: "Mani", phone: "+16475274777", label: "Join & Claim Bonus", at: "1:15", replay: false, nth: 1 })), "✅ *Mani clicked Join & Claim Bonus at 1:15 · (647) 527-4777*\nclick #1 tonight");
-  assert.equal(clean(joinClickNotice({ name: "Bo", phone: null, label: null, at: "0:40", replay: true, nth: 0 })), "✅ *Bo clicked the offer on the replay*");
+  assert.equal(clean(joinClickNotice({ name: "Mani", phone: "+16475274777", label: "Join & Claim Bonus", at: "1:15", replay: false, nth: 1 })), "🔔 *Mani clicked Join & Claim Bonus at 1:15 · (647) 527-4777*\nclick #1 tonight");
+  assert.equal(clean(joinClickNotice({ name: "Bo", phone: null, label: null, at: "0:40", replay: true, nth: 0 })), "🔔 *Bo clicked the offer on the replay*");
 });
 
 test("QR scan: 📱 QR scanned at 1:15 into the session (6:15 PM) → counts the night's scans", () => {
-  assert.equal(clean(qrScanNotice({ at: "1:15", clock: "6:15 PM", nth: 4 })), "✅ *QR scanned at 1:15 · 6:15 PM · scan #4 tonight*");
+  assert.equal(clean(qrScanNotice({ at: "1:15", clock: "6:15 PM", nth: 4 })), "📱 *QR scanned at 1:15 · 6:15 PM · scan #4 tonight*");
 });
 
 test("client wall: 🚧 Client wall: Omayra (<email>) opened the join link for AI For Agents Masterclass 2026-10-25 and got the 404 → one shape; the cap refusal is a 🚨", () => {
-  assert.equal(clean(clientWallNotice({ name: "Omayra", email: "omayra@example.com", path: "join", eventTitle: "AI For Agents Masterclass", date: "2026-10-25" })), "✅ *Client wall: Omayra hit the 404 on the join link*\nomayra@example.com · AI For Agents Masterclass 2026-10-25");
+  assert.equal(clean(clientWallNotice({ name: "Omayra", email: "omayra@example.com", path: "join", eventTitle: "AI For Agents Masterclass", date: "2026-10-25" })), "🚧 *Client wall: Omayra hit the 404 on the join link*\nomayra@example.com · AI For Agents Masterclass 2026-10-25");
   assert.equal(clean(wallCapNotice(412, 300)), "🚨 *Client wall: a sync would have walled 412 people, nobody was walled*\ncap 300; check the snapshot bms-dashboard sent.");
 });
 
