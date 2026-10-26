@@ -1,7 +1,7 @@
 // The notice slots the bridge renders, mirrored for dry runs and the builder tests. Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clipWords, noticeIssues, renderNotice } from "./slack.ts";
+import { clipChars, clipWords, NOTE_MAX_CHARS, noticeIssues, renderNotice, williamMention } from "./slack.ts";
 import { prettyPhone } from "./chat.ts";
 
 test("renderNotice: the kind's emoji, the headline bold, the ask line, three numbers on one line, the note with its period", () => {
@@ -27,4 +27,15 @@ test("prettyPhone and clipWords", () => {
   assert.equal(prettyPhone(null), "");
   assert.equal(clipWords("What are your thoughts on the Close crm?", 7), "What are your thoughts on the Close…");
   assert.equal(clipWords("short", 7), "short");
+  assert.equal(clipChars("x".repeat(NOTE_MAX_CHARS + 50)).length, NOTE_MAX_CHARS, "a note stays under bms's 400-char cap, with its ellipsis");
+  assert.equal(clipChars("short"), "short");
+});
+
+test("williamMention: the real mention when SLACK_WILLIAM_USER_ID is set, plain Will until then", () => {
+  delete process.env.SLACK_WILLIAM_USER_ID;
+  assert.equal(williamMention(), "Will");
+  process.env.SLACK_WILLIAM_USER_ID = "U04MLPJAVUH";
+  assert.equal(williamMention(), "<@U04MLPJAVUH>");
+  assert.match(renderNotice({ kind: "ask", headline: "x", ask: { who: williamMention(), action: "fix it" } }), /^🎯 \*x\*\n→ <@U04MLPJAVUH> fix it\. ✅ here when done\.$/);
+  delete process.env.SLACK_WILLIAM_USER_ID;
 });

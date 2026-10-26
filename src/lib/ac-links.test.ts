@@ -42,11 +42,9 @@ test("linkSlot: the 3 AM slot from 3 to 14 Edmonton, the 3 PM slot from 15, none
   assert.equal(linkSlot(new Date("2026-10-23T07:30:00Z")), null);
 });
 
-test("sweepNotice: a clean sweep posts nothing (Oct 26 2026, 'Links OK (… sweep, 3 days): 1 repaired, 0 room rows created, 0 of 10022 …' is gone); a repair or a contact still blank is a 🚨", () => {
+test("sweepNotice: a sweep that leaves every contact with a link posts nothing, a repair included (Oct 26 2026, 'Links OK (… sweep, 3 days): 1 repaired, 0 room rows created, 0 of 10022 …' is gone; the 9 AM digest's thread carries the repair count); a contact still blank or a failed write is a 🚨", () => {
   assert.equal(sweepNotice({ scanned: 10022, pending: 0, written: 0, created: 0, failed: 0, truncated: false, sample: [], scope: "3 days" }, "2026-10-23T03"), null);
-  const repaired = sweepNotice({ scanned: 10022, pending: 1, written: 1, created: 0, failed: 0, truncated: false, sample: [], scope: "3 days" }, "2026-10-23T03")!;
-  assert.deepEqual(noticeIssues(repaired), []);
-  assert.equal(renderNotice(repaired), "🚨 *Links sweep: 1 contact had no personal link, repaired*\n1 repaired · 0 room rows created · 0 of 10022 checked still blank\n2026-10-23T03 sweep, 3 days.");
+  assert.equal(sweepNotice({ scanned: 10022, pending: 1, written: 1, created: 0, failed: 0, truncated: false, sample: [], scope: "3 days" }, "2026-10-23T03"), null, "a repair is the sweep working");
   const blank = sweepNotice({ scanned: 100, pending: 5, written: 2, created: 0, failed: 3, truncated: true, sample: [], scope: "full" }, null)!;
   assert.deepEqual(noticeIssues(blank), []);
   assert.equal(renderNotice(blank), "🚨 *Links sweep: 3 contacts still have no personal link*\n2 repaired · 0 room rows created · 3 of 100 checked still blank\nforced sweep, full · 3 failed · budget hit, the next run continues.");

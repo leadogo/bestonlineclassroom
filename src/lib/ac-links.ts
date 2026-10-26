@@ -138,10 +138,10 @@ export async function sweepLinks(opts: { apply: boolean; budgetMs?: number; even
   return result;
 }
 
-/** After a run (SPEC-friday-unattended.md, E4; Oct 26 2026: green is silent): nothing when every contact had a link, a 🚨 when the sweep repaired some or some are still blank. */
+/** After a run (SPEC-friday-unattended.md, E4; Oct 26 2026: green is silent): nothing when every contact ends up with a link (a repair is the sweep working; the 9 AM digest's thread carries the count), a 🚨 when contacts are still blank or writes failed. */
 export function sweepNotice(r: SweepResult, slot: string | null): Notice | null {
   const left = r.pending - r.written;
-  if (!left && !r.written && !r.failed) return null;
+  if (left === 0 && !r.failed) return null;
   const contacts = (n: number) => `${n} contact${n === 1 ? "" : "s"}`;
   return {
     kind: "alert",

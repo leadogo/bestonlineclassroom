@@ -11,6 +11,12 @@ export const CHAT_CHANNEL = process.env.SLACK_CHAT_CHANNEL_ID ?? "";
 /** #autoweb-intel (offer clicks as they happen, phase 5.1 intel-feed); the id leadogo's Brandon posts to. */
 export const INTEL_CHANNEL = process.env.SLACK_INTEL_CHANNEL_ID ?? "C0BNUAWDURL";
 
+import { escapeMrkdwn, prettyPhone } from "./chat.ts";
+
+export { escapeMrkdwn, prettyPhone };
+/** William's mention for an ask (`SLACK_WILLIAM_USER_ID`, set in production); "Will" as plain text until it is. */
+export const williamMention = (): string => (process.env.SLACK_WILLIAM_USER_ID ? `<@${process.env.SLACK_WILLIAM_USER_ID}>` : "Will");
+
 export type NoticeKind = "ask" | "read" | "alert" | "receipt" | "digest";
 export type NoticeAsk = { who: string; action: string; by?: string | null; ack?: boolean };
 /** `emoji`: a per-event feed William kept carries its own sign (🔔 📱 🚧) in place of the kind's; the bridge honours it once bms deploys `notice.emoji`, and ignores it until then. */
@@ -50,6 +56,10 @@ export function noticeIssues(n: Notice): string[] {
   if (lines > CHANNEL_MAX_LINES) out.push(`${lines} lines in the channel post (max ${CHANNEL_MAX_LINES})`);
   return out;
 }
+
+/** A note under this many characters: bms caps the slot at 400 without an ellipsis. */
+export const NOTE_MAX_CHARS = 390;
+export const clipChars = (text: string, max = NOTE_MAX_CHARS): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 /** The first `max` words, with an ellipsis when something was cut. */
 export function clipWords(text: string, max: number): string {

@@ -432,7 +432,14 @@ async function tellNeedsYou(reg: Reg, did: number, kbKey: string | null, o: { qu
     first = (earlier.data as { id: number; slack_ts: string } | null) ?? null;
     asked = Math.max(1, count.count ?? 1);
   }
-  const sent = await postNotice(CHAT_CHANNEL, needsYouNotice({ name: reg.first_name, ghosted: Boolean(reg.ghosted), asked: first ? asked : 1, ...o }), first ? { ts: first.slack_ts } : {});
+  const notice = needsYouNotice({ name: reg.first_name, ghosted: Boolean(reg.ghosted), asked: first ? asked : 1, ...o });
+  let sent = await postNotice(CHAT_CHANNEL, notice, first ? { ts: first.slack_ts } : {});
+  // The first post gone (deleted on the desk, cant_update_message): a fresh card, and the dead ts comes off its row so the next repeat edits the new one.
+  if (!sent.ok && first) {
+    await db().from("kaitlyn_decisions").update({ slack_ts: null }).eq("id", first.id);
+    first = null;
+    sent = await postNotice(CHAT_CHANNEL, notice);
+  }
   if (sent.ok && sent.ts && !first) await db().from("kaitlyn_decisions").update({ slack_ts: sent.ts }).eq("id", did);
 }
 

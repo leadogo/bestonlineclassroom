@@ -1,7 +1,7 @@
 // Kaitlyn's knowledge base, the pure parts (SPEC-kaitlyn-knowledge.md): the key the model names per decision, the
 // KNOWLEDGE block her prompt reads from `kaitlyn_kb`, the 9 AM digest's clock and text, the check that a humanizer rewrite
 // kept William's facts, and the line she posts when she does not know and nobody is on the desk.
-import { clipWords, HEADLINE_MAX_WORDS, type Notice } from "./slack.ts";
+import { clipWords, HEADLINE_MAX_WORDS, williamMention, type Notice } from "./slack.ts";
 
 export type KbHandling = "open" | "answer" | "me" | "ignore";
 export type KbRow = { key: string; question: string; answer: string | null; approved: string | null; /** When William approved the line; a rewrite waiting for his OK has `approved` text and no date, and stays out of her prompt. */ approved_at: string | null; handling: KbHandling; asked: number };
@@ -133,7 +133,7 @@ export function digestNotice(o: { questions: Array<{ question: string; asked: nu
   if (o.waiting || n) {
     // Something for Will: the staged answers to approve, the questions to answer, or both.
     const headline = waiting && unanswered ? `Kaitlyn: ${waiting} · ${unanswered}` : waiting ? `Kaitlyn: ${waiting}` : `Kaitlyn couldn't answer ${n} ${plural(n, "question", "questions")} last night (${o.people} asked)`;
-    return { kind: "ask", headline, ask: { who: "Will", action: `${o.waiting ? "approve" : "answer"} them before tonight's room` }, numbers, detail: lines };
+    return { kind: "ask", headline, ask: { who: williamMention(), action: `${o.waiting ? "approve" : "answer"} them before tonight's room` }, numbers, detail: lines };
   }
   if (!lines.length && !numbers.length) return null;
   // Nothing to answer or approve: the night's audit as a read, its first line the headline.

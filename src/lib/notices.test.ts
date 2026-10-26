@@ -5,6 +5,7 @@ import { autopilotNotice, broadcastNotice, canaryNotice, clientWallNotice, compl
 import { noticeIssues, renderNotice, type Notice } from "./slack.ts";
 
 const clean = (n: Notice) => { assert.deepEqual(noticeIssues(n), [], renderNotice(n)); return renderNotice(n); };
+// The feed glyphs (🔔 📱 🚧) ride `notice.emoji`; the bridge renders ✅ until bms-dashboard's notification-schema PR (the emoji slot) deploys, so these assert what lands after it.
 
 test("join click: 🔔 *Mani* · +1647… clicked *Join & Claim Bonus* at 1:15 into the session · click #1 tonight → one ✅ with the phone on the headline", () => {
   assert.equal(clean(joinClickNotice({ name: "Mani", phone: "+16475274777", label: "Join & Claim Bonus", at: "1:15", replay: false, nth: 1 })), "🔔 *Mani clicked Join & Claim Bonus at 1:15 · (647) 527-4777*\nclick #1 tonight");
@@ -67,4 +68,12 @@ test("Kaitlyn needs you: Wayne Williams: \"What are your thoughts on the Close c
   const again = needsYouNotice({ name: "Wayne", ghosted: true, question: "Close crm?", action: "ask_william", draft: "", asked: 3 });
   assert.equal(clean(again), "🎯 *Kaitlyn needs you — (ghosted) Wayne: \"Close crm?\"*\n→ @Will answer on the desk or reply here. ✅ here when done.\nshe would ask william · asked 3×.");
   assert.match(renderNotice(needsYouNotice({ name: "Wayne", ghosted: false, question: "Close crm?", action: "ghost", draft: "", asked: 2 })), /she would ghost · asked twice\.$/);
+  // Attendee text never reads as mrkdwn, and a long draft stays under bms's note cap.
+  const markup = needsYouNotice({ name: "<!channel>", ghosted: false, question: "ping <!here>?", action: "ask_william", draft: "x".repeat(600), asked: 1 });
+  assert.equal(renderNotice(markup).split("\n")[0], "🎯 *Kaitlyn needs you — &lt;!channel&gt;: \"ping &lt;!here&gt;?\"*");
+  assert.ok(markup.note!.length < 400 && markup.note!.endsWith("…"));
+  assert.ok(deskPassedNotice({ name: "Ana", text: "y".repeat(600) }).note!.length < 400);
+  process.env.SLACK_WILLIAM_USER_ID = "U04MLPJAVUH";
+  assert.match(renderNotice(needsYouNotice({ name: "Wayne", ghosted: false, question: "Close crm?", action: "ghost", draft: "", asked: 1 })), /\n→ <@U04MLPJAVUH> answer on the desk or reply here\./);
+  delete process.env.SLACK_WILLIAM_USER_ID;
 });

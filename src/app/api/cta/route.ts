@@ -30,6 +30,9 @@ export async function POST(request: Request) {
   const { date, behind } = kind === "live" && sched ? roomDateFor(scheduleOf(sched), reg.data.session_date as string) : { date: reg.data.session_date as string, behind: false };
   const me = reg.data as unknown as Movable;
   if (behind && (await moveIn(me, date))) after(() => reportRoomJoin(me, date));
+  // A second tap tonight is the same click: the intel line posts once per registrant per session (review of Oct 26 2026).
+  const prior = await db().from("attendance").select("cta_clicked_at").eq("registrant_id", reg.data.id).eq("session_date", date).eq("kind", kind).maybeSingle();
+  const alreadyClicked = Boolean(prior.data?.cta_clicked_at);
   const { error } = await db()
     .from("attendance")
     .upsert({ registrant_id: reg.data.id, session_date: date, kind, cta_clicked_at: now, last_seen_at: now }, { onConflict: "registrant_id,session_date,kind", ignoreDuplicates: false });
@@ -37,7 +40,7 @@ export async function POST(request: Request) {
   after(() => tagNow(registrantId, "clicked_offer"));
   // The intel channel hears about it within the minute: who, their phone, how far into the session, which click of the night.
   const ev = reg.data.event as unknown as { cta_label: string | null; timezone: string; start_time: string; video_seconds: number | null; days: number[] } | null;
-  if (reg.data.source !== "test" && ev) {
+  if (reg.data.source !== "test" && ev && !alreadyClicked) {
     const r = reg.data;
     after(async () => {
       const session = sessionFor(scheduleOf(ev), date);
