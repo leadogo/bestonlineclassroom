@@ -13,7 +13,7 @@ import { logClick } from "@/lib/clicks";
 import { headers } from "next/headers";
 import { pickRunningOrNext } from "@/lib/daily-schedule";
 import { clientIp, ipBlocked } from "@/lib/ip";
-import { isScannerAddress, isScannerAgent } from "@/lib/scanner";
+import { isCrawlerAgent, isScannerAddress, isScannerAgent } from "@/lib/scanner";
 import { renderMove } from "@/lib/outcomes";
 import { reportRoomJoin, type Movable } from "@/lib/move-in";
 
@@ -61,7 +61,7 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     if (r.block_reason === "client") {
       after(async () => {
         await logClick({ path: "j", outcome: "walled", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src: typeof sp.src === "string" ? sp.src : null, userAgent: ua, bot: scanner, ip });
-        await tellWallHit(r, r.event.title, "join").catch(() => {});
+        if (!scanner) await tellWallHit(r, r.event.title, "join").catch(() => {});
       });
       notFound();
     }
@@ -76,7 +76,7 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
   }
   // An old link used for a later session: the person now belongs to that session (chat, presence, numbers). A scanner's open moves the row too (William, Oct 21: that move is the reminder touch that fed 30 people and 4 bookings on Oct 20); its beats are dropped at the heartbeat and it reports no room_join (SPEC-link-opens.md, A).
   const to = outcome.rejoinDate;
-  if (to && renderMove(to, Boolean(outcome.props.preview))) {
+  if (to && renderMove(to, Boolean(outcome.props.preview)) && !isCrawlerAgent(ua)) {
     const mv = await db().from("registrants").update({ session_date: to, moved_in_at: new Date().toISOString() }).eq("id", r.id);
     if (mv.error) console.error("[join] move failed", { code: mv.error.code });
     r.session_date = to;
