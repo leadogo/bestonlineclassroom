@@ -34,6 +34,17 @@ export async function registrantByToken(token: string): Promise<(Registrant & { 
   return (data as unknown as (Registrant & { event: EventRow }) | null) ?? null;
 }
 
+/**
+ * Ghosted in chat on this event, on this seat or any seat under the same email: the live room 404s for them (William,
+ * Oct 28 2026: every ghost, by hand or by rule; the replay stays open). Best-effort: a read error lets them in.
+ */
+export async function everGhosted(r: { id: string; event_id: string; email: string | null }): Promise<boolean> {
+  const ghosted = () => db().from("registrants").select("id", { count: "exact", head: true }).eq("event_id", r.event_id).not("ghosted_at", "is", null);
+  const [self, same] = await Promise.all([ghosted().eq("id", r.id), r.email ? ghosted().eq("email", r.email) : Promise.resolve({ count: 0, error: null })]);
+  if (self.error || same.error) return false;
+  return (self.count ?? 0) + (same.count ?? 0) > 0;
+}
+
 /** The most recent registrant for this identity on this event, any session. */
 async function latestBy(eventId: string, column: "email_hash" | "site_registration_id" | "legacy_key", value: string): Promise<Registrant | null> {
   const { data, error } = await db().from("registrants").select(COLS).eq("event_id", eventId).eq(column, value).order("session_date", { ascending: false }).limit(1).maybeSingle();

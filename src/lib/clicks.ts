@@ -3,7 +3,7 @@
 import { isIP } from "node:net";
 import { db } from "./db.ts";
 
-export type ClickOutcome = "live" | "countdown" | "ended" | "replay" | "replay_expired" | "invalid" | "prompt" | "scan" | "walled";
+export type ClickOutcome = "live" | "countdown" | "ended" | "replay" | "replay_expired" | "invalid" | "prompt" | "scan" | "walled" | "ghosted";
 
 export async function logClick(input: { path: "j" | "w" | "replay" | "qr"; outcome: ClickOutcome; token?: string | null; registrantId?: string | null; eventId?: string | null; sessionDate?: string | null; src?: string | null; userAgent?: string | null; /** a scanner open (SPEC-link-opens.md, A) */ bot?: boolean; /** the caller's address (SPEC-friday-unattended.md, D: one address opening many links is a fleet) */ ip?: string | null }): Promise<void> {
   try {
