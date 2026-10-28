@@ -3297,6 +3297,30 @@
    "expected": "keep",
    "body": "can I get a replay or notes",
    "minute": 86
+  },
+  {
+   "key": "ghost",
+   "expected": "ghost",
+   "body": "Scam??",
+   "minute": 40
+  },
+  {
+   "key": "ghost",
+   "expected": "ghost",
+   "body": "🤮",
+   "minute": 50
+  },
+  {
+   "key": "ghost",
+   "expected": "ghost",
+   "body": "Congratulations on your wedding and baby on the way!Anyone in need of a TC? I'm taking Texas RE Courses now and trying to get clients",
+   "minute": 20
+  },
+  {
+   "key": "ghost",
+   "expected": "ghost",
+   "body": "i notice my question kept answered by AI",
+   "minute": 70
   }
  ]
 }

@@ -10,7 +10,7 @@ type Row = { key: string; question: string; answer: string | null; approved: str
 type Ask = { kb_key: string; message_id: number; registrant_id: string; session_date: string; text: string; created_at: string; body: string; name: string; team: string | null; /** What William was saying on screen when they typed (the last 20 s). */ screen: string | null };
 
 const when = (iso: string | null, tz: string) => (iso ? new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso)) : "");
-const HANDLING: Record<KbHandling, string> = { open: "open", answer: "she answers it herself", me: "always handed to you", ignore: "ignored, not a question" };
+const HANDLING: Record<KbHandling, string> = { open: "open", answer: "she answers it herself", me: "always handed to you", ignore: "ignored, not a question", ghost: "ghosted on the spot" };
 
 /**
  * Admin → Knowledge base (SPEC-kaitlyn-knowledge.md): every question the room asks, folded by meaning as Kaitlyn names
@@ -112,8 +112,8 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
               <>
                 <textarea name="answer" rows={3} placeholder="Your answer, in your words" aria-label="Your answer" className="w-full rounded-lg border border-line bg-room px-3 py-2 text-[15px] focus:border-brand focus:outline-none" />
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                  {(["answer", "me", "ignore"] as const).map((h) => (
-                    <label key={h} className="inline-flex items-center gap-1.5"><input type="radio" name="handling" value={h} defaultChecked={h === "answer"} /> {h === "answer" ? "She answers this herself" : h === "me" ? "Always hand it to me" : "Ignore, not a question"}</label>
+                  {(["answer", "me", "ignore", "ghost"] as const).map((h) => (
+                    <label key={h} className="inline-flex items-center gap-1.5"><input type="radio" name="handling" value={h} defaultChecked={h === "answer"} /> {h === "answer" ? "She answers this herself" : h === "me" ? "Always hand it to me" : h === "ignore" ? "Ignore, not a question" : "Ghost them on the spot"}</label>
                   ))}
                   <button type="submit" className={`${btn} min-h-9 px-4`}>Save</button>
                 </div>

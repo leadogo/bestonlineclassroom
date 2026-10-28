@@ -3,7 +3,7 @@
 // kept William's facts, and the line she posts when she does not know and nobody is on the desk.
 import { clipWords, escapeMrkdwn, HEADLINE_MAX_WORDS, williamMention, type Notice } from "./slack.ts";
 
-export type KbHandling = "open" | "answer" | "me" | "ignore";
+export type KbHandling = "open" | "answer" | "me" | "ignore" | "ghost";
 export type KbRow = { key: string; question: string; answer: string | null; approved: string | null; /** When William approved the line; a rewrite waiting for his OK has `approved` text and no date, and stays out of her prompt. */ approved_at: string | null; handling: KbHandling; asked: number };
 
 /** A slug: lowercase letters, digits and hyphens, 3 to 40 chars, no hyphen at either end. */
@@ -26,11 +26,13 @@ export function knowledgeBlock(rows: KbRow[]): string {
   const answers = rows.filter((r) => r.handling === "answer" && r.approved?.trim() && r.approved_at);
   const me = rows.filter((r) => r.handling === "me");
   const skip = rows.filter((r) => r.handling === "ignore");
+  const ghost = rows.filter((r) => r.handling === "ghost");
   const parts = [
     `KNOWLEDGE (William's approved answers: his words, in the shape he wants. When a question matches one, use its substance and its length, reworded to fit the line, never recited; a match counts as sure.)\n${answers.map((r) => `Q: ${r.question}\n   A: ${r.approved!.trim()}`).join("\n") || "(none yet)"}`,
   ];
   if (me.length) parts.push(`ALWAYS ASK_WILLIAM (he answers these himself; no draft needed)\n${me.map((r) => `- ${r.key}: ${r.question}`).join("\n")}`);
   if (skip.length) parts.push(`SKIP (never answer, never acknowledge)\n${skip.map((r) => `- ${r.key}: ${r.question}`).join("\n")}`);
+  if (ghost.length) parts.push(`GHOST (William: a line that means this is a ghost, sure, on the spot; category negative, no text)\n${ghost.map((r) => `- ${r.key}: ${r.question}`).join("\n")}`);
   parts.push(`KEYS YOU MAY NAME (put the matching one in "kb"; coin a new lowercase-hyphen slug with a one-line question only when none matches)\n${rows.map((r) => `${r.key} (${r.question})`).join(" · ")}`);
   return parts.join("\n\n");
 }

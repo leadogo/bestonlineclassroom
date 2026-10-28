@@ -32,7 +32,7 @@ export async function answerKb(fd: FormData): Promise<void> {
   const question = String(fd.get("question") ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
   const answer = String(fd.get("answer") ?? "").trim().slice(0, 2000);
   const handling = String(fd.get("handling") ?? "answer");
-  if (!["answer", "me", "ignore"].includes(handling)) throw new Error("How should she treat it?");
+  if (!["answer", "me", "ignore", "ghost"].includes(handling)) throw new Error("How should she treat it?");
   if (handling === "answer" && answer.length < 2) throw new Error("Type the answer first.");
   const base = { ...(question ? { question } : {}), answer: answer || null, handling, answered_at: now(), answered_by: me.id, updated_at: now() };
   if (handling !== "answer") {

@@ -158,6 +158,9 @@ export async function POST(request: Request) {
       if (mids.length) for (const x of (await db().from("team_members").select("id, display_name").in("id", mids)).data ?? []) { mentions.push(`m:${x.id}`); mention_names.push(x.display_name as string); }
       // A reply to a ghost is seen by that ghost and the desk only; the room would otherwise watch us talk to nobody.
       const ghosted = rids.length ? ((await db().from("registrants").select("id").in("id", rids).not("ghosted_at", "is", null)).data ?? []).map((x) => x.id as string) : [];
+      // A double tap posts once (Kevin to Gina, Oct 27, twice a second apart): the same words from the same seat within 10 s return the first.
+      const twin = await db().from("chat_messages").select(SELECT).eq("event_id", s.event.id).eq("session_date", s.session.date).eq("team_member_id", member.id).eq("body", body).is("deleted_at", null).gte("created_at", new Date(Date.now() - 10_000).toISOString()).limit(1).maybeSingle();
+      if (twin.data) return Response.json({ message: twin.data });
       const { data, error } = await db().from("chat_messages").insert({ event_id: s.event.id, session_date: s.session.date, team_member_id: member.id, author_name: member.display_name, role: "moderator", body, offset_seconds: offset, mentions, mention_names, visible_to: ghosted[0] ?? null }).select(SELECT).single();
       if (error) return Response.json({ error: "Could not send." }, { status: 500 });
       // Their open questions are now answered, by this moderator (the Questions page pairs them).
@@ -221,7 +224,7 @@ export async function POST(request: Request) {
     case "kaitlyn": {
       // A moderator acting on one of Kaitlyn's suggestions: send (as typed or edited), skip, ghost, or apply her reaction.
       const id = Number(b.id);
-      const row = await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, action, text, react, status").eq("id", id).eq("event_id", s.event.id).maybeSingle();
+      const row = await db().from("kaitlyn_decisions").select("id, message_id, registrant_id, action, text, react, status, kb_key").eq("id", id).eq("event_id", s.event.id).maybeSingle();
       if (!row.data) return Response.json({ error: "Which suggestion?" }, { status: 422 });
       const d = row.data;
       const mark = (patch: object) => db().from("kaitlyn_decisions").update({ decided_by: member.id, decided_at: now, ...patch }).eq("id", id);
@@ -253,6 +256,12 @@ export async function POST(request: Request) {
         const mid = await postAsKaitlyn({ id: reg.data.id as string, event_id: reg.data.event_id as string, session_date: reg.data.session_date as string, first_name: reg.data.first_name as string, source: String(reg.data.source ?? "") }, full, offset, "text");
         if (!mid) return Response.json({ error: "Could not send." }, { status: 500 });
         await mark({ status: body === String(d.text) ? "sent" : "edited", sent_body: full, sent_message_id: mid });
+        // The desk's answer to a question she handed over is kept (William, Oct 28: 25 of 56 open questions had one, thrown
+        // away): an open row with no answer yet gets it as a proposal, waiting for his OK on the Knowledge page like any rewrite.
+        if (d.action === "ask_william" && d.kb_key) {
+          const bare = withoutMention(full, reg.data.first_name as string);
+          await db().from("kaitlyn_kb").update({ answer: bare, approved: bare, approved_at: null, answered_at: now, answered_by: member.id, updated_at: now }).eq("event_id", s.event.id).eq("key", d.kb_key).eq("handling", "open").is("answer", null);
+        }
         const msg = await db().from("chat_messages").select(SELECT).eq("id", mid).maybeSingle();
         return Response.json({ ok: true, message: msg.data });
       }
