@@ -9,10 +9,17 @@
 import { db } from "./db.ts";
 
 const PEOPLE_ON_LINUX = /Android|CrOS|SMART-TV|SmartTV|Tizen|Web0S|webOS|CrKey|Roku|PlayStation|Xbox|Nintendo/i;
+/** Link-preview and AI crawlers name themselves on any OS. Oct 28: Meta's (facebookexternalhit on a Mac agent, meta-externalagent, 57.141.x.x) walked ~1,300 personal links at 5 AM, starting replay clocks, tagging watched_replay and posting each to Slack. */
+const CRAWLERS = /facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|Twitterbot|Slackbot|LinkedInBot|Discordbot|TelegramBot|WhatsApp|Googlebot|bingbot|GPTBot|ClaudeBot|PerplexityBot|Applebot|SkypeUriPreview/i;
+
+/** A named crawler (not an email scanner): no person is behind the open, so it moves nobody. */
+export function isCrawlerAgent(ua: string | null | undefined): boolean {
+  return Boolean(ua && CRAWLERS.test(ua));
+}
 
 export function isScannerAgent(ua: string | null | undefined): boolean {
   if (!ua) return false;
-  return /Linux/.test(ua) && !PEOPLE_ON_LINUX.test(ua);
+  return CRAWLERS.test(ua) || (/Linux/.test(ua) && !PEOPLE_ON_LINUX.test(ua));
 }
 
 /** The Oct 22 wave (SPEC-friday-unattended.md, D): Windows Chrome agents, 112 rows from 60 addresses, three addresses alone 32 rows at 4 to 10 s each. An address that opened this many *different* personal links inside the window is a fleet. A brokerage office watching together is one or two laptops on one address, not four in ten minutes. */
