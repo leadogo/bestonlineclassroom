@@ -2440,31 +2440,31 @@
   },
   {
    "key": "live",
-   "expected": "skip",
+   "expected": "ghost",
    "body": "Is this a recording lol",
    "minute": 84
   },
   {
    "key": "live",
-   "expected": "skip",
+   "expected": "ghost",
    "body": "Is this live or a pre-recorded video?",
    "minute": 83
   },
   {
    "key": "live",
-   "expected": "skip",
+   "expected": "ghost",
    "body": "is thi s a live call or prior recording   reason I ask is august 2025 example  if no answer - its the answer. thanks",
    "minute": 1
   },
   {
    "key": "live",
-   "expected": "skip",
+   "expected": "ghost",
    "body": "Are these comments from a pre recorded video ?",
    "minute": 79
   },
   {
    "key": "live",
-   "expected": "skip",
+   "expected": "ghost",
    "body": "Is this live",
    "minute": 67
   },
@@ -3144,7 +3144,7 @@
   },
   {
    "key": "live",
-   "expected": "keep",
+   "expected": "ghost",
    "body": "Is this a recording lol",
    "minute": 24,
    "prior": [
@@ -3154,13 +3154,13 @@
   },
   {
    "key": "live",
-   "expected": "keep",
+   "expected": "ghost",
    "body": "Is this live or a pre-recorded video?",
    "minute": 23
   },
   {
    "key": "live",
-   "expected": "keep",
+   "expected": "ghost",
    "body": "I mean is this call now liv or prior recording",
    "minute": 63,
    "prior": [
@@ -3174,7 +3174,7 @@
   },
   {
    "key": "live",
-   "expected": "keep",
+   "expected": "ghost",
    "body": "Is this live",
    "minute": 7,
    "prior": [
@@ -3275,6 +3275,28 @@
    "expected": "keep",
    "body": "Low energy",
    "minute": 54
+  },
+  {
+   "key": "live",
+   "expected": "ghost",
+   "body": "Is this a prerecording",
+   "minute": 30
+  },
+  {
+   "key": "live",
+   "expected": "ghost",
+   "body": "this call is a replay right",
+   "minute": 89,
+   "prior": [
+    "Who's your broker?",
+    "can I get a replay or notes"
+   ]
+  },
+  {
+   "key": "live",
+   "expected": "keep",
+   "body": "can I get a replay or notes",
+   "minute": 86
   }
  ]
 }
