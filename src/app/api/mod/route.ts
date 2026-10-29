@@ -6,8 +6,8 @@ import { blockAtEdge, edgeConfigured, unblockAtEdge } from "@/lib/edge-block";
 import { forgetBlockedIps } from "@/lib/ip";
 import { toggleReaction } from "@/lib/reactions";
 import { asAutopilot, asMode, KAITLYN, postAsKaitlyn, reactAsKaitlyn, withoutMention } from "@/lib/kaitlyn";
-import { CHAT_CHANNEL, postNotice } from "@/lib/slack";
-import { learnedNotice } from "@/lib/notices";
+import { CHAT_CHANNEL, INTEL_CHANNEL, postNotice } from "@/lib/slack";
+import { ipSurgeLevel, ipSurgeNotice, learnedNotice } from "@/lib/notices";
 import { withQuery } from "@/lib/params";
 import { ghostReason, skipReason } from "@/lib/moderation";
 import { isPerson, peakConcurrent, PRESENCE_GRACE_MS } from "@/lib/outcomes";
@@ -310,17 +310,8 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
     case "block_ip": {
-      const rid = String(b.registrant_id ?? "");
-      const r = await db().from("registrants").select("ip, first_name").eq("id", rid).eq("event_id", s.event.id).maybeSingle();
-      const ip = r.data?.ip ? String(r.data.ip) : null;
-      if (!ip) return Response.json({ error: "No IP on record for them yet." }, { status: 422 });
-      const edge_id = await blockAtEdge(ip, `${r.data?.first_name} blocked by ${member.display_name} ${now.slice(0, 10)}`);
-      const { error } = await db().from("blocked_ips").upsert({ ip, reason: `chat, ${r.data?.first_name}`, by: member.id, edge_id }, { onConflict: "ip" });
-      if (error) return Response.json({ error: "Could not block the IP." }, { status: 500 });
-      forgetBlockedIps();
-      await db().from("registrants").update({ blocked_at: now }).eq("ip", ip).is("blocked_at", null);
-      await db().from("chat_messages").update({ deleted_at: now, updated_at: now }).eq("registrant_id", rid).is("deleted_at", null);
-      return Response.json({ ok: true, edge: Boolean(edge_id) });
+      const out = await blockIp(String(b.registrant_id ?? ""), s.event.id, member, now);
+      return "error" in out ? Response.json({ error: out.error }, { status: out.status }) : Response.json({ ok: true, edge: out.edge });
     }
     case "unblock_ip": {
       const rid = String(b.registrant_id ?? "");
@@ -340,9 +331,28 @@ export async function POST(request: Request) {
       const r1 = await db().from("registrants").update({ blocked_at: now }).eq("id", rid).eq("event_id", s.event.id);
       if (r1.error) return Response.json({ error: "Could not block." }, { status: 500 });
       await db().from("chat_messages").update({ deleted_at: now, updated_at: now }).eq("registrant_id", rid).is("deleted_at", null);
-      return Response.json({ ok: true });
+      // Their IP too, so a new name from the same connection can't walk back in (William, Oct 28: Brishen); no IP on record yet → the seat only.
+      const ipOut = await blockIp(rid, s.event.id, member, now);
+      return Response.json({ ok: true, ip_blocked: !("error" in ipOut) });
     }
     default:
       return Response.json({ error: "Unknown action." }, { status: 422 });
   }
+}
+
+/** Blocks a registrant's IP: the edge rule when configured, the blocked list, every seat on that IP, their chat lines; then a Slack ask when the day's blocks reach a surge level. */
+async function blockIp(rid: string, eventId: string, member: { id: string; display_name: string }, now: string): Promise<{ edge: boolean } | { error: string; status: number }> {
+  const r = await db().from("registrants").select("ip, first_name").eq("id", rid).eq("event_id", eventId).maybeSingle();
+  const ip = r.data?.ip ? String(r.data.ip) : null;
+  if (!ip) return { error: "No IP on record for them yet.", status: 422 };
+  const edge_id = await blockAtEdge(ip, `${r.data?.first_name} blocked by ${member.display_name} ${now.slice(0, 10)}`);
+  const { error } = await db().from("blocked_ips").upsert({ ip, reason: `chat, ${r.data?.first_name}`, by: member.id, edge_id }, { onConflict: "ip" });
+  if (error) return { error: "Could not block the IP.", status: 500 };
+  forgetBlockedIps();
+  await db().from("registrants").update({ blocked_at: now }).eq("ip", ip).is("blocked_at", null);
+  await db().from("chat_messages").update({ deleted_at: now, updated_at: now }).eq("registrant_id", rid).is("deleted_at", null);
+  const { count } = await db().from("blocked_ips").select("ip", { count: "exact", head: true }).gte("at", new Date(Date.parse(now) - 86_400_000).toISOString());
+  const level = ipSurgeLevel(count ?? 0);
+  if (level) await postNotice(INTEL_CHANNEL, ipSurgeNotice({ count: level, latest: `${r.data?.first_name ?? "someone"} by ${member.display_name}` })).catch(() => {});
+  return { edge: Boolean(edge_id) };
 }

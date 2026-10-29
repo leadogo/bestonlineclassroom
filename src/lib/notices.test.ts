@@ -1,7 +1,7 @@
 // Every room post on the schema, from the posts as they landed Oct 23–26 2026 (the audit's fixtures). Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { autopilotNotice, broadcastNotice, canaryNotice, clientWallNotice, complaintNotice, deskPassedNotice, ghostNotice, joinClickNotice, learnedNotice, needsYouNotice, nightlyNotice, qrScanNotice, wallCapNotice } from "./notices.ts";
+import { autopilotNotice, broadcastNotice, canaryNotice, clientWallNotice, complaintNotice, deskPassedNotice, ghostNotice, ipSurgeLevel, ipSurgeNotice, joinClickNotice, learnedNotice, needsYouNotice, nightlyNotice, qrScanNotice, wallCapNotice } from "./notices.ts";
 import { noticeIssues, renderNotice, type Notice } from "./slack.ts";
 
 const clean = (n: Notice) => { assert.deepEqual(noticeIssues(n), [], renderNotice(n)); return renderNotice(n); };
@@ -80,4 +80,9 @@ test("Kaitlyn needs you: Wayne Williams: \"What are your thoughts on the Close c
   process.env.SLACK_WILLIAM_USER_ID = "U04MLPJAVUH";
   assert.match(renderNotice(needsYouNotice({ name: "Wayne", ghosted: false, question: "Close crm?", action: "ghost", draft: "", asked: 1 })), /\n→ <@U04MLPJAVUH> answer on the desk or reply here\./);
   delete process.env.SLACK_WILLIAM_USER_ID;
+});
+
+test("ipSurgeLevel: an ask at 5, 10, 20, 50 and 100 blocks in a day, once each, never in between", () => {
+  assert.deepEqual([1, 4, 5, 6, 9, 10, 11, 20, 50, 100, 101].map(ipSurgeLevel), [null, null, 5, null, null, 10, null, 20, 50, 100, null]);
+  assert.match(clean(ipSurgeNotice({ count: 5, latest: "B by William" })), /🚨 \*5 IPs blocked in the last 24 hours\*/);
 });

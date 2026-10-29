@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeClients, phoneKey } from "./client-wall.ts";
+import { freeLocal, isDeviceTell, normalizeClients, phoneKey } from "./client-wall.ts";
 import { emailHash, nameFromEmail } from "./registrants.ts";
 
 test("phoneKey keeps the last ten digits and drops anything shorter", () => {
@@ -30,4 +30,24 @@ test("nameFromEmail gives a first name worth showing, else Guest", () => {
   assert.equal(nameFromEmail("JDOE99@example.com"), "Jdoe");
   assert.equal(nameFromEmail("a1@example.com"), "Guest");
   assert.equal(nameFromEmail(null), "Guest");
+});
+
+test("freeLocal: the name part of a personal mailbox, long and specific enough to be one person (Brishen, Oct 28: combsrealtor@gmail walled, back as combsrealtor@icloud)", () => {
+  assert.equal(freeLocal("combsrealtor@gmail.com"), "combsrealtor");
+  assert.equal(freeLocal("CombsRealtor@iCloud.com"), "combsrealtor");
+  assert.equal(freeLocal("buzz628@yahoo.com"), "buzz628");
+  for (const e of ["andrew@andrewhaire.ca", "leslie@lunsfordgrp.com", "jeremy@bannackre.com"]) assert.equal(freeLocal(e), null, `${e}: a company domain's first name is many people`);
+  for (const e of ["info@gmail.com", "realtor@yahoo.com", "sam@gmail.com", "", "not-an-email"]) assert.equal(freeLocal(e), null, e);
+});
+
+test("normalizeClients carries the personal-mailbox name parts for the look-alike match", () => {
+  const [c] = normalizeClients([{ id: "1", emails: ["combsrealtor@gmail.com", "brishen@combsteam.com"], phones: [] }]);
+  assert.deepEqual(c.free_locals, ["combsrealtor"]);
+});
+
+test("isDeviceTell: an address and browser that hit the 404 for one client only is that client's device; one seen for several is a scanner or proxy", () => {
+  assert.equal(isDeviceTell(["233fbfb3"]), true);
+  assert.equal(isDeviceTell(["233fbfb3", "233fbfb3", "233fbfb3"]), true, "the same client reloading");
+  assert.equal(isDeviceTell(["233fbfb3", "86d4466f"]), false, "Gmail's link scanner checks many clients' emails");
+  assert.equal(isDeviceTell([]), false);
 });

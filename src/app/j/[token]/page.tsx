@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { tellWallHit } from "@/lib/client-wall";
+import { tellWallHit, walledDevice } from "@/lib/client-wall";
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { Room } from "@/components/room/Room";
@@ -68,6 +68,15 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     return <Removed logoUrl={r.event.logo_url} />;
   }
   const team = sp.at ? Boolean(await getTeamMember().catch(() => null)) : false;
+  // A client's own device under a new email (Brishen, Oct 28: walled on gmail, back through Skool on icloud from the same Mac and address): the same bland 404, this request only.
+  if (!team && !scanner && (await walledDevice(ip, ua).catch(() => false))) {
+    after(async () => {
+      // Its own outcome: a "walled" row under this new seat would make the device look shared and let them in next time.
+      await logClick({ path: "j", outcome: "walled_device", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src: typeof sp.src === "string" ? sp.src : null, userAgent: ua, bot: scanner, ip });
+      await tellWallHit(r, r.event.title, "join").catch(() => {});
+    });
+    notFound();
+  }
   // Ghosted in chat, tonight or any night before under this email: the live room is a bland 404, like the client wall (William, Oct 28 2026).
   if (!team && (await everGhosted(r).catch(() => false))) {
     after(() => logClick({ path: "j", outcome: "ghosted", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src: typeof sp.src === "string" ? sp.src : null, userAgent: ua, bot: scanner, ip }));
