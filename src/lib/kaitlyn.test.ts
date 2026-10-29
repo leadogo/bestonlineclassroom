@@ -357,3 +357,15 @@ test("tellNeedsYou: a repeat whose first post is gone releases the key and posts
   assert.equal(await tellNeedsYou(reg, 3, "close-crm", card, { store: fakeStore(failing), post: poster([], () => ({ ok: false, error: "HTTP 500" })) }), "skipped");
   assert.equal(failing.get(3), null, "a failed post releases the claim so the next card can take it");
 });
+
+test("guard: before the pitch, no talk of the offer, the bonus or the pitch coming later (William, Oct 28: 'the offer comes up near the end of the class')", () => {
+  for (const s of ["the offer comes up near the end of the class, stick around", "William covers the offer later", "there's a bonus for the first 10", "the bonuses come at the end", "stick around for the pitch", "the special offer is worth waiting for"]) assert.equal(guard(s, true), "offer talk before the pitch", s);
+  // The neutral "later" lines (approved Oct 22) never name the offer and still pass; "offer" as a verb is not the offer.
+  for (const s of [...SHAPES.later, "we offer Spanish-speaking setters too", "at the end of the day it's about speed", "she offers to book them", "great question, stick around"]) assert.equal(guard(s, true), null, s);
+  assert.equal(guard("the offer comes up near the end of the class", false), null, "after the pitch it's fine");
+  // Rick's case: the draft is swapped for a neutral "later" line, posted with no desk card and no Slack ping.
+  const rick = parseDecision({ action: "reply", category: "other", text: "the offer comes up near the end of the class, stick around", sure: true, why: "offer request before pitch" }, { beforePitch: true, pick: 2 });
+  assert.equal(rick.action, "reply");
+  assert.ok(SHAPES.later.includes(rick.text), rick.text);
+  assert.match(rick.why, /offer talk before the pitch/);
+});
