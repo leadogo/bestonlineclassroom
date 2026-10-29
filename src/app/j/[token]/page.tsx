@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { db } from "@/lib/db";
 import { Room } from "@/components/room/Room";
 import { Removed } from "@/components/room/Removed";
-import { registrantByToken } from "@/lib/attendees";
+import { everGhosted, registrantByToken } from "@/lib/attendees";
 import { getTeamMember } from "@/lib/auth";
 import { TOKEN_RE } from "@/lib/registrants";
 import { buildRoom } from "@/lib/room-props";
@@ -68,6 +68,11 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
     return <Removed logoUrl={r.event.logo_url} />;
   }
   const team = sp.at ? Boolean(await getTeamMember().catch(() => null)) : false;
+  // Ghosted in chat, tonight or any night before under this email: the live room is a bland 404, like the client wall (William, Oct 28 2026).
+  if (!team && (await everGhosted(r).catch(() => false))) {
+    after(() => logClick({ path: "j", outcome: "ghosted", token, registrantId: r.id, eventId: r.event_id, sessionDate: r.session_date, src: typeof sp.src === "string" ? sp.src : null, userAgent: ua, bot: scanner, ip }));
+    notFound();
+  }
   const outcome = buildRoom(r.event, r, sp, new Date(), { team });
   const src = typeof sp.src === "string" ? sp.src : null;
   if (outcome.kind === "ended") {
