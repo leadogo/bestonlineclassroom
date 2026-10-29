@@ -238,6 +238,8 @@ export function marketLine(body: string, markets: MarketCount[]): string | null 
 /** What a reply may never contain, whatever the model wrote; the reply becomes ask_william with the draft kept. `beforePitch`: nobody is sent to the call before booking opens (SPEC-friday-unattended.md, C). */
 export function guard(text: string, beforePitch = false): string | null {
   // The call as a thing to book ("a quick call", "the free 15-minute call", "our call", "call with the team", "book a spot", "consult"); "she calls the leads" and "call them yourself" are not booking talk (review of Oct 22).
+  // The offer by name, the bonus, the pitch (William, Oct 28: "the offer comes up near the end of the class" went to Rick); the neutral "later" lines never name them.
+  if (beforePitch && /\b(?:the|an|our|this|that|his|special|exclusive)\s+offer\b|\boffers?\s+(?:comes?|is|are|goes)\b|\bbonus(?:es)?\b|\bpitch\b/i.test(text)) return "offer talk before the pitch";
   if (beforePitch && /\b(?:a|an|the|your|our|this|that|free|quick|strategy|discovery|intro|onboarding|setup)\s+(?:[\w-]+\s+){0,3}call\b|\bcall with\b|\bbook(?:ing|ed)?\b[^.!?]{0,40}\bcall\b|\bconsult(?:ation)?\b|\bbook(?:ing)?\s+(?:a |the |your )?(?:spot|time|slot)\b/i.test(text)) return "call talk before the pitch";
   // The two figures William approved Oct 17 (Katherine's subscription, in any spelling, and the ad-budget example) pass; every other figure does not.
   const t = text.replace(/\$250\s?(?:a month|\/\s?mo(?:nth)?|per month|monthly)/gi, "").replace(/\$10 a day/gi, "");
@@ -277,7 +279,9 @@ export function parseDecision(input: unknown, opts: { beforePitch?: boolean; pic
     else if ((action === "reply" || action === "ask_william") && !/\$250/.test(text)) { action = "reply"; text = laterShape(opts.pick ?? Math.floor(Math.random() * 1000)); why = `before the pitch; ${why}`.slice(0, 140); }
   }
   const bad = action === "reply" ? guard(text, Boolean(opts.beforePitch)) : null;
-  if (bad) { action = "ask_william"; why = `draft mentions ${bad}; ${why}`.slice(0, 140); }
+  // Offer talk before the pitch: the neutral "later" line instead, posted, like a price ask (no desk card, no Slack ping for a routine early ask).
+  if (bad === "offer talk before the pitch") { text = laterShape(opts.pick ?? Math.floor(Math.random() * 1000)); why = `${bad}, later line; ${why}`.slice(0, 140); }
+  else if (bad) { action = "ask_william"; why = `draft mentions ${bad}; ${why}`.slice(0, 140); }
   // A line with an AI tell never posts on its own; the desk sees what tripped it (SPEC-kaitlyn-autopilot.md, B).
   const tell = action === "reply" ? tells(text)[0] : undefined;
   if (tell) { action = "ask_william"; why = `sounds like a bot: ${tell}; ${why}`.slice(0, 140); }
