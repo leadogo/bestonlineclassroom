@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { isScannerAgent } from "@/lib/scanner";
+import { isCrawlerAgent, isScannerAgent } from "@/lib/scanner";
 import { GuestForm } from "./guest-form";
 import { WaitingCount } from "./waiting-count";
 import { resolveForSession } from "@/lib/attendees";
@@ -44,16 +44,19 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
   const ph = one("ph").replace(/[^\d+() .-]/g, "").trim().slice(0, 32);
   const passthrough = { ...cleanParams(sp), ...(one("at") ? { at: one("at") } : {}), ...(one("key") ? { key: one("key") } : {}) };
 
-  const known = await resolveForSession(event.id, sessionDate, { eh, rid, lk: one("lk").toLowerCase() }, src).catch(() => null);
+  const ua = (await headers()).get("user-agent");
+  // A link-preview or AI crawler (Meta walked ~4,200 emailed open links on Oct 28, each making a seat for the night,
+  // its reminders and its tags): it sees the join card, nothing is created or resolved.
+  const crawler = isCrawlerAgent(ua);
+  const known = crawler ? null : await resolveForSession(event.id, sessionDate, { eh, rid, lk: one("lk").toLowerCase() }, src).catch(() => null);
   if (known) {
     if (ph && !known.phone) await db().from("registrants").update({ phone: ph }).eq("id", known.id).is("phone", null);
     redirect(`/j/${known.token}${toQuery(passthrough)}`);
   }
-  if (email && fn) {
+  if (email && fn && !crawler) {
     const made = await createGuest({ eventId: event.id, sessionDate, firstName: fn, source: isTestIdentity(email) ? ("test" as never) : src, email, emailHash: eh, phone: ph || null, siteRegistrationId: rid }).catch(() => null);
     if (made) redirect(`/j/${made.token}${toQuery(passthrough)}`);
   }
-  const ua = (await headers()).get("user-agent");
   after(() => logClick({ path: "w", outcome: "prompt", eventId: event.id, sessionDate, src, userAgent: ua, bot: isScannerAgent(ua) }));
 
   // The join card (William, Sep 23: it has to look like something you trust): what they are joining, who is on
