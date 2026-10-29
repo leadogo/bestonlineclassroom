@@ -110,3 +110,12 @@ export function learnedNotice(o: { name: string; fact: string }): Notice {
 export function complaintNotice(o: { name: string; email: string | null; message: string }): Notice {
   return { kind: "alert", headline: `A client complaint in the room, answered privately: ${escapeMrkdwn(o.name)}`, numbers: [o.email ? escapeMrkdwn(o.email) : "no email"], note: clipChars(`"${escapeMrkdwn(clipWords(o.message, 40))}" · someone should follow up tomorrow`) };
 }
+
+/** The levels at which a run of IP blocks is worth a look (William, Oct 28: the desk's Block now blocks the IP too). */
+export const IP_SURGE_LEVELS = [5, 10, 20, 50, 100];
+export function ipSurgeLevel(blockedLast24h: number): number | null {
+  return IP_SURGE_LEVELS.includes(blockedLast24h) ? blockedLast24h : null;
+}
+export function ipSurgeNotice(o: { count: number; latest: string }): Notice {
+  return { kind: "ask", emoji: "🚨", headline: `${o.count} IPs blocked in the last 24 hours`, ask: { who: williamMention(), action: "check Admin › Blocked" }, note: clipChars(`latest: ${escapeMrkdwn(o.latest)} · a run of blocks can mean a shared office or phone-carrier address is shutting out real people`) };
+}
