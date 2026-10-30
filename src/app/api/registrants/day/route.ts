@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, pageAll } from "@/lib/db";
 import { getEvent } from "@/lib/events";
 import { currentOrNextSession, scheduleOf, sessionFor } from "@/lib/daily-schedule";
 import { joinUrl } from "@/lib/registrants";
@@ -23,14 +23,24 @@ export async function GET(request: Request) {
   const session = date ? (DATE_RE.test(date) ? sessionFor(schedule, date) : null) : currentOrNextSession(schedule);
   if (!session) return Response.json({ error: "Bad date" }, { status: 400 });
 
-  const { data: regs, error } = await db()
-    .from("registrants")
-    .select("id, token, first_name, email, phone, source, blocked_at, created_at, flags")
-    .eq("event_id", event.id)
-    .eq("session_date", session.date)
-    .neq("source", "test")
-    .order("created_at");
-  if (error) return Response.json({ error: "Read failed" }, { status: 500 });
+  // Every row, a thousand at a time (Oct 28: a 1,000-registrant day read as exactly 1,000 and Katherine never saw the rest).
+  type Reg = { id: string; token: string; first_name: string | null; email: string | null; phone: string | null; source: string | null; blocked_at: string | null; created_at: string; flags: Record<string, unknown> | null };
+  let regs: Reg[];
+  try {
+    regs = await pageAll<Reg>((from, to) =>
+      db()
+        .from("registrants")
+        .select("id, token, first_name, email, phone, source, blocked_at, created_at, flags")
+        .eq("event_id", event.id)
+        .eq("session_date", session.date)
+        .neq("source", "test")
+        .order("created_at")
+        .order("id")
+        .range(from, to),
+    );
+  } catch {
+    return Response.json({ error: "Read failed" }, { status: 500 });
+  }
 
   const ids = (regs ?? []).map((r) => r.id as string);
   const live = new Map<string, number>();
