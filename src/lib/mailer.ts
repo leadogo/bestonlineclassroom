@@ -4,7 +4,7 @@ import { ordinal, partsInTz } from "./tz.ts";
 import { db } from "./db.ts";
 import type { EventRow } from "./events.ts";
 import { CONFIRMATION_BODY, CONFIRMATION_SUBJECT, TRANSPARENCY_FOOTER, fill } from "./email-templates.ts";
-import { buildInvite } from "./ics.ts";
+import { calendarInvite } from "./ics.ts";
 import { sendEmail } from "./postmark.ts";
 import { joinUrl, replayUrl } from "./registrants.ts";
 import { toHtml } from "./reminders.ts";
@@ -54,18 +54,7 @@ export async function sendConfirmation(p: Person, e: EventRow, session: Session)
   const body = fill(e.confirmation?.body || CONFIRMATION_BODY, vars);
   const text = withFooter(body, e.confirmation?.footer !== false, p.token);
   // Jeremy (2026-09-20): a real invite, 1h15 on the calendar, "full replay available after" in the description.
-  const ics = buildInvite({
-    uid: `${p.token}-${session.date}@bestonlineclassroom.com`,
-    start: session.start,
-    end: new Date(session.start.getTime() + 75 * 60_000),
-    title: e.title,
-    description: `Your private link to join: ${vars.join_url}\nOpen it a few minutes early and turn the sound on when it starts.\nFull replay available after.`,
-    url: vars.join_url,
-    organizerName: e.host_name,
-    organizerEmail: REPLY_TO,
-    attendeeName: p.first_name,
-    attendeeEmail: p.email,
-  });
+  const ics = calendarInvite(p, e, session, vars.join_url, REPLY_TO);
   const res = await sendEmail({ to: p.email, subject, text, html: toHtml(text), tag: "confirmation", attachments: [{ name: "invite.ics", content: Buffer.from(ics, "utf8").toString("base64"), contentType: "text/calendar; method=REQUEST" }] });
   if (res.ok) await db().from("registrants").update({ confirmation_sent_at: new Date().toISOString() }).eq("id", p.id);
   else console.error("[mailer] confirmation failed", { registrant: p.id, error: res.error });
