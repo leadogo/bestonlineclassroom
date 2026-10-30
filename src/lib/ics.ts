@@ -11,6 +11,7 @@ export type Invite = {
   organizerName: string;
   organizerEmail: string;
   attendeeName: string;
+  /** Empty: no ATTENDEE line (a calendar file fetched from a text may be for someone with no email on file). */
   attendeeEmail: string;
 };
 
@@ -53,7 +54,7 @@ export function buildInvite(i: Invite): string {
     `LOCATION:${esc(i.url)}`,
     `URL:${i.url}`,
     `ORGANIZER;CN=${esc(i.organizerName)}:mailto:${i.organizerEmail}`,
-    `ATTENDEE;CN=${esc(i.attendeeName)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${i.attendeeEmail}`,
+    ...(i.attendeeEmail ? [`ATTENDEE;CN=${esc(i.attendeeName)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${i.attendeeEmail}`] : []),
     "STATUS:CONFIRMED",
     "SEQUENCE:0",
     "BEGIN:VALARM",
@@ -65,4 +66,27 @@ export function buildInvite(i: Invite): string {
     "END:VCALENDAR",
   ];
   return lines.map(fold).join("\r\n") + "\r\n";
+}
+
+type SessionLike = { date: string; start: Date; end: Date };
+
+/** The registrant's invite, the one the confirmation email attaches (Jeremy, 2026-09-20: 1h15 on the calendar, the replay noted). */
+export function calendarInvite(p: { token: string; first_name: string; email: string | null }, e: { title: string; host_name: string }, session: SessionLike, joinLink: string, organizerEmail: string): string {
+  return buildInvite({
+    uid: `${p.token}-${session.date}@bestonlineclassroom.com`,
+    start: session.start,
+    end: new Date(session.start.getTime() + 75 * 60_000),
+    title: e.title,
+    description: `Your private link to join: ${joinLink}\nOpen it a few minutes early and turn the sound on when it starts.\nFull replay available after.`,
+    url: joinLink,
+    organizerName: e.host_name,
+    organizerEmail,
+    attendeeName: p.first_name,
+    attendeeEmail: p.email ?? "",
+  });
+}
+
+/** Which session a calendar link adds: the registrant's own until it ends, then the running-or-next one (their link moves them in). */
+export function calendarSession<S extends SessionLike>(own: S | null, next: S, now: Date = new Date()): S {
+  return own && own.end.getTime() > now.getTime() ? own : next;
 }
