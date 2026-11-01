@@ -81,7 +81,7 @@ export default async function ReplayPage({ params, searchParams }: { params: Pro
       <main className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-md">
           {e.logo_url && <img src={e.logo_url} alt={e.title} className="mx-auto mb-8 h-10 w-auto" />}
-          <h1 className="text-2xl font-bold text-balance">{running ? "Session is in progress now" : ended ? `Your replay opens tonight at ${zones[1][1]} Mountain` : `Your session is ${day}`}</h1>
+          <h1 className="text-2xl font-bold text-balance">{running ? "Session is in progress now" : ended ? `Your replay opens tonight at ${zones.find(([z]) => z === "Eastern")?.[1] ?? ""} Eastern` : `Your session is ${day}`}</h1>
           <p className="mt-3 text-base text-muted">{ended ? `${zoneLine}. Come back to this same link then.` : `${zoneLine}. The full replay is available here afterwards.`}</p>
           {ended ? (
             cta && <a href={cta.href} target="_blank" rel="noopener" className={button}>{cta.label}</a>

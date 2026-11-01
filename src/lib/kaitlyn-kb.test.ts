@@ -62,9 +62,9 @@ test("digestDue: from 9 AM in Edmonton for the rest of the day (a failed 9 AM po
   assert.equal(digestDue(new Date("2026-10-18T14:00:00Z"), null).due, false);
   assert.equal(digestDue(new Date("2026-10-18T16:00:00Z"), null).due, true, "10 AM still posts when 9 failed");
   assert.equal(digestDue(new Date("2026-10-18T16:00:00Z"), "2026-10-18").due, false, "but once a day");
-  // After Nov 1 Edmonton is MST: 9 AM is 16:00 UTC
-  assert.equal(digestDue(new Date("2026-11-03T15:00:00Z"), null).due, false);
-  assert.deepEqual(digestDue(new Date("2026-11-03T16:00:00Z"), null), { due: true, today: "2026-11-03" });
+  // The event's zone after Nov 1 is EST: 9 AM is 14:00 UTC
+  assert.equal(digestDue(new Date("2026-11-03T13:00:00Z"), null, "America/New_York").due, false);
+  assert.deepEqual(digestDue(new Date("2026-11-03T14:00:00Z"), null, "America/New_York"), { due: true, today: "2026-11-03" });
 });
 
 

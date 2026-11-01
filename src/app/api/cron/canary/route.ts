@@ -5,11 +5,58 @@ import { postmarkConfigured } from "@/lib/postmark";
 import { cronDue } from "@/lib/tz";
 import { INTEL_CHANNEL, postNotice, renderNotice } from "@/lib/slack";
 import { canaryNotice, type CanaryCheck } from "@/lib/notices";
+import { activeCampaignConfigured, api as acApi } from "@/lib/activecampaign";
+import { acChecks, clockChecks, icsStart, type AcTrigger, type Reading } from "@/lib/clock-agreement";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const SITE = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bestonlineclassroom.com").replace(/\/$/, "");
+// Clock agreement (SPEC-clock-agreement.md): the systems that time the AI Leads masterclass, asked when it starts.
+const CLOCK_EVENT = "ailg-r";
+const FUNNEL = "https://thefuturerealestateagent.com";
+const KATHERINE = (process.env.KATHERINE_URL ?? "https://app.getkatherine.ai").replace(/\/$/, "");
+const LEADOGO = (process.env.LEADOGO_URL ?? "https://app.leadogo.com").replace(/\/$/, "");
+const AC_AUTOMATIONS = [173, 174, 175, 176, 177, 178, 191, 199];
+
+async function getText(url: string): Promise<{ text: string | null; error?: string }> {
+  try {
+    // An auth redirect (an endpoint not deployed behind a login) counts as unreachable, not as an answer.
+    const res = await fetch(url, { redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(15_000) });
+    return res.ok ? { text: await res.text() } : { text: null, error: `HTTP ${res.status}` };
+  } catch (err) {
+    return { text: null, error: err instanceof Error ? err.name : "fetch failed" };
+  }
+}
+
+async function clockReading(system: string, url: string): Promise<Reading> {
+  const r = await getText(url);
+  if (!r.text) return { system, start: null, error: r.error };
+  try {
+    const j = JSON.parse(r.text) as { next_start?: string; slots?: string[] };
+    return { system, start: j.next_start ? new Date(j.next_start) : null, slots: j.slots?.map((s) => new Date(s)) };
+  } catch {
+    return { system, start: null, error: "not JSON" };
+  }
+}
+
+async function clockAgreement(e: EventRow, start: Date, date: string): Promise<CanaryCheck[]> {
+  const ics = await getText(`${FUNNEL}/api/calendar`);
+  const readings: Reading[] = [
+    { system: "site", start: ics.text ? icsStart(ics.text) : null, error: ics.error },
+    await clockReading("Katherine", `${KATHERINE}/api/public/webinar-clock`),
+    await clockReading("Leadogo", `${LEADOGO}/api/public/webinar-clock`),
+  ];
+  const checks = clockChecks(start, e.timezone, readings);
+  if (!activeCampaignConfigured()) return checks;
+  const me = await acApi<{ user?: { localZoneid?: string } }>("/users/me");
+  const triggers: AcTrigger[] = [];
+  for (const id of AC_AUTOMATIONS) {
+    const res = await acApi<{ automationTriggers?: Array<{ type: string; params: AcTrigger["params"] }> }>(`/automations/${id}/triggers`);
+    for (const t of res?.automationTriggers ?? []) triggers.push({ automation: id, type: t.type, params: t.params });
+  }
+  return [...checks, ...acChecks(start, e.timezone, date, me?.user?.localZoneid ?? null, triggers)];
+}
 
 
 async function head(url: string, range = false): Promise<{ ok: boolean; status: number }> {
@@ -23,11 +70,12 @@ async function head(url: string, range = false): Promise<{ ok: boolean; status: 
 }
 
 /**
- * The daily canary (SPEC-phase5.md guardrail 6): at 3:45 PM Mountain, before anyone can deploy for the evening, every
+ * The daily canary (SPEC-phase5.md guardrail 6): at 3:45 PM Alberta (4:45 PM ET in winter, 5:45 in summer), before the evening, every
  * event that runs today is checked end to end: the video answers a byte range, the open page renders, the offer link
  * answers, the crowd exists, people are registered, reminders went out yesterday, mail and Slack are configured.
  * One health check to #autoweb-intel per event. Two UTC entries in vercel.json (21:45 and 22:45) and the hour guard keep
- * it at 3:45 PM Mountain in both DST states; `?force=1` runs it any time.
+ * it at 3:45 PM Alberta whatever the UTC offset; `?force=1` runs it any time, `?dry=1` without posting. For the AI Leads
+ * masterclass it also checks that every system agrees on tonight's start (SPEC-clock-agreement.md).
  */
 const CANARY_HOUR = 15;
 export async function GET(request: Request) {
@@ -64,6 +112,7 @@ export async function GET(request: Request) {
     const wall = await db().from("client_wall").select("seen_at", { count: "exact" }).is("released_at", null).order("seen_at", { ascending: false }).limit(1);
     const wallAt = wall.data?.[0]?.seen_at ? new Date(wall.data[0].seen_at as string).getTime() : 0;
     checks.push({ name: "client wall", ok: now.getTime() - wallAt < 2 * 3_600_000, detail: wallAt ? `${wall.count ?? 0} clients on the wall, synced ${Math.round((now.getTime() - wallAt) / 60_000)} min ago` : "client wall never synced", short: "client wall" });
+    if (e.slug === CLOCK_EVENT) checks.push(...(await clockAgreement(e, session.start, session.date)));
     report.push({ event: e.slug, runs: true, checks });
   }
   // One health check per event that runs today (a day with no session posts nothing); `?dry=1` renders without posting.
@@ -71,7 +120,7 @@ export async function GET(request: Request) {
   const notices = report.filter((r) => r.runs).map((r) => {
     const e = (events ?? []).find((x) => x.slug === r.event) as EventRow;
     const zones = fourZones(sessionFor(scheduleOf(e), localDate(scheduleOf(e), now))!);
-    return canaryNotice({ title: e.title, at: `${zones.find(([z]) => z === "Mountain")?.[1] ?? ""} Mountain`, checks: r.checks });
+    return canaryNotice({ title: e.title, at: `${zones.find(([z]) => z === "Eastern")?.[1] ?? ""} Eastern`, checks: r.checks });
   });
   const posted = dry ? [] : await Promise.all(notices.map((n) => postNotice(INTEL_CHANNEL, n)));
   return Response.json({ ok: report.every((r) => !r.runs || r.checks.every((c) => c.ok)), report, text: notices.map(renderNotice), posted }, { headers: { "cache-control": "no-store" } });

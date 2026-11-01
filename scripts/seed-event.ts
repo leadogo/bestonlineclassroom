@@ -8,8 +8,9 @@ const EVENTS: Record<string, Record<string, unknown>> = {
     slug: "ailg-r",
     title: "AI For Agents Masterclass",
     host_name: "William Kabrall",
-    timezone: "America/Edmonton",
-    start_time: "17:00",
+    timezone: "America/New_York", // 7 PM Eastern year-round, pinned 1 Nov 2026
+    start_time: "19:00",
+    replay_opens_at: "22:00",
     cta_at_seconds: 4500, // 1:15:00
     cta_hide_seconds: 8259, // 2:17:39, as EasyWebinar was set
     cta_label: "Book your call",

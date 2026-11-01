@@ -54,7 +54,7 @@ if (values.teardown) {
   process.exit(0);
 }
 
-if (!/^\d{1,2}:\d{2}$/.test(values.at ?? "")) throw new Error("--at HH:MM (24 h, Mountain) is required");
+if (!/^\d{1,2}:\d{2}$/.test(values.at ?? "")) throw new Error("--at HH:MM (24 h, in the source event's zone, Eastern for ailg-r) is required");
 const src = await db().from("events").select("*").eq("slug", values.from!).single();
 if (src.error) throw new Error(src.error.message);
 const { id: fromId, created_at: _c, ...copy } = src.data as Record<string, unknown> & { id: string; created_at: string };

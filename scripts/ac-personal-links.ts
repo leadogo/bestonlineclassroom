@@ -34,7 +34,7 @@ const since = opt("--since", "2026-08-01");
 const tagId = opt("--tag", "304");
 const limit = Number(opt("--limit", "Infinity"));
 const planPath = opt("--plan", "");
-const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
 const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const newToken = () => { const b = randomBytes(12); let s = ""; for (let i = 0; i < 12; i++) s += ALPHABET[b[i] % ALPHABET.length]; return s; };

@@ -9,6 +9,7 @@ import { asMode } from "@/lib/kaitlyn";
 import { localDate, scheduleOf } from "@/lib/daily-schedule";
 import { mp4Info } from "@/lib/mp4";
 import { REPLAY_COPY } from "@/lib/replay-content";
+import { isZone } from "@/lib/clock-agreement";
 
 async function guard(slug: string) {
   if ((await getTeamMember().catch(() => null))?.role !== "admin") throw new Error("Admins only");
@@ -33,14 +34,17 @@ export async function saveSettings(slug: string, _prev: ActionState, fd: FormDat
   const cta_hide = parseSeconds(str(fd, "cta_hide"));
   const replay_hours = Number(str(fd, "replay_hours"));
   const start_time = str(fd, "start_time", 8);
-  if (!/^\d{2}:\d{2}$/.test(start_time)) return { error: "Start time must look like 17:00." };
+  if (!/^\d{2}:\d{2}$/.test(start_time)) return { error: "Start time must look like 19:00." };
   const replay_opens_at = str(fd, "replay_opens_at", 8);
   if (replay_opens_at && !/^\d{2}:\d{2}$/.test(replay_opens_at)) return { error: "Replay opens at must look like 20:00, or be blank." };
   if (!str(fd, "title")) return { error: "The title is required." };
+  const timezone = str(fd, "timezone", 64) || event.timezone;
+  // A typo here breaks every page that renders a time.
+  if (!isZone(timezone)) return { error: `"${timezone}" is not a time zone name. Use one like America/New_York.` };
   const patch = {
     title: str(fd, "title", 120),
     host_name: str(fd, "host_name", 80) || event.host_name,
-    timezone: str(fd, "timezone", 64) || event.timezone,
+    timezone,
     start_time,
     cta_label: str(fd, "cta_label", 60) || null,
     cta_href: str(fd, "cta_href", 500) || null,

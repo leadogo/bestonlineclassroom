@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
 import { isPerson, peakConcurrent, PRESENCE_GRACE_MS, retentionCurve } from "@/lib/outcomes";
 import { scheduleOf, sessionFor } from "@/lib/daily-schedule";
-import { loadHistory, projectBookings, typicalNight } from "@/lib/history";
+import { loadHistory, localWeekday, projectBookings, typicalNight } from "@/lib/history";
 import { loadJoinSources } from "@/lib/join-sources-data";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     if (date && session) {
       const minuteNow = Math.max(0, Math.floor((nowMs - session.start.getTime()) / 60_000));
       const history = await loadHistory(event, row.session_date as string);
-      const proj = at_pitch !== null && at_pitch > 0 ? projectBookings(history, session.start.getUTCDay(), at_pitch) : in_room > 0 ? projectBookings(history, session.start.getUTCDay(), in_room) : null;
+      const proj = at_pitch !== null && at_pitch > 0 ? projectBookings(history, localWeekday(session.date), at_pitch) : in_room > 0 ? projectBookings(history, localWeekday(session.date), in_room) : null;
       extras = { until_pitch_minutes: pitchAt !== null && pitchAt > nowMs ? Math.round((pitchAt - nowMs) / 60_000) : null, projected: proj, typical: typicalNight(history.map((h) => h.curve).filter((c): c is number[] => Array.isArray(c)), minuteNow), minute: minuteNow };
     }
     const by_source = await loadJoinSources(event.id, row.session_date as string, event.cta_at_seconds ?? 4500);

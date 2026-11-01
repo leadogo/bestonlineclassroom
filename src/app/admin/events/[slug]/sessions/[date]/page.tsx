@@ -37,8 +37,10 @@ export default async function SessionAdmin({ params, searchParams }: { params: P
   const joined = real.filter((r) => r.attendance.some((a) => a.kind === "live")).length;
   const replayed = real.filter((r) => r.attendance.some((a) => a.kind === "replay")).length;
   const clicked = real.filter((r) => r.attendance.some((a) => a.cta_clicked_at)).length;
-  const prev = new Date(session.start.getTime() - 86_400_000).toISOString().slice(0, 10);
-  const next = new Date(session.start.getTime() + 86_400_000).toISOString().slice(0, 10);
+  // Step the local calendar date, not ±24 h of UTC: with a 00:00Z start the UTC date is already tomorrow.
+  const step = (days: number) => { const d = new Date(`${session.date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+  const prev = step(-1);
+  const next = step(1);
 
   return (
     <div className="flex flex-col gap-8">
