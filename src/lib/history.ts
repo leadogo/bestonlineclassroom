@@ -26,6 +26,9 @@ export function typicalNight(curves: number[][], now: number): Typical | null {
 }
 
 /** Projected bookings: tonight's at-the-pitch × the book rate of past sessions, this weekday once it has four, else all. */
+/** The weekday of a local YYYY-MM-DD (a 00:00Z start is already the next UTC day). */
+export const localWeekday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
+
 export function projectBookings(history: PastSession[], weekday: number, atPitch: number): { projected: number; rate: number; sessions: number; byWeekday: boolean } | null {
   const same = history.filter((h) => h.weekday === weekday && h.at_pitch > 0);
   const pool = same.length >= 4 ? same : history.filter((h) => h.at_pitch > 0);
@@ -49,7 +52,7 @@ export async function loadHistory(event: EventRow, before: string, n = 28, curve
     const att = await db().from("attendance").select("joined_at, last_seen_at, seconds_watched, cta_clicked_at, registrant:registrants!inner(source)").eq("session_date", s.date).eq("kind", "live").eq("registrant.event_id", event.id);
     const intervals = (att.data ?? []).filter((a) => (a.registrant as unknown as { source: string }).source !== "test" && isPerson({ seconds_watched: (a.seconds_watched as number | null) ?? 0, cta_clicked_at: (a.cta_clicked_at as string | null) ?? null })).map((a) => ({ from: new Date(a.joined_at as string).getTime(), to: new Date(a.last_seen_at as string).getTime() }));
     const booked = await db().from("bookings").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("session_date", s.date).eq("status", "scheduled");
-    out.push({ date: s.date, weekday: s.start.getUTCDay(), at_pitch: concurrentAt(intervals, pitchAt, PRESENCE_GRACE_MS), booked: booked.count ?? 0, curve: out.length < curves && minutes > 0 ? Array.from({ length: minutes + 1 }, (_, m) => concurrentAt(intervals, s.start.getTime() + m * 60_000)) : undefined });
+    out.push({ date: s.date, weekday: localWeekday(s.date), at_pitch: concurrentAt(intervals, pitchAt, PRESENCE_GRACE_MS), booked: booked.count ?? 0, curve: out.length < curves && minutes > 0 ? Array.from({ length: minutes + 1 }, (_, m) => concurrentAt(intervals, s.start.getTime() + m * 60_000)) : undefined });
   }
   return out;
 }

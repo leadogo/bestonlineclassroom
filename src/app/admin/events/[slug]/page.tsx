@@ -79,7 +79,7 @@ export default async function EventAdmin({ params }: { params: Promise<{ slug: s
             <Field label="Captions offset (seconds)" name="captions_offset" value={String(Number(event.captions_offset_seconds ?? 0) || 0)} hint="Positive if captions run ahead of the words, negative if behind." />
             <Field label="Host photo (image link)" name="host_avatar_url" value={event.host_avatar_url ?? ""} hint="A square photo. Upload with npm run brand:upload for now." />
             <Field label="Start time (24 h)" name="start_time" value={event.start_time.slice(0, 5)} hint="On the days ticked below, at this time." />
-            <Field label="Timezone" name="timezone" value={event.timezone} hint="IANA name, e.g. America/Edmonton" />
+            <Field label="Timezone" name="timezone" value={event.timezone} hint="IANA name, e.g. America/New_York (the AI Leads masterclass runs on Eastern)" />
           </div>
           <fieldset className="flex flex-wrap gap-2 text-sm">
             <legend className="mb-1.5 w-full font-bold">Days it runs</legend>

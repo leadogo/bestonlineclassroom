@@ -33,7 +33,7 @@ async function apiRaw<T>(path: string, init: RequestInit = {}, retried = false):
   return { status: res.status, body: (await res.json()) as T };
 }
 
-async function api<T>(path: string, init: RequestInit = {}): Promise<T | null> {
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T | null> {
   return (await apiRaw<T>(path, init)).body;
 }
 

@@ -6,7 +6,7 @@
 import { partsInTz, zoned } from "./tz.ts";
 
 export type Schedule = {
-  /** IANA zone, e.g. America/Edmonton */
+  /** IANA zone, e.g. America/New_York */
   timezone: string;
   startHour: number;
   startMinute: number;
@@ -33,8 +33,8 @@ export type RoomState = {
   offsetSeconds: number;
 };
 
-/** Tonight's event: 5:00 PM Mountain, the 139m46s recording. The seed script and tests use it; routes read the DB. */
-export const AILG_R: Schedule = { timezone: "America/Edmonton", startHour: 17, startMinute: 0, seconds: 8386 };
+/** Tonight's event: 7:00 PM Eastern (pinned from 1 Nov 2026), the 139m46s recording. The seed script and tests use it; routes read the DB. */
+export const AILG_R: Schedule = { timezone: "America/New_York", startHour: 19, startMinute: 0, seconds: 8386 };
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 

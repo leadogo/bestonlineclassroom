@@ -66,14 +66,14 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
   const live = state.state === "live";
   const session = state.session;
   const zones = fourZones(session);
-  const mountain = zones.find(([z]) => z === "Mountain")?.[1] ?? "";
   const dayLabel = new Intl.DateTimeFormat("en-US", { timeZone: event.timezone, weekday: "long", month: "long", day: "numeric" }).format(session.start);
   const isToday = session.date === currentOrNextSession(schedule, now).date && new Intl.DateTimeFormat("en-CA", { timeZone: event.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now) === session.date;
   const minutesToStart = Math.max(0, Math.round((session.start.getTime() - now.getTime()) / 60_000));
   const elapsed = Math.max(0, Math.floor((now.getTime() - session.start.getTime()) / 1000));
   const clock = `${Math.floor(elapsed / 3600)}:${String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0")}`;
-  const startLabel = new Intl.DateTimeFormat("en-US", { timeZone: event.timezone, hour: "numeric", minute: "2-digit" }).format(session.start);
-  const others = zones.filter(([z]) => z !== "Mountain").map(([z, t]) => `${t} ${z}`).join(" · ");
+  // Led by Eastern, the zone every ad and email names (the session is pinned to 7 PM ET from 1 Nov 2026).
+  const startLabel = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }).format(session.start);
+  const others = zones.filter(([z]) => z !== "Eastern").map(([z, t]) => `${t} ${z}`).join(" · ");
   const crowd = 1 + (event.simulated_names ?? []).length;
   let watching: number | null = null;
   let realOpeners = 0;
@@ -85,7 +85,7 @@ export default async function OpenPage({ params, searchParams }: { params: Promi
     const { data } = await db().from("link_clicks").select("registrant_id").eq("event_id", event.id).eq("session_date", session.date).eq("outcome", "countdown").eq("bot", false).gte("at", new Date(session.start.getTime() - 15 * 60_000).toISOString()).limit(2000);
     realOpeners = new Set((data ?? []).map((c) => c.registrant_id).filter(Boolean)).size;
   }
-  const when = live ? `Started ${startLabel} Mountain · you'll join at the live minute` : `${isToday ? "Today" : dayLabel} · ${startLabel} Mountain · ${others}`;
+  const when = live ? `Started ${startLabel} Eastern · you'll join at the live minute` : `${isToday ? "Today" : dayLabel} · ${startLabel} Eastern · ${others}`;
 
   return (
     <main className="min-h-screen bg-room px-4 py-8 sm:py-12">
