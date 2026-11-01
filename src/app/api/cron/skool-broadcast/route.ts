@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { INTEL_CHANNEL, postNotice } from "@/lib/slack";
 import { broadcastNotice } from "@/lib/notices";
-import { CATEGORY, SKOOL_GROUP, isBroadcastMinute, mountainParts, pickBroadcast, BROADCASTS } from "@/lib/skool-broadcast";
+import { CATEGORY, SKOOL_GROUP, isBroadcastMinute, sessionParts, pickBroadcast, BROADCASTS } from "@/lib/skool-broadcast";
 import { postToSkool } from "@/lib/skool-post";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +23,8 @@ export async function GET(request: Request) {
   const dayParam = q.get("day");
   const broadcast = dayParam === "sunday" || dayParam === "wednesday" ? BROADCASTS[dayParam] : pickBroadcast(now);
   if (!broadcast) return Response.json({ skipped: "not a broadcast day" });
-  if (!force && !isBroadcastMinute(now)) return Response.json({ skipped: "not the broadcast minute", mountain: mountainParts(now) });
-  const { date } = mountainParts(now);
+  if (!force && !isBroadcastMinute(now)) return Response.json({ skipped: "not the broadcast minute", eastern: sessionParts(now) });
+  const { date } = sessionParts(now);
   if (!dry) {
     const done = await db().from("skool_broadcasts").select("id, post_url").eq("group_slug", group).eq("broadcast_date", date).eq("status", "posted").maybeSingle();
     if (done.data) return Response.json({ skipped: "already posted today", post_url: done.data.post_url });

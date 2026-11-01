@@ -3,7 +3,7 @@
 
 export const SKOOL_GROUP = "bms-agent-accelerator";
 export const BROADCAST_LINK = "https://watch.bookmoreshowings.com/w/ailg-r?src=skool";
-export const BROADCAST_HOUR = 16; // 4:58 pm Mountain, two minutes before the 5 pm session
+export const BROADCAST_HOUR = 18; // 6:58 pm Eastern, two minutes before the 7 pm ET session (1 Nov 2026: Alberta stopped changing clocks; the session is pinned to Eastern)
 export const BROADCAST_MINUTE = 58;
 export const CATEGORY = "Announcements";
 
@@ -11,7 +11,7 @@ export const CATEGORY = "Announcements";
 export type Broadcast = { weekday: "wednesday" | "sunday"; title: string; body: string };
 
 export const BROADCASTS: Record<Broadcast["weekday"], Broadcast> = {
-  // The post and its email land at 4:58 pm Mountain, two minutes before the doors: doors-open-now framing (Jeremy,
+  // The post and its email land at 6:58 pm Eastern, two minutes before the doors: doors-open-now framing (Jeremy,
   // Oct 18, second pass). One siren, never a row of them: Skool members are past registrants, not cold traffic.
   wednesday: {
     weekday: "wednesday",
@@ -29,26 +29,26 @@ export const BROADCASTS: Record<Broadcast["weekday"], Broadcast> = {
   },
 };
 
-const TZ = "America/Edmonton";
+const TZ = "America/New_York";
 
-export function mountainParts(now: Date): { weekday: number; hour: number; minute: number; date: string } {
+export function sessionParts(now: Date): { weekday: number; hour: number; minute: number; date: string } {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
   return { weekday, hour: Number(get("hour")) % 24, minute: Number(get("minute")), date: `${get("year")}-${get("month")}-${get("day")}` };
 }
 
-/** Today's broadcast in Mountain time, or null on the other five days. */
+/** Today's broadcast in the session's zone (Eastern), or null on the other five days. */
 export function pickBroadcast(now: Date): Broadcast | null {
-  const { weekday } = mountainParts(now);
+  const { weekday } = sessionParts(now);
   if (weekday === 3) return BROADCASTS.wednesday;
   if (weekday === 0) return BROADCASTS.sunday;
   return null;
 }
 
-/** The cron fires at 22:58 and 23:58 UTC; only the run that lands at 16:5x Mountain posts. */
+/** The cron fires at 22:58 and 23:58 UTC; only the run that lands at 18:5x Eastern posts (22:58 in summer, 23:58 in winter). */
 export function isBroadcastMinute(now: Date): boolean {
-  const { hour, minute } = mountainParts(now);
+  const { hour, minute } = sessionParts(now);
   return hour === BROADCAST_HOUR && minute >= BROADCAST_MINUTE - 3 && minute <= BROADCAST_MINUTE + 4;
 }
 
