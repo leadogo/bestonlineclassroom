@@ -4,5 +4,5 @@
 - [x] CP1 (review done) classroom PR review, migrate, merge, prod dry run
 - [x] T3 Katherine push days Mon–Thu
 - [x] T4 Katherine attended pool 40/day
-- [ ] CP2 Katherine PR review, merge, deploy, dry run
+- [x] CP2 Katherine PR review, merge, deploy, dry run
 - [ ] Ship: watch Tue Nov 3 5:50 pm ET push + Katherine digest
