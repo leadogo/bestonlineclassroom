@@ -18,7 +18,8 @@ const shiftDays = (date: string, days: number) => new Date(Date.parse(`${date}T1
 async function allContacts(query: string): Promise<string[]> {
   const ids: string[] = [];
   for (let offset = 0; ; offset += 100) {
-    const page = await api<Page>(`/contacts?${query}&limit=100&offset=${offset}`);
+    const url = `/contacts?${query}&limit=100&offset=${offset}`;
+    const page = (await api<Page>(url)) ?? (await api<Page>(url));
     if (!page) throw new Error(`ActiveCampaign list failed: ${query} @${offset}`);
     ids.push(...page.contacts.map((c) => c.id));
     if (page.contacts.length < 100) return ids;
@@ -28,7 +29,8 @@ async function allContacts(query: string): Promise<string[]> {
 async function inAutomation(automation: string): Promise<Set<string>> {
   const ids = new Set<string>();
   for (let offset = 0; ; offset += 100) {
-    const page = await api<AutomationPage>(`/contactAutomations?filters[seriesid]=${automation}&limit=100&offset=${offset}`);
+    const url = `/contactAutomations?filters[seriesid]=${automation}&limit=100&offset=${offset}`;
+    const page = (await api<AutomationPage>(url)) ?? (await api<AutomationPage>(url));
     if (!page) throw new Error(`ActiveCampaign automation ${automation} list failed @${offset}`);
     for (const r of page.contactAutomations) if (r.status === "1") ids.add(r.contact);
     if (page.contactAutomations.length < 100) return ids;
@@ -56,20 +58,38 @@ export async function GET(request: Request) {
   if (!dry) {
     // Claim the day before any tag lands: a second invocation (a retry, a manual run) hits the primary key and stops.
     const claim = await db().from("push_runs").insert({ push_date: date, group_no: group, tagged: 0, skipped_reengagement: 0, skipped_hold: 0, assigned_new: 0, failed: 0 });
-    if (claim.error) return Response.json({ skipped: "already pushed today", date, detail: claim.error.message });
+    if (claim.error?.code === "23505") return Response.json({ skipped: "already pushed today", date });
+    if (claim.error) throw new Error(`push_runs claim failed: ${claim.error.message}`);
   }
+  try {
+    return await run(date, group, dry);
+  } catch (e) {
+    // Nothing was tagged before the first write below, so give the day back; a rerun (?force=1) can still push it.
+    if (!dry && !(e instanceof TaggingStarted)) await db().from("push_runs").delete().eq("push_date", date);
+    throw e instanceof TaggingStarted ? e.cause : e;
+  }
+}
+
+/** Thrown once tags may have landed: the claim then stays, so the day is never pushed twice. */
+class TaggingStarted extends Error {}
+
+/** Stop queuing tags here: the function dies at 300 s, and a tag that never ran is better than a run cut off mid-write. */
+const DEADLINE_MS = 270_000;
+
+async function run(date: string, group: number, dry: boolean): Promise<Response> {
+  const started = Date.now();
 
   // Every read at once: the ActiveCampaign client paces all callers to its 5-a-second limit, so running them side by
   // side keeps the whole run near that limit instead of waiting on each call's latency (500 tags one by one ran past 300 s).
   const [members, eligible, reengagement, attended, watched40, booked, clients, log] = await Promise.all([
-    Promise.all(GROUP_TAGS.map((tag) => allContacts(`tagid=${tag}`))),
-    allContacts(`segmentid=${ELIGIBLE_SEGMENT}`),
+    Promise.all(GROUP_TAGS.map((tag) => allContacts(`tagid=${tag}&status=1`))),
+    allContacts(`segmentid=${ELIGIBLE_SEGMENT}&status=1`),
     inAutomation(REENGAGEMENT_AUTOMATION),
-    allContacts(`tagid=${HOT_TAGS.attended}`),
-    allContacts(`tagid=${HOT_TAGS.watched40}`).then((ids) => new Set(ids)),
+    allContacts(`tagid=${HOT_TAGS.attended}&status=1`),
+    allContacts(`tagid=${HOT_TAGS.watched40}&status=1`).then((ids) => new Set(ids)),
     allContacts(`tagid=${HOT_TAGS.booked}`).then((ids) => new Set(ids)),
     allContacts(`tagid=${HOT_TAGS.client}`).then((ids) => new Set(ids)),
-    pageAll<{ contact_id: string; push_date: string; track: string }>((from, to) => db().from("push_log").select("contact_id, push_date, track").gte("push_date", shiftDays(date, -60)).lt("push_date", date).order("push_date").range(from, to)),
+    pageAll<{ contact_id: string; push_date: string; track: string }>((from, to) => db().from("push_log").select("contact_id, push_date, track").gte("push_date", shiftDays(date, -60)).lt("push_date", date).order("push_date").order("contact_id").range(from, to)),
   ]);
 
   // Newcomers to the smallest group.
@@ -110,18 +130,31 @@ export async function GET(request: Request) {
   let tagged = 0;
   let failed = 0;
   let assignedNew = 0;
+  const pushIds = [...pick.push, ...hotPush];
   if (dry) {
-    tagged = pick.push.length + hotPush.length;
+    tagged = pushIds.length;
     assignedNew = joins.length;
   } else {
-    const results = await Promise.all([
-      ...joins.map(([id, g]) => addTag(id, GROUP_TAGS[g - 1]).then((ok) => ({ kind: "join" as const, ok }))),
-      ...[...pick.push, ...hotPush].map((id) => addTag(id, PUSH_TODAY_TAG).then((ok) => ({ kind: "push" as const, ok }))),
-    ]);
-    for (const r of results) {
-      if (r.kind === "join") assignedNew += r.ok ? 1 : 0;
-      else if (r.ok) tagged++;
-      else failed++;
+    // Log every push BEFORE tagging: if the run dies mid-way, the hold and the hot history still know who may have
+    // been emailed, so nobody gets a second "first" invite. A tag that then fails is counted, never retried today.
+    const rows = [...pick.push.map((contact_id) => ({ contact_id, push_date: date, group_no: group, track: "group" })), ...hotPush.map((contact_id) => ({ contact_id, push_date: date, group_no: 0, track: "hot" }))];
+    for (let i = 0; i < rows.length; i += 500) {
+      const w = await db().from("push_log").upsert(rows.slice(i, i + 500));
+      if (w.error) throw new Error(`push_log write failed before tagging: ${w.error.message}`);
+    }
+    const attempt = (id: string, tag: string) => (Date.now() - started > DEADLINE_MS ? Promise.resolve(false) : addTag(id, tag).catch(() => false));
+    try {
+      const results = await Promise.all([
+        ...pushIds.map((id) => attempt(id, PUSH_TODAY_TAG).then((ok) => ({ kind: "push" as const, ok }))),
+        ...joins.map(([id, g]) => attempt(id, GROUP_TAGS[g - 1]).then((ok) => ({ kind: "join" as const, ok }))),
+      ]);
+      for (const r of results) {
+        if (r.kind === "join") assignedNew += r.ok ? 1 : 0;
+        else if (r.ok) tagged++;
+        else failed++;
+      }
+    } catch (e) {
+      throw new TaggingStarted("tagging started", { cause: e });
     }
   }
 
@@ -132,11 +165,6 @@ export async function GET(request: Request) {
   const previous = stats && before ? { sent: stats.sent - before.sent, opens: stats.opens - before.opens, unsubs: stats.unsubs - before.unsubs } : null;
 
   if (!dry) {
-    const rows = [...pick.push.map((contact_id) => ({ contact_id, push_date: date, group_no: group, track: "group" })), ...hotPush.map((contact_id) => ({ contact_id, push_date: date, group_no: 0, track: "hot" }))];
-    for (let i = 0; i < rows.length; i += 500) {
-      const w = await db().from("push_log").upsert(rows.slice(i, i + 500));
-      if (w.error) console.error("[push-day] push_log write failed; the hold will miss these", w.error.message);
-    }
     await db().from("push_runs").update({ tagged, skipped_reengagement: pick.skippedReengagement, skipped_hold: pick.skippedHold, assigned_new: assignedNew, failed, email_stats: stats, hot_first: hot.first.length, hot_second: hot.second.length, hot_graduated: hot.graduate.length }).eq("push_date", date);
   }
   const result = { date, group, dry, tagged, failed, skippedReengagement: pick.skippedReengagement, skippedHold: pick.skippedHold, assignedNew, previous, hot: { first: hot.first.length, second: hot.second.length, graduated: hot.graduate.length } };

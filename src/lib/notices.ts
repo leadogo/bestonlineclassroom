@@ -140,7 +140,7 @@ export function pushNotice(o: { date: string; group: number; dry: boolean; tagge
     `${o.skippedReengagement} in re-engagement`,
     `${o.skippedHold} inside the 14-day hold`,
     `${o.assignedNew} new contacts given a group`,
-    ...(o.hot ? [`hot track: ${o.hot.first} first, ${o.hot.second} second, ${o.hot.graduated} graduated`] : []),
+    ...(o.hot ? [`${o.hot.first + o.hot.second} hot (first ${o.hot.first}, second ${o.hot.second}), ${o.hot.graduated} moved to a group`] : []),
     ...(o.failed ? [`${o.failed} tags failed`] : []),
   ];
   const detail = o.previous ? [`Previous push, email 1: ${o.previous.sent} sent, ${o.previous.opens} opens, ${o.previous.unsubs} unsubscribes so far`] : [];
