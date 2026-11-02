@@ -133,13 +133,14 @@ export function pushTripped(d: PushEmailDelta): string | null {
 }
 
 /** 📣 today's group was tagged (or the dry run's list), with the previous push's email numbers and any tripwire. */
-export function pushNotice(o: { date: string; group: number; dry: boolean; tagged: number; failed: number; skippedReengagement: number; skippedHold: number; assignedNew: number; previous: PushEmailDelta | null }): Notice {
+export function pushNotice(o: { date: string; group: number; dry: boolean; tagged: number; failed: number; skippedReengagement: number; skippedHold: number; assignedNew: number; previous: PushEmailDelta | null; hot?: { first: number; second: number; graduated: number } }): Notice {
   const tripped = o.previous ? pushTripped(o.previous) : null;
   const numbers = [
     `${o.tagged} ${o.dry ? "would be invited" : "invited"}`,
     `${o.skippedReengagement} in re-engagement`,
     `${o.skippedHold} inside the 14-day hold`,
     `${o.assignedNew} new contacts given a group`,
+    ...(o.hot ? [`${o.hot.first + o.hot.second} hot (first ${o.hot.first}, second ${o.hot.second}), ${o.hot.graduated} moved to a group`] : []),
     ...(o.failed ? [`${o.failed} tags failed`] : []),
   ];
   const detail = o.previous ? [`Previous push, email 1: ${o.previous.sent} sent, ${o.previous.opens} opens, ${o.previous.unsubs} unsubscribes so far`] : [];

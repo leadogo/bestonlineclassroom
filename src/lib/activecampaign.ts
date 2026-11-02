@@ -22,7 +22,8 @@ async function apiRaw<T>(path: string, init: RequestInit = {}, retried = false):
   await paced();
   const res = await fetch(`${BASE}/api/3${path}`, { ...init, headers: { "Api-Token": KEY, "content-type": "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(10_000) });
   if (res.status === 429 && !retried) {
-    nextSlot = Date.now() + 1500;
+    // Push the queue back, never pull it forward: concurrent callers already hold slots further out than this.
+    nextSlot = Math.max(nextSlot, Date.now() + 1500);
     await new Promise((r) => setTimeout(r, 1500));
     return apiRaw<T>(path, init, true);
   }
