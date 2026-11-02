@@ -67,3 +67,13 @@ test("hot track: re-engagement and any push in the last 6 days sit out; duplicat
   const r2 = pickHot(cands, new Map(), new Set(["b"]), new Map([["c", "2026-11-04"]]), "2026-11-10", 10);
   assert.deepEqual(r2.first, ["a", "c"]);
 });
+
+test("edges: the push window is 17:47–17:55 ET; a cap of 0 invites nobody; two hot pushes graduate even from re-engagement", () => {
+  assert.equal(isPushMinute(new Date("2026-11-02T22:47:00Z")), true);
+  assert.equal(isPushMinute(new Date("2026-11-02T22:55:00Z")), true);
+  assert.equal(isPushMinute(new Date("2026-11-02T22:56:00Z")), false);
+  assert.equal(isPushMinute(new Date("2026-11-02T22:46:00Z")), false);
+  const r = pickHot([{ id: "a", watched40: true }, { id: "b", watched40: true }], new Map([["b", ["2026-10-20", "2026-10-27"]]]), new Set(["b"]), new Map(), "2026-11-10", 0);
+  assert.deepEqual(r.first, []);
+  assert.deepEqual(r.graduate, ["b"]);
+});

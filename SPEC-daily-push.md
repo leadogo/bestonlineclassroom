@@ -65,6 +65,12 @@ push days Mon–Thu, attended pool age/cap/holdout/lifetime). Prod verification 
 - Ask first: new email copy, new sending domain, Katherine pools beyond the 30-day window, any AC automation edit.
 - Never: pause a live Zap; touch unsubscribed/bounced contacts; RevRing.
 
+## Ship notes (Nov 2 2026)
+- Newcomer assignment from segment 1972 is OFF: through the API the segment intermittently returns the whole account
+  (two dry runs: 40,000+ "newcomers"). New contacts get a group through a separate, checked step (to build).
+- Every pushed list is `status=1` (subscribed). That filter works with `tagid` and NOT with `segmentid`.
+- Prod dry run for Tue Nov 3: group 2 = 394 (7 in re-engagement), hot = 140 first invites, reads 55 s.
+
 ## Later (not in this build)
 Re-engagement path for ~11k lapsed registrants (250/day, plain text), ~16k old-launch contacts on a separate sending
 domain, Katherine calls to today's group, 4 rotating email angles.
