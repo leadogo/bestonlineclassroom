@@ -119,3 +119,30 @@ export function ipSurgeLevel(blockedLast24h: number): number | null {
 export function ipSurgeNotice(o: { count: number; latest: string }): Notice {
   return { kind: "ask", emoji: "🚨", headline: `${o.count} IPs blocked in the last 24 hours`, ask: { who: williamMention(), action: "check Admin › Blocked" }, note: clipChars(`latest: ${escapeMrkdwn(o.latest)} · a run of blocks can mean a shared office or phone-carrier address is shutting out real people`) };
 }
+
+// ---- The daily ActiveCampaign push (#autoweb-intel) ----
+
+export type PushEmailDelta = { sent: number; opens: number; unsubs: number };
+
+/** Tripwires (Jeremy, Nov 2 2026): opens under 20% or unsubscribes over 2.5% on the previous push. */
+export function pushTripped(d: PushEmailDelta): string | null {
+  if (d.sent < 50) return null;
+  if (d.unsubs / d.sent > 0.025) return `unsubscribes ${((100 * d.unsubs) / d.sent).toFixed(1)}% (over 2.5%)`;
+  if (d.opens / d.sent < 0.2) return `opens ${((100 * d.opens) / d.sent).toFixed(1)}% (under 20%)`;
+  return null;
+}
+
+/** 📣 today's group was tagged (or the dry run's list), with the previous push's email numbers and any tripwire. */
+export function pushNotice(o: { date: string; group: number; dry: boolean; tagged: number; failed: number; skippedReengagement: number; skippedHold: number; assignedNew: number; previous: PushEmailDelta | null }): Notice {
+  const tripped = o.previous ? pushTripped(o.previous) : null;
+  const numbers = [
+    `${o.tagged} ${o.dry ? "would be invited" : "invited"}`,
+    `${o.skippedReengagement} in re-engagement`,
+    `${o.skippedHold} inside the 14-day hold`,
+    `${o.assignedNew} new contacts given a group`,
+    ...(o.failed ? [`${o.failed} tags failed`] : []),
+  ];
+  const detail = o.previous ? [`Previous push, email 1: ${o.previous.sent} sent, ${o.previous.opens} opens, ${o.previous.unsubs} unsubscribes so far`] : [];
+  if (tripped) return { kind: "alert", headline: `Push group ${o.group} ${o.dry ? "dry run" : "sent"}, but the last push tripped a wire: ${tripped}`, numbers, detail };
+  return { kind: o.failed ? "alert" : "receipt", headline: `AC push ${o.date}: group ${o.group} ${o.dry ? "dry run" : "sent"}`, numbers, detail };
+}
