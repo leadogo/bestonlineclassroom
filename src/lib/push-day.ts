@@ -71,3 +71,46 @@ export function pickToday(members: readonly string[], inReengagement: ReadonlySe
   }
   return { push, skippedReengagement, skippedHold };
 }
+
+// ---- Hot track (SPEC-daily-push.md M1, Jeremy A1): attended, never booked, never in a group ----
+
+/** ActiveCampaign tags: ailgr_attended, ailgr_watched40min (the hot pool); ailgr-booked and bms_client keep people out. */
+export const HOT_TAGS = { attended: "305", watched40: "316", booked: "334", client: "14" } as const;
+/** First invites a push day may add (541 on Nov 2 → about four push days to work through, then new attendees only). */
+export const HOT_DAILY_CAP = 140;
+/** The second hot invite comes this many days after the first; any push in fewer days than HOT_GAP_DAYS − 1 sits a person out. */
+export const HOT_GAP_DAYS = 7;
+
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000);
+
+/**
+ * Who on the hot track is invited today. `hotHistory` = each contact's hot push dates; `lastAnyPush` = their latest push
+ * on either track. Two hot pushes → graduate to a group (not pushed today); one, at least seven days old → second invite;
+ * none → first invite, watched-40 first, up to the cap. Re-engagement contacts and anyone pushed in the last 5 days sit out.
+ */
+export function pickHot(
+  candidates: ReadonlyArray<{ id: string; watched40: boolean }>,
+  hotHistory: ReadonlyMap<string, readonly string[]>,
+  inReengagement: ReadonlySet<string>,
+  lastAnyPush: ReadonlyMap<string, string>,
+  today: string,
+  cap: number,
+): { first: string[]; second: string[]; graduate: string[] } {
+  const seen = new Set<string>();
+  const fresh: Array<{ id: string; watched40: boolean }> = [];
+  const second: string[] = [];
+  const graduate: string[] = [];
+  for (const c of candidates) {
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    const hot = hotHistory.get(c.id) ?? [];
+    if (hot.length >= 2) { graduate.push(c.id); continue; }
+    if (inReengagement.has(c.id)) continue;
+    const last = lastAnyPush.get(c.id);
+    if (last && daysBetween(last, today) < HOT_GAP_DAYS - 1) continue;
+    if (hot.length === 1) { if (daysBetween(hot[0], today) >= HOT_GAP_DAYS) second.push(c.id); continue; }
+    fresh.push(c);
+  }
+  const first = fresh.filter((c) => c.watched40).concat(fresh.filter((c) => !c.watched40)).slice(0, Math.max(0, cap)).map((c) => c.id);
+  return { first, second, graduate };
+}

@@ -1,5 +1,5 @@
 # Todo — daily push week-1 (plan-daily-push-2026-11-02.md)
-- [ ] T1 hot pick (pure) + tests — classroom
+- [x] T1 hot pick (pure) + tests — classroom
 - [ ] T2 hot track in cron + migration 052 + notice — classroom
 - [ ] CP1 classroom PR review, migrate, merge, prod dry run
 - [ ] T3 Katherine push days Mon–Thu

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { groupFor, isPushDay, isPushMinute, pickToday, smallestGroup } from "./push-day.ts";
+import { HOT_DAILY_CAP, groupFor, isPushDay, isPushMinute, pickHot, pickToday, smallestGroup } from "./push-day.ts";
 
 test("groups run in order Mon–Thu from Nov 2 2026 and come back exactly 14 days later", () => {
   assert.equal(groupFor("2026-11-02"), 1); // Mon
@@ -41,4 +41,29 @@ test("today's list leaves out re-engagement contacts and anyone inside the hold,
   assert.deepEqual(r.push, ["a", "d"]);
   assert.equal(r.skippedReengagement, 1);
   assert.equal(r.skippedHold, 1);
+});
+
+test("hot track: first invites capped, watched-40 first; second invite at 7 days; graduates after two", () => {
+  const none = new Set<string>();
+  const today = "2026-11-10";
+  const cands = [{ id: "a", watched40: false }, { id: "b", watched40: true }, { id: "c", watched40: false }];
+  const r = pickHot(cands, new Map(), none, new Map(), today, 2);
+  assert.deepEqual(r.first, ["b", "a"]);
+  assert.deepEqual(r.second, []);
+  assert.deepEqual(r.graduate, []);
+
+  const hot = new Map([["a", ["2026-11-03"]], ["b", ["2026-11-04"]], ["c", ["2026-10-20", "2026-10-27"]]]);
+  const r2 = pickHot(cands, hot, none, new Map(), today, HOT_DAILY_CAP);
+  assert.deepEqual(r2.second, ["a"]); // 7 days ago yes, 6 days ago (b) not yet
+  assert.deepEqual(r2.first, []);
+  assert.deepEqual(r2.graduate, ["c"]);
+});
+
+test("hot track: re-engagement and any push in the last 6 days sit out; duplicates once", () => {
+  const cands = [{ id: "a", watched40: true }, { id: "b", watched40: true }, { id: "c", watched40: true }, { id: "a", watched40: true }];
+  const lastAny = new Map([["c", "2026-11-05"]]);
+  const r = pickHot(cands, new Map(), new Set(["b"]), lastAny, "2026-11-10", 10);
+  assert.deepEqual(r.first, ["a"]);
+  const r2 = pickHot(cands, new Map(), new Set(["b"]), new Map([["c", "2026-11-04"]]), "2026-11-10", 10);
+  assert.deepEqual(r2.first, ["a", "c"]);
 });
