@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { getEvent } from "@/lib/events";
 import { loadRescueLists } from "@/lib/rescue-data";
 import { rescueReady } from "@/lib/rescue";
@@ -13,7 +14,9 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * never appear.
  */
 export async function GET(request: Request) {
-  if (!SECRET || request.headers.get("authorization") !== `Bearer ${SECRET}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const got = Buffer.from(request.headers.get("authorization") ?? "");
+  const want = Buffer.from(`Bearer ${SECRET}`);
+  if (!SECRET || got.length !== want.length || !timingSafeEqual(got, want)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const q = new URL(request.url).searchParams;
   const event = await getEvent(q.get("event") ?? "ailg-r").catch(() => null);
   if (!event) return Response.json({ error: "Not found" }, { status: 404 });

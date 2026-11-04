@@ -30,10 +30,13 @@ export async function loadRescueLists(eventId: string, sessionDate: string): Pro
   const add = (m: Map<string, string[]>, k: string, v: string) => m.set(k, [...(m.get(k) ?? []), v]);
   for (let i = 0; i < ids.length; i += 200) {
     const b = await db().from("bookings").select("registrant_id, booked_at").in("registrant_id", ids.slice(i, i + 200));
+    // A failed bookings read must stop the run: read as "nobody booked", it would text and call people who booked.
+    if (b.error) throw new Error(`rescue bookings read failed: ${b.error.message}`);
     for (const x of b.data ?? []) if (x.registrant_id) add(byId, String(x.registrant_id), String(x.booked_at));
   }
   for (let i = 0; i < emails.length; i += 200) {
     const b = await db().from("bookings").select("email, booked_at").in("email", emails.slice(i, i + 200));
+    if (b.error) throw new Error(`rescue bookings read failed: ${b.error.message}`);
     for (const x of b.data ?? []) if (x.email) add(byEmail, String(x.email).toLowerCase(), String(x.booked_at));
   }
   const bookedSince = (r: Row, sinceIso: string) => [...(byId.get(r.registrant_id) ?? []), ...(byEmail.get(r.registrant.email?.toLowerCase() ?? "") ?? [])].some((t) => Date.parse(t) >= Date.parse(sinceIso) - 60_000);

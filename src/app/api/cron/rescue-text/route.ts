@@ -20,6 +20,9 @@ export async function GET(request: Request) {
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const q = new URL(request.url).searchParams;
   const dry = q.get("dry") === "1";
+  // Kill switch, off by default: the classroom holds no SMS consent, so the ActiveCampaign automation's consent and
+  // unsubscribe filter is the only gate. Turn on (RESCUE_TEXT_ENABLED=1) only after that filter is verified.
+  if (!dry && process.env.RESCUE_TEXT_ENABLED !== "1") return Response.json({ skipped: "rescue texts are switched off (RESCUE_TEXT_ENABLED)" });
   const now = new Date();
   if (!dry && q.get("force") !== "1" && !inRescueWindow(now)) return Response.json({ skipped: "outside 8:15–10:45 pm Eastern", eastern: easternDate(now) });
   const date = dry && /^\d{4}-\d{2}-\d{2}$/.test(q.get("date") ?? "") ? (q.get("date") as string) : easternDate(now).date;

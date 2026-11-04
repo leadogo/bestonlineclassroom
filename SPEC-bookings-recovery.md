@@ -49,6 +49,9 @@ Code ships per wave; AC edits are made only at ship time, each read back through
   registrant per session (`rescue_texts` log, migration 053). AC automation "AILGR Rescue text" (trigger: tag added,
   multiple) → Roezan text → remove tag. Text (approved): "Hi %FIRSTNAME%, it's William's team. Looked like you were
   picking a time for your call. Here's the calendar again: https://aiforagentsmasterclass.com/join-community?src=rescue"
+- Consent: the classroom holds no SMS consent. The AC automation's first step filters SMS consent + not unsubscribed +
+  not DNC; the cron has a kill switch RESCUE_TEXT_ENABLED (off by default) turned on only after that filter is verified
+  with a non-consented test contact.
 - Katherine: new list `rescue` (pool `rescue`, mode `rescue`): rows 30–60 min after the click, ahead of other lists;
   time zone from the phone's area code; after 8:55 PM local → 10:00 AM local next day. Every 5th = holdout (text only).
   Second ring: list `reinvite` pool `pitch_no_click`, next evening, cap 15, mode `reinvite_attended`.
