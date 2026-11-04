@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HOT_DAILY_CAP, groupFor, isPushDay, isPushMinute, pickHot, pickToday, smallestGroup } from "./push-day.ts";
+import { HOT_DAILY_CAP, pushTripwire, groupFor, isPushDay, isPushMinute, pickHot, pickToday, smallestGroup } from "./push-day.ts";
 
 test("groups run in order Mon–Thu from Nov 2 2026 and come back exactly 14 days later", () => {
   assert.equal(groupFor("2026-11-02"), 1); // Mon
@@ -76,4 +76,14 @@ test("edges: the push window is 17:47–17:55 ET; a cap of 0 invites nobody; two
   const r = pickHot([{ id: "a", watched40: true }, { id: "b", watched40: true }], new Map([["b", ["2026-10-20", "2026-10-27"]]]), new Set(["b"]), new Map(), "2026-11-10", 0);
   assert.deepEqual(r.first, []);
   assert.deepEqual(r.graduate, ["b"]);
+});
+
+test("a push is judged on clicks and unsubscribes: under 5% clicked or over 2.5% unsubscribed trips; small pushes never", () => {
+  const ok = { pushed: 534, clicked: 49, watched: 19, pitch: 14, booked: 4, unsubs: 2 };
+  assert.equal(pushTripwire(ok), null);
+  assert.match(pushTripwire({ ...ok, clicked: 20 }) ?? "", /clicked 3\.7%/);
+  assert.match(pushTripwire({ ...ok, unsubs: 14 }) ?? "", /unsubscribed 2\.6%/);
+  assert.equal(pushTripwire({ ...ok, pushed: 40, clicked: 0 }), null);
+  assert.equal(pushTripwire({ ...ok, unsubs: null }), null);
+  assert.equal(pushTripwire({ ...ok, clicked: 27 }), null); // exactly 5.06%: fine
 });
