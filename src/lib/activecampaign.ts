@@ -81,6 +81,19 @@ export async function addTag(cid: string, tid: string): Promise<boolean> {
   return Boolean(r.body?.contactTag) || r.status === 422;
 }
 
+/** The contact's tags as tag id → contactTag id (the id a removal needs); null when the call failed. */
+export async function contactTagIds(cid: string): Promise<Map<string, string> | null> {
+  const r = await api<{ contactTags: Array<{ id: string; tag: string }> }>(`/contacts/${cid}/contactTags`);
+  return r ? new Map(r.contactTags.map((t) => [String(t.tag), String(t.id)])) : null;
+}
+
+/** Takes one tag off a contact by its contactTag id. true when it is gone afterwards (already gone counts). */
+export async function removeContactTag(contactTagId: string): Promise<boolean> {
+  if (!activeCampaignConfigured()) return false;
+  const r = await apiRaw<unknown>(`/contactTags/${contactTagId}`, { method: "DELETE" });
+  return r.status === 200 || r.status === 404;
+}
+
 /** The personal watch link's shape and the two fields that hold it (SPEC-friday-unattended.md, E1; `watch.` is the texting domain, SPEC-show-rate-recovery.md). */
 export const WATCH = "https://watch.bookmoreshowings.com";
 export const PERSONAL_RE = /^https:\/\/watch\.bookmoreshowings\.com\/[abcdefghjkmnpqrstuvwxyz23456789]{12}$/;
