@@ -5,6 +5,7 @@ import type { Funnel } from "./open-link.ts";
 import { openLinkLine } from "./open-link.ts";
 import { JOIN_SOURCES, type JoinSourcesResult } from "./join-sources.ts";
 import { resultLine, type BroadcastResult } from "./skool-broadcast-results.ts";
+import { pushTripwire, type PushOutcome } from "./push-day.ts";
 
 const withPhone = (headline: string, phone: string | null | undefined): string => (phone ? `${headline} · ${prettyPhone(phone)}` : headline);
 
@@ -122,19 +123,17 @@ export function ipSurgeNotice(o: { count: number; latest: string }): Notice {
 
 // ---- The daily ActiveCampaign push (#autoweb-intel) ----
 
-export type PushEmailDelta = { sent: number; opens: number; unsubs: number };
+export type PushJudged = PushOutcome & { date: string; group: number };
 
-/** Tripwires (Jeremy, Nov 2 2026): opens under 20% or unsubscribes over 2.5% on the previous push. */
-export function pushTripped(d: PushEmailDelta): string | null {
-  if (d.sent < 50) return null;
-  if (d.unsubs / d.sent > 0.025) return `unsubscribes ${((100 * d.unsubs) / d.sent).toFixed(1)}% (over 2.5%)`;
-  if (d.opens / d.sent < 0.2) return `opens ${((100 * d.opens) / d.sent).toFixed(1)}% (under 20%)`;
-  return null;
+/** One line on the last push: what its people did (classroom records), and the tripwire if it tripped. */
+export function previousPushLine(p: PushJudged): string {
+  const pct = p.pushed ? Math.round((100 * p.clicked) / p.pushed) : 0;
+  return `Last push (${p.date}, ${p.group ? `group ${p.group}` : "hot only"}): ${p.pushed} pushed · ${p.clicked} clicked (${pct}%) · ${p.watched} watched · ${p.pitch} at the pitch · ${p.booked} booked${p.unsubs != null ? ` · ${p.unsubs} unsubscribed` : ""}`;
 }
 
 /** 📣 today's group was tagged (or the dry run's list), with the previous push's email numbers and any tripwire. */
-export function pushNotice(o: { date: string; group: number; dry: boolean; tagged: number; failed: number; skippedReengagement: number; skippedHold: number; assignedNew: number; previous: PushEmailDelta | null; hot?: { first: number; second: number; graduated: number } }): Notice {
-  const tripped = o.previous ? pushTripped(o.previous) : null;
+export function pushNotice(o: { date: string; group: number; dry: boolean; tagged: number; failed: number; skippedReengagement: number; skippedHold: number; assignedNew: number; previous: PushJudged | null; hot?: { first: number; second: number; graduated: number } }): Notice {
+  const tripped = o.previous ? pushTripwire(o.previous) : null;
   const numbers = [
     `${o.tagged} ${o.dry ? "would be invited" : "invited"}`,
     `${o.skippedReengagement} in re-engagement`,
@@ -143,7 +142,7 @@ export function pushNotice(o: { date: string; group: number; dry: boolean; tagge
     ...(o.hot ? [`${o.hot.first + o.hot.second} hot (first ${o.hot.first}, second ${o.hot.second}), ${o.hot.graduated} moved to a group`] : []),
     ...(o.failed ? [`${o.failed} tags failed`] : []),
   ];
-  const detail = o.previous ? [`Previous push, email 1: ${o.previous.sent} sent, ${o.previous.opens} opens, ${o.previous.unsubs} unsubscribes so far`] : [];
+  const detail = o.previous ? [previousPushLine(o.previous)] : [];
   if (tripped) return { kind: "alert", headline: `Push group ${o.group} ${o.dry ? "dry run" : "sent"}, but the last push tripped a wire: ${tripped}`, numbers, detail };
   return { kind: o.failed ? "alert" : "receipt", headline: `AC push ${o.date}: group ${o.group} ${o.dry ? "dry run" : "sent"}`, numbers, detail };
 }

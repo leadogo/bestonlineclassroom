@@ -1,8 +1,8 @@
 import { db, pageAll } from "@/lib/db";
 import { INTEL_CHANNEL, postNotice } from "@/lib/slack";
-import { pushNotice, type PushEmailDelta } from "@/lib/notices";
+import { pushNotice } from "@/lib/notices";
 import { activeCampaignConfigured, addTag, api } from "@/lib/activecampaign";
-import { GROUP_TAGS, GROUPS, HOLD_DAYS, HOT_DAILY_CAP, HOT_TAGS, PUSH_TODAY_TAG, REENGAGEMENT_AUTOMATION, easternDate, groupFor, isPushMinute, pickHot, pickToday, smallestGroup } from "@/lib/push-day";
+import { type PushOutcome, GROUP_TAGS, GROUPS, HOLD_DAYS, HOT_DAILY_CAP, HOT_TAGS, PUSH_TODAY_TAG, REENGAGEMENT_AUTOMATION, easternDate, groupFor, isPushMinute, pickHot, pickToday, smallestGroup } from "@/lib/push-day";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -10,7 +10,10 @@ export const maxDuration = 300;
 /** Email 1 of the push (campaign 6239): its running counters, kept per run so the next run reports the difference. */
 const EMAIL_1 = "6239";
 
-type Page = { contacts: Array<{ id: string }> };
+type Page = { contacts: Array<{ id: string; email?: string }> };
+
+/** Every contact email seen this run, by ActiveCampaign id: logged with each push so the next run can find these people in the classroom. */
+const emailOf = new Map<string, string>();
 type AutomationPage = { contactAutomations: Array<{ contact: string; status: string }> };
 
 const shiftDays = (date: string, days: number) => new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
@@ -21,7 +24,10 @@ async function allContacts(query: string): Promise<string[]> {
     const url = `/contacts?${query}&limit=100&offset=${offset}`;
     const page = (await api<Page>(url)) ?? (await api<Page>(url));
     if (!page) throw new Error(`ActiveCampaign list failed: ${query} @${offset}`);
-    ids.push(...page.contacts.map((c) => c.id));
+    for (const c of page.contacts) {
+      ids.push(c.id);
+      if (c.email) emailOf.set(c.id, c.email.toLowerCase());
+    }
     if (page.contacts.length < 100) return ids;
   }
 }
@@ -122,6 +128,14 @@ async function run(date: string, group: number, dry: boolean, state: { logged: b
   }
   const hotPush = [...hot.first, ...hot.second].filter((id) => !pick.push.includes(id));
 
+  // Email 1's counters before the first tag (Nov 3: read after tagging, they mixed tonight's sends into last night's).
+  const camp = await api<{ campaign: { send_amt: string; uniqueopens: string; unsubscribes: string } }>(`/campaigns/${EMAIL_1}`).catch(() => null);
+  const stats = camp ? { sent: Number(camp.campaign.send_amt), opens: Number(camp.campaign.uniqueopens), unsubs: Number(camp.campaign.unsubscribes) } : null;
+  const previous = await judgePreviousPush(date, stats?.unsubs ?? null).catch((e) => {
+    console.error("[push-day] previous push not judged", e instanceof Error ? e.message : e);
+    return null;
+  });
+
   let tagged = 0;
   let failed = 0;
   let assignedNew = 0;
@@ -132,7 +146,7 @@ async function run(date: string, group: number, dry: boolean, state: { logged: b
   } else {
     // Log every push BEFORE tagging: if the run dies mid-way, the hold and the hot history still know who may have
     // been emailed, so nobody gets a second "first" invite. A tag that then fails is counted, never retried today.
-    const rows = [...pick.push.map((contact_id) => ({ contact_id, push_date: date, group_no: group, track: "group" })), ...hotPush.map((contact_id) => ({ contact_id, push_date: date, group_no: 0, track: "hot" }))];
+    const rows = [...pick.push.map((contact_id) => ({ contact_id, push_date: date, group_no: group, track: "group", email: emailOf.get(contact_id) ?? null })), ...hotPush.map((contact_id) => ({ contact_id, push_date: date, group_no: 0, track: "hot", email: emailOf.get(contact_id) ?? null }))];
     state.logged = true;
     for (let i = 0; i < rows.length; i += 500) {
       const w = await db().from("push_log").upsert(rows.slice(i, i + 500));
@@ -153,11 +167,6 @@ async function run(date: string, group: number, dry: boolean, state: { logged: b
     }));
   }
 
-  const camp = await api<{ campaign: { send_amt: string; uniqueopens: string; unsubscribes: string } }>(`/campaigns/${EMAIL_1}`).catch(() => null);
-  const stats = camp ? { sent: Number(camp.campaign.send_amt), opens: Number(camp.campaign.uniqueopens), unsubs: Number(camp.campaign.unsubscribes) } : null;
-  const last = await db().from("push_runs").select("email_stats").lt("push_date", date).order("push_date", { ascending: false }).limit(1).maybeSingle();
-  const before = last.data?.email_stats as PushEmailDelta | null | undefined;
-  const previous = stats && before ? { sent: stats.sent - before.sent, opens: stats.opens - before.opens, unsubs: stats.unsubs - before.unsubs } : null;
 
   if (!dry) {
     await db().from("push_runs").update({ tagged, skipped_reengagement: pick.skippedReengagement, skipped_hold: pick.skippedHold, assigned_new: assignedNew, failed, email_stats: stats, hot_first: hot.first.length, hot_second: hot.second.length, hot_graduated: hot.graduate.length }).eq("push_date", date);
@@ -165,4 +174,51 @@ async function run(date: string, group: number, dry: boolean, state: { logged: b
   const result = { date, group, dry, tagged, failed, skippedReengagement: pick.skippedReengagement, skippedHold: pick.skippedHold, assignedNew, previous, hot: { first: hot.first.length, second: hot.second.length, graduated: hot.graduate.length } };
   await postNotice(INTEL_CHANNEL, pushNotice(result)).catch(() => {});
   return Response.json(result);
+}
+
+const chunks = <T,>(xs: T[], n = 200): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+
+/**
+ * The last push before `date`, judged on what its people did in the 24 hours after it (SPEC-bookings-recovery.md M1):
+ * pushed contacts found in the classroom by email, who clicked a push or email link (scanners left out), watched 2+
+ * minutes, reached the pitch, booked. Unsubscribes = email 1's counter now less the counter that push saved before
+ * its own tags. null when that push logged no emails (pushes before Nov 4).
+ */
+async function judgePreviousPush(date: string, unsubsNow: number | null): Promise<(PushOutcome & { date: string; group: number }) | null> {
+  const run = await db().from("push_runs").select("push_date, group_no, email_stats, created_at").lt("push_date", date).order("push_date", { ascending: false }).limit(1).maybeSingle();
+  if (!run.data) return null;
+  const from = run.data.created_at as string;
+  const to = new Date(Date.parse(from) + 86_400_000).toISOString();
+  const log = await pageAll<{ email: string | null }>((a, b) => db().from("push_log").select("email").eq("push_date", run.data!.push_date).order("contact_id").range(a, b));
+  const emails = [...new Set(log.map((r) => r.email).filter((e): e is string => Boolean(e)))];
+  if (!emails.length) return null;
+  const ids: string[] = [];
+  for (const part of chunks(emails)) {
+    const r = await db().from("registrants").select("id").in("email", part);
+    if (r.error) throw r.error;
+    ids.push(...(r.data ?? []).map((x) => x.id as string));
+  }
+  // Bookings arrive by registrant id, else by email: count both (one person once).
+  const bookedEmails = new Set<string>();
+  for (const part of chunks(emails)) {
+    const r = await db().from("bookings").select("email").in("email", part).gte("booked_at", from).lt("booked_at", to);
+    for (const x of r.data ?? []) if (x.email) bookedEmails.add(String(x.email).toLowerCase());
+  }
+  const clicked = new Set<string>(), watched = new Set<string>(), pitch = new Set<string>(), booked = new Set<string>();
+  for (const part of chunks(ids)) {
+    const [c, a, b] = await Promise.all([
+      db().from("link_clicks").select("registrant_id, user_agent, bot").in("registrant_id", part).in("src", ["push", "email"]).gte("at", from).lt("at", to),
+      db().from("attendance").select("registrant_id, seconds_watched, max_offset, cta_clicked_at").in("registrant_id", part).eq("kind", "live").eq("session_date", run.data.push_date),
+      db().from("bookings").select("registrant_id").in("registrant_id", part).gte("booked_at", from).lt("booked_at", to),
+    ]);
+    for (const x of c.data ?? []) if (!x.bot && !/linux x86/i.test(String(x.user_agent ?? ""))) clicked.add(x.registrant_id as string);
+    for (const x of a.data ?? []) {
+      if (Number(x.seconds_watched) >= 120 || x.cta_clicked_at) watched.add(x.registrant_id as string);
+      if (Number(x.max_offset) >= 4500) pitch.add(x.registrant_id as string);
+    }
+    for (const x of b.data ?? []) booked.add(x.registrant_id as string);
+  }
+  const before = (run.data.email_stats as { unsubs?: number } | null)?.unsubs;
+  const unsubs = unsubsNow != null && typeof before === "number" ? Math.max(0, unsubsNow - before) : null;
+  return { date: run.data.push_date as string, group: run.data.group_no as number, pushed: emails.length, clicked: clicked.size, watched: watched.size, pitch: pitch.size, booked: Math.max(booked.size, bookedEmails.size), unsubs };
 }

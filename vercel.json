@@ -37,6 +37,10 @@
     {
       "path": "/api/cron/push-day",
       "schedule": "50 21,22 * * 1-4"
+    },
+    {
+      "path": "/api/cron/rescue-text",
+      "schedule": "*/5 0-3 * * *"
     }
   ]
 }

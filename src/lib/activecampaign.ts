@@ -81,6 +81,35 @@ export async function addTag(cid: string, tid: string): Promise<boolean> {
   return Boolean(r.body?.contactTag) || r.status === 422;
 }
 
+/** The contact's tags as tag id → contactTag id (the id a removal needs); null when a call failed. Paged: ActiveCampaign answers 20 a page by default and push contacts carry many tags. */
+export async function contactTagIds(cid: string): Promise<Map<string, string> | null> {
+  const out = new Map<string, string>();
+  for (let offset = 0; ; offset += 100) {
+    const r = await api<{ contactTags: Array<{ id: string; tag: string }> }>(`/contacts/${cid}/contactTags?limit=100&offset=${offset}`);
+    if (!r) return null;
+    for (const t of r.contactTags) out.set(String(t.tag), String(t.id));
+    if (r.contactTags.length < 100) return out;
+  }
+}
+
+/** When the contact last entered this automation (ISO), from ActiveCampaign itself; null when never, undefined when a call failed. Paged: a long-time contact has more than 100 entries. */
+export async function lastAutomationEntry(cid: string, automation: string): Promise<string | null | undefined> {
+  let latest: string | null = null;
+  for (let offset = 0; ; offset += 100) {
+    const r = await api<{ contactAutomations: Array<{ automation: string; adddate: string }> }>(`/contacts/${cid}/contactAutomations?limit=100&offset=${offset}`);
+    if (!r) return undefined;
+    for (const a of r.contactAutomations) if (String(a.automation) === automation && (!latest || a.adddate > latest)) latest = a.adddate;
+    if (r.contactAutomations.length < 100) return latest;
+  }
+}
+
+/** Takes one tag off a contact by its contactTag id. true when it is gone afterwards (already gone counts). */
+export async function removeContactTag(contactTagId: string): Promise<boolean> {
+  if (!activeCampaignConfigured()) return false;
+  const r = await apiRaw<unknown>(`/contactTags/${contactTagId}`, { method: "DELETE" });
+  return r.status === 200 || r.status === 404;
+}
+
 /** The personal watch link's shape and the two fields that hold it (SPEC-friday-unattended.md, E1; `watch.` is the texting domain, SPEC-show-rate-recovery.md). */
 export const WATCH = "https://watch.bookmoreshowings.com";
 export const PERSONAL_RE = /^https:\/\/watch\.bookmoreshowings\.com\/[abcdefghjkmnpqrstuvwxyz23456789]{12}$/;

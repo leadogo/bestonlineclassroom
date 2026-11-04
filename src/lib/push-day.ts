@@ -114,3 +114,17 @@ export function pickHot(
   const first = fresh.filter((c) => c.watched40).concat(fresh.filter((c) => !c.watched40)).slice(0, Math.max(0, cap)).map((c) => c.id);
   return { first, second, graduate };
 }
+
+// ---- Judging a push (SPEC-bookings-recovery.md M1) ----
+
+/** What a push's people did in the 24 hours after it, from the classroom's own records; `unsubs` from ActiveCampaign (null when unread). */
+export type PushOutcome = { pushed: number; clicked: number; watched: number; pitch: number; booked: number; unsubs: number | null };
+
+/** Tripwires (Jeremy, Nov 2 2026): fewer than 5% of pushed people clicked, or more than 2.5% unsubscribed; pushes under 50 people are too small to judge. */
+export function pushTripwire(o: PushOutcome): string | null {
+  if (o.pushed < 50) return null;
+  const pct = (n: number) => ((100 * n) / o.pushed).toFixed(1);
+  if (o.unsubs != null && o.unsubs / o.pushed > 0.025) return `unsubscribed ${pct(o.unsubs)}% (over 2.5%)`;
+  if (o.clicked / o.pushed < 0.05) return `clicked ${pct(o.clicked)}% (under 5%)`;
+  return null;
+}
