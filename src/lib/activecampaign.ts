@@ -81,10 +81,23 @@ export async function addTag(cid: string, tid: string): Promise<boolean> {
   return Boolean(r.body?.contactTag) || r.status === 422;
 }
 
-/** The contact's tags as tag id → contactTag id (the id a removal needs); null when the call failed. */
+/** The contact's tags as tag id → contactTag id (the id a removal needs); null when a call failed. Paged: ActiveCampaign answers 20 a page by default and push contacts carry many tags. */
 export async function contactTagIds(cid: string): Promise<Map<string, string> | null> {
-  const r = await api<{ contactTags: Array<{ id: string; tag: string }> }>(`/contacts/${cid}/contactTags`);
-  return r ? new Map(r.contactTags.map((t) => [String(t.tag), String(t.id)])) : null;
+  const out = new Map<string, string>();
+  for (let offset = 0; ; offset += 100) {
+    const r = await api<{ contactTags: Array<{ id: string; tag: string }> }>(`/contacts/${cid}/contactTags?limit=100&offset=${offset}`);
+    if (!r) return null;
+    for (const t of r.contactTags) out.set(String(t.tag), String(t.id));
+    if (r.contactTags.length < 100) return out;
+  }
+}
+
+/** When the contact last entered this automation (ISO), from ActiveCampaign itself; null when never, undefined when the call failed. */
+export async function lastAutomationEntry(cid: string, automation: string): Promise<string | null | undefined> {
+  const r = await api<{ contactAutomations: Array<{ automation: string; adddate: string }> }>(`/contacts/${cid}/contactAutomations?limit=100`);
+  if (!r) return undefined;
+  const dates = r.contactAutomations.filter((a) => String(a.automation) === automation).map((a) => a.adddate).sort();
+  return dates.at(-1) ?? null;
 }
 
 /** Takes one tag off a contact by its contactTag id. true when it is gone afterwards (already gone counts). */

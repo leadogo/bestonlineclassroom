@@ -198,6 +198,12 @@ async function judgePreviousPush(date: string, unsubsNow: number | null): Promis
     if (r.error) throw r.error;
     ids.push(...(r.data ?? []).map((x) => x.id as string));
   }
+  // Bookings arrive by registrant id, else by email: count both (one person once).
+  const bookedEmails = new Set<string>();
+  for (const part of chunks(emails)) {
+    const r = await db().from("bookings").select("email").in("email", part).gte("booked_at", from).lt("booked_at", to);
+    for (const x of r.data ?? []) if (x.email) bookedEmails.add(String(x.email).toLowerCase());
+  }
   const clicked = new Set<string>(), watched = new Set<string>(), pitch = new Set<string>(), booked = new Set<string>();
   for (const part of chunks(ids)) {
     const [c, a, b] = await Promise.all([
@@ -214,5 +220,5 @@ async function judgePreviousPush(date: string, unsubsNow: number | null): Promis
   }
   const before = (run.data.email_stats as { unsubs?: number } | null)?.unsubs;
   const unsubs = unsubsNow != null && typeof before === "number" ? Math.max(0, unsubsNow - before) : null;
-  return { date: run.data.push_date as string, group: run.data.group_no as number, pushed: emails.length, clicked: clicked.size, watched: watched.size, pitch: pitch.size, booked: booked.size, unsubs };
+  return { date: run.data.push_date as string, group: run.data.group_no as number, pushed: emails.length, clicked: clicked.size, watched: watched.size, pitch: pitch.size, booked: Math.max(booked.size, bookedEmails.size), unsubs };
 }

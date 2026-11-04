@@ -1,6 +1,6 @@
 // The rescue lists for one session, read from the classroom (SPEC-bookings-recovery.md M4). Shared by the endpoint
 // Katherine reads and the cron that tags `ailgr_rescue`.
-import { db } from "./db.ts";
+import { db, pageAll } from "./db.ts";
 import { joinUrl } from "./registrants.ts";
 import { secondRing, type Attendee, type Clicker } from "./rescue.ts";
 
@@ -10,15 +10,18 @@ export type RescueLists = { rescue: Array<RescuePerson & Clicker & { clicked_at:
 type Row = { registrant_id: string; max_offset: number | null; cta_clicked_at: string | null; registrant: { token: string; first_name: string; email: string | null; phone: string | null; blocked_at: string | null; created_at: string; source: string | null; event_id: string } };
 
 export async function loadRescueLists(eventId: string, sessionDate: string): Promise<RescueLists> {
-  const { data, error } = await db()
-    .from("attendance")
-    .select("registrant_id, max_offset, cta_clicked_at, registrant:registrants!inner(token, first_name, email, phone, blocked_at, created_at, source, event_id)")
-    .eq("session_date", sessionDate)
-    .eq("kind", "live")
-    .eq("registrant.event_id", eventId)
-    .limit(2000);
-  if (error) throw new Error(`rescue read failed: ${error.message}`);
-  const rows = ((data ?? []) as unknown as Row[]).filter((r) => r.registrant.source !== "test");
+  // Paged: PostgREST answers at most 1,000 rows a call whatever the limit says.
+  const data = await pageAll<Row>((from, to) =>
+    db()
+      .from("attendance")
+      .select("registrant_id, max_offset, cta_clicked_at, registrant:registrants!inner(token, first_name, email, phone, blocked_at, created_at, source, event_id)")
+      .eq("session_date", sessionDate)
+      .eq("kind", "live")
+      .eq("registrant.event_id", eventId)
+      .order("registrant_id")
+      .range(from, to) as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>,
+  );
+  const rows = data.filter((r) => r.registrant.source !== "test");
 
   // Bookings by these rows or the same emails, with when they were made (a booking before tonight's click is not tonight's).
   const ids = rows.map((r) => r.registrant_id);

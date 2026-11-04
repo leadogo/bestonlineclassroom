@@ -2,7 +2,7 @@
 // registrants left about 2,700 tags; two unpaced requests per tag met the 5-a-second limit and every run died at 300 s.
 // Now: newest session first, the session-end tags (they fire the replay and follow-up automations) before the rest, one
 // contact lookup per email per run, and the run returns when the budget is spent; the next run continues.
-import { addTag, contactId, contactTagIds, ensureContact, removeContactTag, setLinks, tagId } from "./activecampaign.ts";
+import { addTag, contactId, contactTagIds, ensureContact, lastAutomationEntry, removeContactTag, setLinks, tagId } from "./activecampaign.ts";
 import { partsInTz } from "./tz.ts";
 import { scheduleOf, sessionFor } from "./daily-schedule.ts";
 import { db, pageAll } from "./db.ts";
@@ -13,6 +13,15 @@ export const PUSH_BUDGET_MS = 240_000;
 export const MISSED_RERUN_DAYS = 14;
 /** `ailgr_nurturemissed`: added by automation 172, starts 192; taken off with `ailgr_missed` so a re-run starts both again. */
 export const NURTURE_MISSED_TAG = "ailgr_nurturemissed";
+/** AILGR Missed: the automation the missed tag starts; its own entry date is the truth about the last follow-up. */
+export const MISSED_AUTOMATION = "172";
+/** Re-runs per pass, so the first night after ship never fires hundreds of follow-ups at once; the rest stay owed for the next pass (every 15 minutes). */
+export const MISSED_RERUNS_PER_RUN = 50;
+
+/** The later of two YYYY-MM-DD dates, either may be missing. */
+export function latestDate(a: string | null, b: string | null): string | null {
+  return !a ? b : !b ? a : a > b ? a : b;
+}
 
 const etDate = (iso: string) => { const p = partsInTz(new Date(iso), "America/New_York"); return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`; };
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000);
@@ -93,6 +102,7 @@ export async function pushOutcomeTags(opts: { budgetMs?: number } = {}): Promise
   const t0 = Date.now();
   const plan = await planOutcomeTags(t0);
   const cids = new Map<string, string | null>();
+  const reruns = { left: MISSED_RERUNS_PER_RUN };
   let sent = 0, failed = 0;
   for (let i = 0; i < plan.length && withinBudget(t0, Date.now(), opts.budgetMs); i++) {
     const p = plan[i];
@@ -101,9 +111,12 @@ export async function pushOutcomeTags(opts: { budgetMs?: number } = {}): Promise
       if (cid === undefined) { cid = (await contactId(p.email)) ?? (await ensureContact(p.email, p.first_name || p.email.split("@")[0], null)); cids.set(p.email, cid); }
       const tid = await tagId(p.tag);
       if (cid && tid && p.missed) {
-        const r = await pushMissed(cid, tid, p.session_date);
+        const r = await pushMissed(cid, tid, p.session_date, reruns);
         if (r === "failed") { failed += 1; continue; }
-        await db().from("outcome_tags").insert({ registrant_id: p.registrant_id, tag: p.tag });
+        if (r === "held") continue; // over this pass's re-run cap: stays owed for the next pass
+        // (registrant_id, tag) is the key: a repeat miss updates the row's sent_at so the planner stops owing it.
+        const w = await db().from("outcome_tags").upsert({ registrant_id: p.registrant_id, tag: p.tag, sent_at: new Date().toISOString() });
+        if (w.error) console.error("[outcome-push] missed tag not recorded", { registrant_id: p.registrant_id, err: w.error.message });
         if (r !== "skip") sent += 1;
         continue;
       }
@@ -122,16 +135,20 @@ export async function pushOutcomeTags(opts: { budgetMs?: number } = {}): Promise
 }
 
 /** The repeat-miss rule against ActiveCampaign and the run log; "failed" leaves the tag owed for the next run. */
-async function pushMissed(cid: string, missedTid: string, sessionDate: string): Promise<"first" | "rerun" | "skip" | "failed"> {
-  const [tags, last, nurtureTid] = await Promise.all([
+async function pushMissed(cid: string, missedTid: string, sessionDate: string, reruns: { left: number }): Promise<"first" | "rerun" | "skip" | "held" | "failed"> {
+  const [tags, last, entered, nurtureTid] = await Promise.all([
     contactTagIds(cid),
     db().from("missed_followups").select("run_date").eq("contact_id", cid).order("run_date", { ascending: false }).limit(1).maybeSingle(),
+    lastAutomationEntry(cid, MISSED_AUTOMATION),
     tagId(NURTURE_MISSED_TAG),
   ]);
-  if (!tags || last.error) return "failed";
-  const action = missedAction({ lastRun: (last.data?.run_date as string | undefined) ?? null, tagged: tags.has(missedTid), today: sessionDate });
+  if (!tags || last.error || entered === undefined) return "failed";
+  const lastRun = latestDate((last.data?.run_date as string | undefined) ?? null, entered ? etDate(entered) : null);
+  const action = missedAction({ lastRun, tagged: tags.has(missedTid), today: sessionDate });
   if (action === "skip") return "skip";
   if (action === "rerun") {
+    if (reruns.left <= 0) return "held";
+    reruns.left -= 1;
     for (const t of [missedTid, nurtureTid]) {
       const ct = t ? tags.get(t) : undefined;
       if (ct && !(await removeContactTag(ct))) return "failed";
