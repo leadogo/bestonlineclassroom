@@ -92,12 +92,15 @@ export async function contactTagIds(cid: string): Promise<Map<string, string> | 
   }
 }
 
-/** When the contact last entered this automation (ISO), from ActiveCampaign itself; null when never, undefined when the call failed. */
+/** When the contact last entered this automation (ISO), from ActiveCampaign itself; null when never, undefined when a call failed. Paged: a long-time contact has more than 100 entries. */
 export async function lastAutomationEntry(cid: string, automation: string): Promise<string | null | undefined> {
-  const r = await api<{ contactAutomations: Array<{ automation: string; adddate: string }> }>(`/contacts/${cid}/contactAutomations?limit=100`);
-  if (!r) return undefined;
-  const dates = r.contactAutomations.filter((a) => String(a.automation) === automation).map((a) => a.adddate).sort();
-  return dates.at(-1) ?? null;
+  let latest: string | null = null;
+  for (let offset = 0; ; offset += 100) {
+    const r = await api<{ contactAutomations: Array<{ automation: string; adddate: string }> }>(`/contacts/${cid}/contactAutomations?limit=100&offset=${offset}`);
+    if (!r) return undefined;
+    for (const a of r.contactAutomations) if (String(a.automation) === automation && (!latest || a.adddate > latest)) latest = a.adddate;
+    if (r.contactAutomations.length < 100) return latest;
+  }
 }
 
 /** Takes one tag off a contact by its contactTag id. true when it is gone afterwards (already gone counts). */
