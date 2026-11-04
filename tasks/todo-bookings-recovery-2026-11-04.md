@@ -1,7 +1,7 @@
 # Todo — bookings recovery (plan-bookings-recovery-2026-11-04.md)
 - [x] T1 M1 push result (classroom)
 - [x] T2 M2 repeat missers (classroom, migration 053)
-- [ ] T3 M4 rescue endpoint + text cron (classroom)
+- [x] T3 M4 rescue endpoint + text cron (classroom)
 - [ ] T4 M3 day-of first (katherine)
 - [ ] T5 M4 rescue lane (katherine)
 - [ ] T6 M5 daytime re-invites behind a flag (katherine)
