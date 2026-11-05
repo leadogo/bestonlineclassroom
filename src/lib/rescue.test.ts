@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { inRescueWindow, rescueReady, secondRing } from "./rescue.ts";
+import { holdsBooking, inRescueWindow, rescueReady, secondRing } from "./rescue.ts";
 
 const click = { id: "r1", clickedAt: "2026-11-05T01:20:00Z", booked: false, blocked: false };
 
@@ -28,4 +28,12 @@ test("second ring: stayed to the pitch, did not click, no booking, not blocked; 
     { id: "e", maxOffset: 4500, clicked: false, booked: false, blocked: false, registeredAt: "2026-11-04T19:00:00Z" },
   ];
   assert.deepEqual(secondRing(rows).map((r) => r.id), ["e", "a"]);
+});
+
+test("holdsBooking: a booking made before the latest offer click still counts (Nov 4 2026)", () => {
+  // Booked 8:20 PM ET, clicked again 8:26 PM ET: must not be texted.
+  assert.equal(holdsBooking(["2026-11-05T01:20:24Z"], "2026-11-04"), true);
+  assert.equal(holdsBooking(["2026-10-10T15:00:00Z"], "2026-11-04"), true);
+  assert.equal(holdsBooking(["2026-09-01T15:00:00Z"], "2026-11-04"), false);
+  assert.equal(holdsBooking([], "2026-11-04"), false);
 });
