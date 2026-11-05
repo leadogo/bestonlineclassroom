@@ -12,10 +12,20 @@ export const RESCUE_WINDOW_MIN = { from: 20 * 60 + 15, to: 22 * 60 + 45 } as con
 /** Live seconds into the session at which the offer is pitched (the classroom's "at the pitch" line). */
 export const PITCH_OFFSET_S = 4500;
 
-export type Clicker = { id: string; clickedAt: string; /** a booking at or after the click, by this row or the same email */ booked: boolean; blocked: boolean };
+export type Clicker = { id: string; clickedAt: string; /** holds a booking (holdsBooking), by this row or the same email */ booked: boolean; blocked: boolean };
 
 export function rescueReady(c: Clicker, nowMs: number): boolean {
   return !c.blocked && !c.booked && nowMs - Date.parse(c.clickedAt) >= RESCUE_AFTER_MS;
+}
+
+/**
+ * Booked = any booking made in the 30 days before the session or since, whatever order the clicks came in. The offer
+ * button can be clicked again after booking: on Nov 4 2026 someone booked at 8:20, clicked at 8:26 and was texted at
+ * 8:45 because only bookings after the latest click counted.
+ */
+export function holdsBooking(bookedAt: readonly string[], sessionDate: string): boolean {
+  const since = Date.parse(`${sessionDate}T00:00:00Z`) - 30 * 86_400_000;
+  return bookedAt.some((t) => Date.parse(t) >= since);
 }
 
 export function inRescueWindow(now: Date): boolean {

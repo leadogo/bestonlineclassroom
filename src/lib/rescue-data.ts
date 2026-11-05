@@ -2,7 +2,7 @@
 // Katherine reads and the cron that tags `ailgr_rescue`.
 import { db, pageAll } from "./db.ts";
 import { joinUrl } from "./registrants.ts";
-import { secondRing, type Attendee, type Clicker } from "./rescue.ts";
+import { holdsBooking, secondRing, type Attendee, type Clicker } from "./rescue.ts";
 
 export type RescuePerson = { id: string; token: string; first_name: string; email: string | null; phone: string | null; join_url: string; session_date: string; registered_at: string };
 export type RescueLists = { rescue: Array<RescuePerson & Clicker & { clicked_at: string }>; second_ring: RescuePerson[] };
@@ -23,7 +23,7 @@ export async function loadRescueLists(eventId: string, sessionDate: string): Pro
   );
   const rows = data.filter((r) => r.registrant.source !== "test");
 
-  // Bookings by these rows or the same emails, with when they were made (a booking before tonight's click is not tonight's).
+  // Bookings by these rows or the same emails, with when they were made (see holdsBooking).
   const ids = rows.map((r) => r.registrant_id);
   const emails = [...new Set(rows.map((r) => r.registrant.email?.toLowerCase()).filter((e): e is string => Boolean(e)))];
   const byId = new Map<string, string[]>(), byEmail = new Map<string, string[]>();
@@ -39,12 +39,12 @@ export async function loadRescueLists(eventId: string, sessionDate: string): Pro
     if (b.error) throw new Error(`rescue bookings read failed: ${b.error.message}`);
     for (const x of b.data ?? []) if (x.email) add(byEmail, String(x.email).toLowerCase(), String(x.booked_at));
   }
-  const bookedSince = (r: Row, sinceIso: string) => [...(byId.get(r.registrant_id) ?? []), ...(byEmail.get(r.registrant.email?.toLowerCase() ?? "") ?? [])].some((t) => Date.parse(t) >= Date.parse(sinceIso) - 60_000);
+  const booked = (r: Row) => holdsBooking([...(byId.get(r.registrant_id) ?? []), ...(byEmail.get(r.registrant.email?.toLowerCase() ?? "") ?? [])], sessionDate);
 
   const person = (r: Row): RescuePerson => ({ id: r.registrant_id, token: r.registrant.token, first_name: r.registrant.first_name, email: r.registrant.email, phone: r.registrant.phone, join_url: joinUrl(r.registrant.token), session_date: sessionDate, registered_at: r.registrant.created_at });
   const rescue = rows
     .filter((r) => r.cta_clicked_at)
-    .map((r) => ({ ...person(r), clickedAt: r.cta_clicked_at as string, clicked_at: r.cta_clicked_at as string, booked: bookedSince(r, r.cta_clicked_at as string), blocked: Boolean(r.registrant.blocked_at) }));
-  const attendees: Array<Attendee & { row: Row }> = rows.map((r) => ({ id: r.registrant_id, maxOffset: Number(r.max_offset ?? 0), clicked: Boolean(r.cta_clicked_at), booked: bookedSince(r, `${sessionDate}T00:00:00Z`), blocked: Boolean(r.registrant.blocked_at), registeredAt: r.registrant.created_at, row: r }));
+    .map((r) => ({ ...person(r), clickedAt: r.cta_clicked_at as string, clicked_at: r.cta_clicked_at as string, booked: booked(r), blocked: Boolean(r.registrant.blocked_at) }));
+  const attendees: Array<Attendee & { row: Row }> = rows.map((r) => ({ id: r.registrant_id, maxOffset: Number(r.max_offset ?? 0), clicked: Boolean(r.cta_clicked_at), booked: booked(r), blocked: Boolean(r.registrant.blocked_at), registeredAt: r.registrant.created_at, row: r }));
   return { rescue, second_ring: secondRing(attendees).map((a) => person(a.row)) };
 }
